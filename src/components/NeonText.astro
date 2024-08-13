@@ -1,0 +1,137 @@
+---
+interface Props {
+  text: string;
+}
+
+const { text } = Astro.props;
+const soothing_colors = [
+  '#FF9AA2', '#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7',
+  '#C7CEEA', '#9ED2C6', '#DEA5A4', '#AEC6CF', '#F0E68C'
+];
+
+function getContrastingColor(color: string) {
+  const index = soothing_colors.indexOf(color);
+  const oppositeIndex = (index + Math.floor(soothing_colors.length / 2)) % soothing_colors.length;
+  return soothing_colors[oppositeIndex];
+}
+
+const initialTextColor = soothing_colors[Math.floor(Math.random() * soothing_colors.length)];
+const initialBorderColor = getContrastingColor(initialTextColor);
+---
+
+<h1 spellcheck="false">{text}</h1>
+
+<style define:vars={{ initialTextColor, initialBorderColor }}>
+  @import url(https://fonts.googleapis.com/css2?family=Neonderthaw&display=swap);
+
+  :root {
+    font-size: 10px;
+    --neon-text-color: var(--initialTextColor);
+    --neon-border-color: var(--initialBorderColor);
+  }
+
+  h1 {
+    font-family: "Neonderthaw", cursive;
+    font-size: 8rem;
+    font-weight: 400;
+    color: #fff;
+    padding: 4rem 6rem 5.5rem;
+    border: 0.4rem solid #fff;
+    border-radius: 2rem;
+    animation: flicker 1.5s infinite alternate;
+    user-select: none;
+    transition: text-shadow 5s, box-shadow 5s;
+  }
+
+  h1::-moz-selection {
+    background-color: var(--neon-border-color);
+    color: var(--neon-text-color);
+  }
+
+  h1::selection {
+    background-color: var(--neon-border-color);
+    color: var(--neon-text-color);
+  }
+
+  h1:focus {
+    outline: none;
+  }
+
+  @keyframes flicker {
+    0%,
+    19%,
+    21%,
+    23%,
+    25%,
+    54%,
+    56%,
+    100% {
+      text-shadow:
+        -0.2rem -0.2rem 1rem #fff,
+        0.2rem 0.2rem 1rem #fff,
+        0 0 2rem var(--neon-text-color),
+        0 0 4rem var(--neon-text-color),
+        0 0 6rem var(--neon-text-color),
+        0 0 8rem var(--neon-text-color),
+        0 0 10rem var(--neon-text-color);
+
+      box-shadow:
+        0 0 0.5rem #fff,
+        inset 0 0 0.5rem #fff,
+        0 0 2rem var(--neon-border-color),
+        inset 0 0 2rem var(--neon-border-color),
+        0 0 4rem var(--neon-border-color),
+        inset 0 0 4rem var(--neon-border-color);
+    }
+
+    20%,
+    24%,
+    55% {
+      text-shadow: none;
+      box-shadow: none;
+    }
+  }
+</style>
+
+<script>
+  const soothing_colors = [
+    '#9c19e0', '#f0cfa1', '#f5ff8a', '#00ead3', '#ff449f',
+    '#49a7fe', '#e9ff27', '#7ff000', '#f9537b', '#e3e60a'
+  ];
+
+  function getRandomColor() {
+    return soothing_colors[Math.floor(Math.random() * soothing_colors.length)];
+  }
+
+  function getContrastingColor(color: string) {
+    const index = soothing_colors.indexOf(color);
+    const oppositeIndex = (index + Math.floor(soothing_colors.length / 2)) % soothing_colors.length;
+    return soothing_colors[oppositeIndex];
+  }
+
+  function updateColors() {
+    const root = document.documentElement;
+    const newTextColor = getRandomColor();
+    const newBorderColor = getContrastingColor(newTextColor);
+
+    root.style.setProperty('--neon-text-color', newTextColor);
+    root.style.setProperty('--neon-border-color', newBorderColor);
+  }
+
+  // Update colors every 10 seconds
+  const intervalId = setInterval(updateColors, 10000);
+
+  // Add event listener for spacebar
+  document.addEventListener('keydown', (event) => {
+    if (event.code === 'Space') {
+      event.preventDefault(); // Prevent scrolling
+      updateColors();
+    }
+  });
+
+  // Clean up function to remove event listener and clear interval
+  document.addEventListener('astro:page-load', () => {
+    document.removeEventListener('keydown', updateColors);
+    clearInterval(intervalId);
+  });
+</script>

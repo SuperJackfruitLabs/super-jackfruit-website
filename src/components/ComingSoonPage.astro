@@ -1,0 +1,248 @@
+---
+import { useState } from "react";
+import Neon from "./NeonText.astro";
+import TerminalText from "./TerminalText.astro";
+import TerminalInput from "./TerminalInput.astro";
+import NewTerminalInput from "./NewTerminalInput.astro";
+
+let email = "";
+let emailExists = false;
+let submitted = false;
+const existingEmails = ["test@example.com", "user@example.com"];
+
+const handleSubmit = (event: Event) => {
+  event.preventDefault();
+
+  if (existingEmails.includes(email)) {
+    emailExists = true;
+  } else {
+    submitted = true;
+    emailExists = false;
+    // Add the email to your backend or mailing list here
+  }
+};
+---
+
+<div class="coming-soon-container">
+  <!-- <div class="overlay"></div> -->
+  <div class="content">
+    <Neon text="Super Jackfruit Labs" />
+    <!-- <NewTerminalInput /> -->
+    <!-- <TerminalText data-ty="input" data-ty-prompt="echo 'Hello, World!'" data-ty-cursor="▋" /> -->
+    <!-- <TerminalInput /> -->
+    <!-- <h1 class="title">> Empowering the workforce of the future.</h1> -->
+    <!-- <h1 class="title">> Unlock Garage Access: Be the First to Know What's Coming Next</h1> -->
+    <!-- <TerminalText /> -->
+  </div>
+  <!-- <div class="noise"></div> -->
+</div>
+
+<style>
+  /* Basic Reset */
+  body,
+  html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    font-family: "Arial", sans-serif;
+  }
+
+  .coming-soon-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000000;
+    background: radial-gradient(ellipse at center, #29382c 0%, #0c100d 100%);
+  }
+
+  .content {
+    text-align: center;
+    color: #fff;
+    padding: 20px;
+  }
+
+  .title {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    text-align: left;
+    animation: fadeIn 2s ease-in-out;
+  }
+
+  .waitlist-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: fadeInUp 2s ease-in-out;
+  }
+
+  .email-input {
+    padding: 10px;
+    font-size: 1rem;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border: none;
+    width: 250px;
+    outline: none;
+    transition: box-shadow 0.3s ease-in-out;
+  }
+
+  .email-input:focus {
+    box-shadow: 0 0 10px #fff;
+  }
+
+  .submit-button {
+    padding: 10px 20px;
+    font-size: 1rem;
+    background-color: #f2c94c;
+    color: #282c34;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out;
+  }
+
+  .submit-button:hover {
+    background-color: #ff6b6b;
+  }
+
+  .error-message {
+    color: #ff6b6b;
+    margin-top: 10px;
+    animation: shake 0.5s ease;
+  }
+
+  .thank-you-message {
+    font-size: 1.2rem;
+    margin-top: 20px;
+    animation: fadeIn 2s ease-in-out;
+  }
+
+  /* Microanimations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    50% {
+      transform: translateX(5px);
+    }
+    75% {
+      transform: translateX(-5px);
+    }
+  }
+
+  .noise {
+    position: absolute;
+    top: -500px;
+    right: -500px;
+    bottom: -500px;
+    left: -500px;
+    background: transparent
+      url(https://www.dropbox.com/s/h7ab1c82ctzy83n/noise.png?raw=1) 0 0;
+    background-size: 320px 320px;
+    opacity: 0.35;
+    animation: noise 1s steps(8, end) infinite both;
+  }
+
+  @keyframes noise {
+    0% {
+      transform: translateX(0px, 0px);
+    }
+    10% {
+      transform: translate(-100px, 100px);
+    }
+    20% {
+      transform: translate(150px, -100px);
+    }
+    30% {
+      transform: translate(-100px, 100px);
+    }
+    40% {
+      transform: translate(100px, -150px);
+    }
+    50% {
+      transform: translate(-100px, 200px);
+    }
+    60% {
+      transform: translate(-200px, -100px);
+    }
+    70% {
+      transform: translateY(50px, 100px);
+    }
+    80% {
+      transform: translate(100px, -150px);
+    }
+    90% {
+      transform: translate(0px, 200px);
+    }
+    100% {
+      transform: translate(-100px, 100px);
+    }
+  }
+
+  .overlay {
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0.3) 50%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    background-size: auto 4px;
+    z-index: 1;
+  }
+
+  .overlay::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(
+      0deg,
+      transparent 0%,
+      rgba(32, 128, 32, 0.2) 2%,
+      rgba(32, 128, 32, 0.8) 3%,
+      rgba(32, 128, 32, 0.2) 3%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    animation: scan 7.5s linear 0s infinite;
+  }
+</style>

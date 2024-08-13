@@ -1,0 +1,132 @@
+---
+
+---
+
+<!-- <div class="noise"></div> -->
+<div class="terminal">
+  <h1 class="title">Empowering the workforce of the future</h1>
+  <p class="output">
+    Unlock Garage Access: Be the First to Know What's Coming Next
+  </p>
+  <!-- <p class="output">Please try to <a href="#1">go back</a> or <a href="#2">return to the homepage</a>.</p> -->
+  <!-- <p class="output">Good luck.</p> -->
+   <span class="textbox">
+    >
+    <input class="input" placeholder="Enter your email" autofocus/>
+   </span>
+  
+</div>
+<br />
+<a href="#">Submit</a>
+
+<style>
+  @import "https://fonts.googleapis.com/css?family=Inconsolata";
+
+  .title {
+    color: rgba(226, 213, 69, 0.8);
+    /* text-shadow:
+      0 0 1ex rgba(51, 255, 51, 1),
+      0 0 2px rgba(105, 92, 92, 0.8); */
+  }
+  
+  .textbox {
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+      0 0 1ex rgba(51, 255, 51, 1),
+      0 0 2px rgba(255, 255, 255, 0.8);
+  }
+
+  body {
+    /* box-sizing: border-box; */
+    /* height: 100%; */
+    /* background-color: #000000; */
+    /* background-image: radial-gradient(#11581E, #041607), url("https://media.giphy.com/media/oEI9uBYSzLpBK/giphy.gif"); */
+    /* background-repeat: no-repeat; */
+    /* background-size: cover; */
+    font-family: "Inconsolata", Helvetica, sans-serif;
+    font-size: 2rem;
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+      0 0 1ex rgba(51, 255, 51, 1),
+      0 0 2px rgba(255, 255, 255, 0.8);
+  }
+
+  .noise {
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url("https://media.giphy.com/media/oEI9uBYSzLpBK/giphy.gif");
+    background-repeat: no-repeat;
+    background-size: cover;
+    z-index: -1;
+    opacity: 0.02;
+  }
+
+  @keyframes scan {
+    0% {
+      background-position: 0 -100vh;
+    }
+    35%,
+    100% {
+      background-position: 0 100vh;
+    }
+  }
+
+  .terminal {
+    /* box-sizing: inherit;
+  position: absolute; */
+    /* height: 100%; */
+    width: 1000px;
+    max-width: 100%;
+    /* padding: 4rem; */
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .output {
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+      0 0 1px rgba(51, 255, 51, 0.4),
+      0 0 2px rgba(255, 255, 255, 0.8);
+  }
+
+  .output::before {
+    content: "> ";
+  }
+
+  input {
+    background: none;
+    text-align: left;
+    font-size: x-large;
+    text-transform: uppercase;
+    border: none transparent;
+    outline: none;
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+      0 0 1px rgba(51, 255, 51, 0.4),
+      0 0 2px rgba(255, 255, 255, 0.8);
+  }
+
+  input::placeholder {
+    color: rgba(117, 171, 152, 0.8);
+    text-shadow: none;
+  }
+
+  a {
+    color: #fff;
+    text-decoration: none;
+  }
+
+  a::before {
+    content: "[";
+  }
+
+  a::after {
+    content: "]";
+  }
+
+  .errorcode {
+    color: white;
+  }
+</style>
