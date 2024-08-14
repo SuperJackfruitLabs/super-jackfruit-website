@@ -1,28 +1,17 @@
 ---
+import '@fontsource/neonderthaw'
+
 interface Props {
   text: string;
 }
 
 const { text } = Astro.props;
-const soothing_colors = [
-  '#FF9AA2', '#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7',
-  '#C7CEEA', '#9ED2C6', '#DEA5A4', '#AEC6CF', '#F0E68C'
-];
-
-function getContrastingColor(color: string) {
-  const index = soothing_colors.indexOf(color);
-  const oppositeIndex = (index + Math.floor(soothing_colors.length / 2)) % soothing_colors.length;
-  return soothing_colors[oppositeIndex];
-}
-
-const initialTextColor = soothing_colors[Math.floor(Math.random() * soothing_colors.length)];
-const initialBorderColor = getContrastingColor(initialTextColor);
 ---
 
-<h1 spellcheck="false">{text}</h1>
+<h1 id="neon-text" spellcheck="false">{text}</h1>
 
-<style define:vars={{ initialTextColor, initialBorderColor }}>
-  @import url(https://fonts.googleapis.com/css2?family=Neonderthaw&display=swap);
+<style>
+  /* @import url(https://fonts.googleapis.com/css2?family=Neonderthaw&display=swap); */
 
   :root {
     font-size: 10px;
@@ -41,20 +30,6 @@ const initialBorderColor = getContrastingColor(initialTextColor);
     animation: flicker 1.5s infinite alternate;
     user-select: none;
     transition: text-shadow 5s, box-shadow 5s;
-  }
-
-  h1::-moz-selection {
-    background-color: var(--neon-border-color);
-    color: var(--neon-text-color);
-  }
-
-  h1::selection {
-    background-color: var(--neon-border-color);
-    color: var(--neon-text-color);
-  }
-
-  h1:focus {
-    outline: none;
   }
 
   @keyframes flicker {
@@ -119,6 +94,7 @@ const initialBorderColor = getContrastingColor(initialTextColor);
   }
 
   // Update colors every 10 seconds
+  updateColors();
   const intervalId = setInterval(updateColors, 10000);
 
   // Add event listener for spacebar

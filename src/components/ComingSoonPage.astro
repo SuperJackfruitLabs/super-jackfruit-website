@@ -4,6 +4,7 @@ import Neon from "./NeonText.astro";
 import TerminalText from "./TerminalText.astro";
 import TerminalInput from "./TerminalInput.astro";
 import NewTerminalInput from "./NewTerminalInput.astro";
+import "@fontsource/neonderthaw";
 
 let email = "";
 let emailExists = false;
@@ -45,7 +46,7 @@ const handleSubmit = (event: Event) => {
     padding: 0;
     width: 100%;
     height: 100%;
-    font-family: "Arial", sans-serif;
+    font-family: "Neonderthaw", cursive;
   }
 
   .coming-soon-container {
@@ -57,7 +58,8 @@ const handleSubmit = (event: Event) => {
     align-items: center;
     justify-content: center;
     background-color: #000000;
-    background: radial-gradient(ellipse at center, #29382c 0%, #0c100d 100%);
+    background-image: '../images/brick-wall-pattern.jpg';
+    background: radial-gradient(ellipse at center, #24006b 0%, #0c100d 100%);
   }
 
   .content {
@@ -71,92 +73,6 @@ const handleSubmit = (event: Event) => {
     margin-bottom: 20px;
     text-align: left;
     animation: fadeIn 2s ease-in-out;
-  }
-
-  .waitlist-form {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    animation: fadeInUp 2s ease-in-out;
-  }
-
-  .email-input {
-    padding: 10px;
-    font-size: 1rem;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    border: none;
-    width: 250px;
-    outline: none;
-    transition: box-shadow 0.3s ease-in-out;
-  }
-
-  .email-input:focus {
-    box-shadow: 0 0 10px #fff;
-  }
-
-  .submit-button {
-    padding: 10px 20px;
-    font-size: 1rem;
-    background-color: #f2c94c;
-    color: #282c34;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s ease-in-out;
-  }
-
-  .submit-button:hover {
-    background-color: #ff6b6b;
-  }
-
-  .error-message {
-    color: #ff6b6b;
-    margin-top: 10px;
-    animation: shake 0.5s ease;
-  }
-
-  .thank-you-message {
-    font-size: 1.2rem;
-    margin-top: 20px;
-    animation: fadeIn 2s ease-in-out;
-  }
-
-  /* Microanimations */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes shake {
-    0%,
-    100% {
-      transform: translateX(0);
-    }
-    25% {
-      transform: translateX(-5px);
-    }
-    50% {
-      transform: translateX(5px);
-    }
-    75% {
-      transform: translateX(-5px);
-    }
   }
 
   .noise {
