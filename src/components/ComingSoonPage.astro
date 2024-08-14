@@ -58,8 +58,9 @@ const handleSubmit = (event: Event) => {
     align-items: center;
     justify-content: center;
     background-color: #000000;
-    background-image: '../images/brick-wall-pattern.jpg';
-    background: radial-gradient(ellipse at center, #24006b 0%, #0c100d 100%);
+    background: radial-gradient(ellipse at center, #4c054d 0%, #0c100d 100%), url('/brick-pattern.jpg');
+    background-size: cover;
+    background-blend-mode: multiply;
   }
 
   .content {
