@@ -19,53 +19,53 @@ const { text } = Astro.props;
     --neon-border-color: var(--initialBorderColor);
   }
 
-  h1 {
-    font-family: "Neonderthaw", cursive;
-    font-size: 8rem;
-    font-weight: 400;
-    color: #fff;
-    padding: 4rem 6rem 5.5rem;
-    border: 0.4rem solid #fff;
-    border-radius: 2rem;
-    animation: flicker 1.5s infinite alternate;
-    user-select: none;
-    transition: text-shadow 5s, box-shadow 5s;
-  }
-
   @keyframes flicker {
-    0%,
-    19%,
-    21%,
-    23%,
-    25%,
-    54%,
-    56%,
-    100% {
-      text-shadow:
-        -0.2rem -0.2rem 1rem #fff,
-        0.2rem 0.2rem 1rem #fff,
-        0 0 2rem var(--neon-text-color),
-        0 0 4rem var(--neon-text-color),
-        0 0 6rem var(--neon-text-color),
-        0 0 8rem var(--neon-text-color),
-        0 0 10rem var(--neon-text-color);
-
-      box-shadow:
-        0 0 0.5rem #fff,
-        inset 0 0 0.5rem #fff,
-        0 0 2rem var(--neon-border-color),
-        inset 0 0 2rem var(--neon-border-color),
-        0 0 4rem var(--neon-border-color),
-        inset 0 0 4rem var(--neon-border-color);
-    }
-
-    20%,
-    24%,
-    55% {
-      text-shadow: none;
-      box-shadow: none;
-    }
+  0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    text-shadow:
+      0 0 4px #fff,
+      0 0 11px #fff,
+      0 0 19px #fff,
+      0 0 40px var(--neon-text-color),
+      0 0 80px var(--neon-text-color),
+      0 0 90px var(--neon-text-color),
+      0 0 100px var(--neon-text-color),
+      0 0 150px var(--neon-text-color);
+    box-shadow:
+      0 0 .5rem #fff,
+      inset 0 0 .5rem #fff,
+      0 0 2rem var(--neon-border-color),
+      inset 0 0 2rem var(--neon-border-color),
+      0 0 4rem var(--neon-border-color),
+      inset 0 0 4rem var(--neon-border-color);
   }
+  20%, 24%, 55% {
+    text-shadow: none;
+    box-shadow: none;
+  }
+}
+
+h1 {
+  font-family: "Neonderthaw", cursive;
+  font-size: 8rem;
+  font-weight: 400;
+  color: #fff;
+  padding: 4rem 6rem 5.5rem;
+  border: 0.4rem solid #fff;
+  border-radius: 2rem;
+  animation: flicker 1.5s infinite alternate;
+  user-select: none;
+  transition: text-shadow 0.2s, box-shadow 0.2s;
+  text-shadow: 0 0 4px #fff, 0 0 11px #fff, 0 0 19px #fff;
+  visibility: hidden;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: 6rem;
+    padding: 2rem 3rem 2.75rem;
+    border-width: 0.3rem;
+  }
+}
 </style>
 
 <script>
@@ -95,7 +95,7 @@ const { text } = Astro.props;
 
   // Update colors every 10 seconds
   updateColors();
-  const intervalId = setInterval(updateColors, 10000);
+  // const intervalId = setInterval(updateColors, 10000);
 
   // Add event listener for spacebar
   document.addEventListener('keydown', (event) => {
@@ -105,9 +105,24 @@ const { text } = Astro.props;
     }
   });
 
+  document.addEventListener('DOMContentLoaded', () => {
+    const neonText = document.getElementById('neon-text');
+    if (neonText) {
+      neonText.addEventListener('touchstart', updateColors);
+    }
+  });
+
   // Clean up function to remove event listener and clear interval
   document.addEventListener('astro:page-load', () => {
     document.removeEventListener('keydown', updateColors);
-    clearInterval(intervalId);
+    document.removeEventListener('touchstart', updateColors);
+    // clearInterval(intervalId);
+  });
+
+  document.fonts.ready.then(() => {
+    const neonText = document.getElementById('neon-text');
+    if (neonText) {
+      neonText.style.visibility = 'visible';
+    }
   });
 </script>
