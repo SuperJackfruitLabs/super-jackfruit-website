@@ -1,5 +1,6 @@
 ---
 ---
+
 <div class="cli-container">
     <div class="cli-window">
       <div class="cli-header">
@@ -19,8 +20,8 @@
       </div>
     </div>
   </div>
-  
-  <style>
+
+<style>
     .cli-container {
         display: flex;
         justify-content: flex-start; /* Changed from center to flex-start */
@@ -91,21 +92,48 @@
       text-align: left; /* Ensure response message is left-aligned */
     }
   </style>
-  
-  <script>
-    const form = document.getElementById('signup-form');
-    const emailInput = document.getElementById('email-input');
-    const responseMessage = document.getElementById('response-message');
-  
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = emailInput.value;
-      
-      // Here you would typically send the email to your backend
-      // For this example, we'll just simulate a response
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      responseMessage.textContent = `Thanks! ${email} has been added to our waitlist.`;
-      emailInput.value = '';
-    });
-  </script>
+
+<script>
+    const form = document.getElementById('signup-form') as HTMLFormElement | null;
+    const emailInput = document.getElementById('email-input') as HTMLInputElement | null;
+    const responseMessage = document.getElementById('response-message') as HTMLElement | null;
+
+    if (form && responseMessage && emailInput) {
+        form.addEventListener('submit', async (e: Event) => {
+            e.preventDefault();
+            const email: string = emailInput.value.trim();
+
+            if (!email) {
+                responseMessage.textContent = 'Please enter a valid email address.';
+                return;
+            }
+
+            responseMessage.textContent = 'Submitting...';
+
+            try {
+                const payload = JSON.stringify({ email });
+
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: payload
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    responseMessage.textContent = `Thanks! ${email} has been added to our waitlist.`;
+                    emailInput.value = '';
+                } else {
+                    throw new Error(data.message || 'Failed to add email to waitlist');
+                }
+            } catch (error) {
+                responseMessage.textContent = 'An error occurred. Please try again later.';
+            }
+        });
+    } else {
+        console.error('Required DOM elements not found');
+    }
+</script>
