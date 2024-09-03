@@ -1,0 +1,111 @@
+---
+---
+<div class="cli-container">
+    <div class="cli-window">
+      <div class="cli-header">
+        <span class="cli-button"></span>
+        <span class="cli-button"></span>
+        <span class="cli-button"></span>
+      </div>
+      <div class="cli-body">
+        <p>> Welcome to Super Jackfruit Labs</p>
+        <p>> Enter your email to join our waitlist:</p>
+        <form id="signup-form">
+          <span class="cli-prompt">$</span>
+          <input type="email" id="email-input" placeholder="your@email.com" required>
+          <button type="submit" class="submit-button">⏎</button>
+        </form>
+        <p id="response-message"></p>
+      </div>
+    </div>
+  </div>
+  
+  <style>
+    .cli-container {
+        display: flex;
+        justify-content: flex-start; /* Changed from center to flex-start */
+        align-items: flex-start; /* Changed from center to flex-start */
+        padding: 1rem;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: clamp(14px, 2vw, 18px);
+    }
+    .cli-window {
+      width: 100%;
+      max-width: 700px;
+      background-color: #1e1e1e;
+      border-radius: 5px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    .cli-header {
+      background-color: #323232;
+      padding: 10px;
+      display: flex;
+      gap: 5px;
+    }
+    .cli-button {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .cli-button:nth-child(1) { background-color: #ff5f56; }
+    .cli-button:nth-child(2) { background-color: #ffbd2e; }
+    .cli-button:nth-child(3) { background-color: #27c93f; }
+    .cli-body {
+      padding: clamp(15px, 3vw, 30px);
+      color: #f0f0f0;
+      text-align: left; /* Ensure all text is left-aligned */
+    }
+    .cli-prompt {
+      color: #27c93f;
+      margin-right: 10px;
+    }
+    #signup-form {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start; /* Ensure form content is left-aligned */
+    }
+    #email-input {
+      flex-grow: 1;
+      background-color: transparent;
+      border: none;
+      color: #f0f0f0;
+      font-family: inherit;
+      font-size: inherit;
+      outline: none;
+      padding: 5px 0;
+      text-align: left; /* Ensure input text is left-aligned */
+    }
+    .submit-button {
+      background-color: transparent;
+      border: none;
+      color: #27c93f;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    #response-message {
+      margin-top: 15px;
+      font-style: italic;
+      text-align: left; /* Ensure response message is left-aligned */
+    }
+  </style>
+  
+  <script>
+    const form = document.getElementById('signup-form');
+    const emailInput = document.getElementById('email-input');
+    const responseMessage = document.getElementById('response-message');
+  
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = emailInput.value;
+      
+      // Here you would typically send the email to your backend
+      // For this example, we'll just simulate a response
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      responseMessage.textContent = `Thanks! ${email} has been added to our waitlist.`;
+      emailInput.value = '';
+    });
+  </script>

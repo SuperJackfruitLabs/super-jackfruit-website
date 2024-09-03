@@ -1,13 +1,16 @@
 ---
-import { useState } from "react";
 import Neon from "./NeonText.astro";
-import "@fontsource/neonderthaw";
-import "@fontsource-variable/inconsolata";
+import CLISignup from "./CLISignup.astro";
 ---
 
 <div class="coming-soon-container">
   <div class="content">
-    <Neon text="Super Jackfruit Labs" />
+    <div class="neon-wrapper">
+      <Neon text="Super Jackfruit Labs" />
+    </div>
+    <div class="cli-wrapper">
+      <CLISignup />
+    </div>
   </div>
 </div>
 
@@ -16,20 +19,30 @@ import "@fontsource-variable/inconsolata";
   .coming-soon-container {
     position: relative;
     width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     background-color: #000000;
-    background: radial-gradient(ellipse at center, #4c054d 0%, #0c100d 100%), url('/brick-pattern.jpg');
     background-size: cover;
     background-blend-mode: multiply;
   }
 
   .content {
-    text-align: center;
-    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 800px; /* Adjust as needed */
     padding: 20px;
+  }
+
+  .neon-wrapper {
+    margin-bottom: 6rem; /* Increase this value to add more space */
+  }
+
+  .cli-wrapper {
+    width: 100%;
   }
 </style>

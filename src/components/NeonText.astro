@@ -46,27 +46,30 @@ const { text } = Astro.props;
 }
 
 h1 {
-  font-family: "Tilt Neon", system-ui;
-  font-size: 8rem;
-  font-weight: 400;
-  color: #fff;
-  padding: 4rem 6rem 5.5rem;
-  border: 0.4rem solid #fff;
-  border-radius: 2rem;
-  animation: flicker 1.5s infinite alternate;
-  user-select: none;
-  transition: text-shadow 0.2s, box-shadow 0.2s;
-  text-shadow: 0 0 4px #fff, 0 0 11px #fff, 0 0 19px #fff;
-  visibility: hidden;
-}
+    font-family: "Tilt Neon", system-ui;
+    font-size: clamp(2rem, 5vw + 1rem, 5rem); /* Fluid typography */
+    font-weight: 400;
+    color: #fff;
+    padding: clamp(1rem, 3vw, 3rem) clamp(1.5rem, 4vw, 4.5rem);
+    border: clamp(0.1rem, 0.3vw, 0.25rem) solid #fff;
+    border-radius: clamp(0.5rem, 1vw, 1.5rem);
+    animation: flicker 1.5s infinite alternate;
+    user-select: none;
+    transition: text-shadow 0.2s, box-shadow 0.2s;
+    text-shadow: 0 0 4px #fff, 0 0 11px #fff, 0 0 19px #fff;
+    visibility: hidden;
+    max-width: 90vw; /* Prevent text from overflowing on small screens */
+    margin: 0 auto; /* Center the text */
+    word-break: break-word; /* Allow long words to break */
+  }
 
-@media (max-width: 640px) {
+/* @media (max-width: 640px) {
   h1 {
-    font-size: 6rem;
-    padding: 2rem 3rem 2.75rem;
+    font-size: 3rem;
+    padding: 2rem 3rem 2.5rem;
     border-width: 0.3rem;
   }
-}
+} */
 </style>
 
 <script>
