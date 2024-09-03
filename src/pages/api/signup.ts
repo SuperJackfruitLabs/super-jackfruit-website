@@ -48,6 +48,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
   } catch (error) {
     console.error('Error:', error);
-    return new Response(JSON.stringify({ message: 'Error occurred', error: error.message }), { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ message: 'Error occurred', error: errorMessage }), { status: 400 });
   }
 };
