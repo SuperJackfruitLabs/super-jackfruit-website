@@ -1,31 +1,27 @@
 ---
 import Neon from "./NeonText.astro";
+import { WavyBackground } from "./ui/wavy-background";
 import "@fontsource/neonderthaw";
 import "@fontsource-variable/inconsolata";
 ---
 
-<div class="coming-soon-container">
+<WavyBackground 
+  client:load
+  colors={["#0fe513", "#09e6f2", "#f2a707", "#5834f9", "#a12cf9", "#fc5553", "#ef7381", "#5c18f2", "#bfee21", "#ad2624"]}
+  waveWidth={50}
+  backgroundFill="#000000"
+  blur={10}
+  speed="fast"
+  waveOpacity={0.3}
+  containerClassName="h-screen flex flex-col justify-start items-center pt-20"
+  className="wavy-background"
+>
   <div class="content">
     <Neon text="Super Jackfruit Labs" />
   </div>
-</div>
+</WavyBackground>
 
 <style>
-  /* Basic Reset */
-  .coming-soon-container {
-    position: relative;
-    width: 100%;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #000000;
-    background: radial-gradient(ellipse at center, #4c054d 0%, #0c100d 100%), url('/brick-pattern.jpg');
-    background-size: cover;
-    background-blend-mode: multiply;
-  }
-
   .content {
     text-align: center;
     color: #fff;
