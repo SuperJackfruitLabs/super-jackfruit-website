@@ -223,7 +223,9 @@ export async function initStreetScene(
       const tex = makeSignTexture(project, accent);
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 3.6), mat);
-      mesh.position.set(side * (WALL_X - 1.4), SIGN_Y, z);
+      // 1.75 off the wall: the tilt swings the wall-side corner ~1.47 back,
+      // and the 1.05 hover scale adds more — this keeps it clear of the wall
+      mesh.position.set(side * (WALL_X - 1.75), SIGN_Y, z);
       mesh.rotation.y = side * -Math.PI / 2 + side * 0.42;
       mesh.userData.project = project;
       mesh.userData.accent = accent;
