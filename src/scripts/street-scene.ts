@@ -32,10 +32,7 @@ export async function initStreetScene(
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
 
   const THREE = await import('three');
-  const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
-  const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
-  const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
-  const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
+  const { EffectComposer, RenderPass, EffectPass, BloomEffect, SMAAEffect } = await import('postprocessing');
 
   // fonts must be ready before we draw sign textures
   await Promise.all([
@@ -384,8 +381,8 @@ export async function initStreetScene(
       float f = clamp(1.0 - exp(-uFogDensity * d), 0.0, 1.0);
       col = mix(col, uFogColor, f);
 
-      // dither to keep the darks band-free
-      col += (hash(gl_FragCoord.xy + fract(uTime)) - 0.5) / 128.0;
+      // static spatial dither keeps the darks band-free without temporal noise
+      col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
       gl_FragColor = vec4(col, 1.0);
     }
   `;
@@ -483,17 +480,18 @@ export async function initStreetScene(
 
   // ---------- post-processing ----------
 
-  const composer = new EffectComposer(renderer);
-  composer.setPixelRatio(renderer.getPixelRatio());
+  // pmndrs postprocessing: mipmap-blurred bloom is temporally stable (no
+  // half-res shimmer) and SMAA removes edge crawl during motion
+  const composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType });
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.42,
-    0.32,
-    0.5
-  );
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  const bloom = new BloomEffect({
+    intensity: 0.55,
+    luminanceThreshold: 0.45,
+    luminanceSmoothing: 0.25,
+    mipmapBlur: true,
+    radius: 0.65,
+  });
+  composer.addPass(new EffectPass(camera, bloom, new SMAAEffect()));
 
   // ---------- movement & interaction ----------
 
@@ -746,7 +744,7 @@ export async function initStreetScene(
     cameraZ: () => camera.position.z,
     intensityOf: (slug: string) => signs.find((x) => x.project.slug === slug)?.intensity ?? null,
     setBloom: (strength: number) => {
-      bloom.strength = strength;
+      bloom.intensity = strength;
     },
     teleportFacing: (slug: string, dist: number) => {
       const s = signs.find((x) => x.project.slug === slug);
