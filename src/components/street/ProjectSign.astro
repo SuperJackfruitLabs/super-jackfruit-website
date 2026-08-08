@@ -1,0 +1,185 @@
+---
+import type { Project } from '../../data/projects';
+
+interface Props {
+  project: Project;
+  accent: string;
+}
+
+const { project, accent } = Astro.props;
+
+const chars = [...project.name];
+const deadIndex = project.status === 'experiment' ? Math.floor(chars.length / 2) : -1;
+---
+
+<li class="sign-slot">
+  <a
+    class={`sign sign--${project.status}`}
+    href={project.github}
+    target="_blank"
+    rel="noopener noreferrer"
+    style={`--accent: ${accent}`}
+    data-name={project.name}
+    data-tagline={project.tagline}
+    data-description={project.description}
+    data-tags={project.tags.join(',')}
+    data-status={project.status}
+    data-github={project.github}
+    data-demo={project.demo ?? ''}
+  >
+    <span class="sign__name" aria-hidden="true">
+      {chars.map((c, i) => (
+        <span class:list={['ch', { dead: i === deadIndex }]}>{c === ' ' ? ' ' : c}</span>
+      ))}
+    </span>
+    <span class="visually-hidden">{project.name} — {project.tagline}</span>
+    <span class="sign__tagline">{project.tagline}</span>
+  </a>
+  <span class="sign__pool" style={`--accent: ${accent}`} aria-hidden="true"></span>
+</li>
+
+<style>
+  .sign-slot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0 4.5rem;
+    list-style: none;
+  }
+
+  .sign {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2.4rem 3rem 2rem;
+    text-decoration: none;
+    text-align: center;
+    background: rgba(4, 4, 8, 0.55);
+    border: 2px solid color-mix(in srgb, var(--accent) 65%, white 10%);
+    border-radius: 1rem;
+    transform: translateY(-4rem);
+    box-shadow:
+      0 0 0.6rem color-mix(in srgb, var(--accent) 45%, transparent),
+      inset 0 0 1.2rem color-mix(in srgb, var(--accent) 18%, transparent);
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+  }
+
+  .sign:hover,
+  .sign:focus-visible {
+    transform: translateY(-4.6rem);
+    box-shadow:
+      0 0 1.4rem color-mix(in srgb, var(--accent) 70%, transparent),
+      inset 0 0 1.6rem color-mix(in srgb, var(--accent) 28%, transparent);
+    outline: none;
+  }
+
+  .sign:focus-visible {
+    border-color: #fff;
+  }
+
+  .sign__name {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-size: 3.2rem;
+    line-height: 1.1;
+    color: #fff;
+    white-space: nowrap;
+    text-shadow:
+      0 0 4px #fff,
+      0 0 12px var(--accent),
+      0 0 32px var(--accent),
+      0 0 64px var(--accent);
+  }
+
+  .sign__tagline {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.3rem;
+    letter-spacing: 0.06em;
+    color: rgba(239, 233, 220, 0.75);
+  }
+
+  .sign__pool {
+    position: absolute;
+    bottom: 4%;
+    width: 70%;
+    height: 3.5rem;
+    background: radial-gradient(ellipse at center, var(--accent), transparent 70%);
+    opacity: 0.16;
+    filter: blur(8px);
+    pointer-events: none;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* status: wip — irregular flicker */
+  .sign--wip .sign__name {
+    animation: sign-flicker 3.2s infinite;
+  }
+
+  @keyframes sign-flicker {
+    0%, 41%, 44.5%, 62%, 64.5%, 100% {
+      text-shadow:
+        0 0 4px #fff,
+        0 0 12px var(--accent),
+        0 0 32px var(--accent),
+        0 0 64px var(--accent);
+      opacity: 1;
+    }
+    42%, 63% {
+      text-shadow: none;
+      opacity: 0.55;
+    }
+  }
+
+  /* status: experiment — half-lit, buzzing, one letter dead */
+  .sign--experiment {
+    border-style: dashed;
+    opacity: 0.85;
+  }
+
+  .sign--experiment .sign__name {
+    animation: sign-buzz 0.4s infinite steps(2);
+    text-shadow:
+      0 0 3px #fff,
+      0 0 8px var(--accent),
+      0 0 18px var(--accent);
+  }
+
+  .sign--experiment .sign__name .ch.dead {
+    color: rgba(255, 255, 255, 0.18);
+    text-shadow: none;
+  }
+
+  @keyframes sign-buzz {
+    0% { opacity: 0.92; }
+    100% { opacity: 0.8; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sign--wip .sign__name,
+    .sign--experiment .sign__name {
+      animation: none;
+    }
+    .sign,
+    .sign:hover,
+    .sign:focus-visible {
+      transition: none;
+      transform: translateY(-4rem);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .sign-slot { padding: 0 2.4rem; }
+    .sign__name { font-size: 2.4rem; }
+  }
+</style>
