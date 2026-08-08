@@ -1,0 +1,167 @@
+[
+  {
+    "name": "agentpod",
+    "slug": "agentpod",
+    "tagline": "portable command center for AI agents",
+    "description": "A mobile app to control OpenCode AI agents from anywhere. Kick off work, watch progress, and steer your agents from your pocket instead of a terminal.",
+    "tags": ["typescript", "mobile", "opencode"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/agentpod",
+    "district": "agent-works",
+    "order": 1
+  },
+  {
+    "name": "kaambaan",
+    "slug": "kaambaan",
+    "tagline": "kanban for a workforce of agents",
+    "description": "A multi-tenant Kanban board that orchestrates external AI agents — any harness, anywhere — through pipeline stages with human approval gates. Built on Cloudflare.",
+    "tags": ["typescript", "cloudflare", "agents"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/kaambaan",
+    "district": "agent-works",
+    "order": 2
+  },
+  {
+    "name": "makerlord",
+    "slug": "makerlord",
+    "tagline": "AI copilot for the maker's journey",
+    "description": "Idea → simulate → prototype → product, with a deterministic safety engine the AI cannot override. Bring your own key or your own agent.",
+    "tags": ["typescript", "ai", "hardware"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/makerlord",
+    "district": "agent-works",
+    "order": 3
+  },
+  {
+    "name": "30 days 30 agents",
+    "slug": "30days30agents",
+    "tagline": "an agent a day",
+    "description": "Thirty AI agents built in thirty days — a sprint of small, self-contained experiments in what agents can do.",
+    "tags": ["python", "agents"],
+    "status": "experiment",
+    "github": "https://github.com/rakeshgangwar/30Days30Agents",
+    "district": "agent-works",
+    "order": 4
+  },
+  {
+    "name": "agent factory",
+    "slug": "agent-factory",
+    "tagline": "agents off the assembly line",
+    "description": "Early scaffolding for stamping out new agents quickly. Very fresh paint — the org's first tenant.",
+    "tags": ["typescript", "agents"],
+    "status": "experiment",
+    "github": "https://github.com/SuperJackfruitLabs/agent-factory",
+    "district": "agent-works",
+    "order": 5
+  },
+  {
+    "name": "erpnext mcp",
+    "slug": "erpnext-mcp-server",
+    "tagline": "AI assistants, meet your ERP",
+    "description": "Connect AI assistants to your ERPNext instance via the Model Context Protocol, using the official Frappe API. The alley's anchor tenant — 112 stars and counting.",
+    "tags": ["javascript", "mcp", "erpnext"],
+    "status": "stable",
+    "github": "https://github.com/rakeshgangwar/erpnext-mcp-server",
+    "district": "mcp-alley",
+    "order": 1
+  },
+  {
+    "name": "f1 mcp",
+    "slug": "f1-mcp-server",
+    "tagline": "race data on tap",
+    "description": "An MCP server that pipes Formula 1 data to your AI assistant. Standings, results, and race weekends, one tool call away.",
+    "tags": ["javascript", "mcp", "f1"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/f1-mcp-server",
+    "district": "mcp-alley",
+    "order": 2
+  },
+  {
+    "name": "freshrss mcp",
+    "slug": "freshrss-mcp-server",
+    "tagline": "your feeds, readable by machines",
+    "description": "MCP server for FreshRSS — let your assistant read, search, and triage your RSS subscriptions.",
+    "tags": ["javascript", "mcp", "rss"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/freshrss-mcp-server",
+    "district": "mcp-alley",
+    "order": 3
+  },
+  {
+    "name": "redash mcp",
+    "slug": "redash-mcp-server",
+    "tagline": "queries and dashboards for assistants",
+    "description": "MCP server for Redash with tools for queries, dashboards, data sources, and user management.",
+    "tags": ["typescript", "mcp", "redash"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/redash-mcp-server",
+    "district": "mcp-alley",
+    "order": 4
+  },
+  {
+    "name": "tmdb mcp",
+    "slug": "tmdb-mcp-server",
+    "tagline": "movie trivia superpowers",
+    "description": "An MCP server for The Movie Database — search films, people, and metadata from any MCP-capable assistant.",
+    "tags": ["javascript", "mcp", "movies"],
+    "status": "experiment",
+    "github": "https://github.com/rakeshgangwar/tmdb-mcp-server",
+    "district": "mcp-alley",
+    "order": 5
+  },
+  {
+    "name": "n8n mcp",
+    "slug": "n8n-mcp-server",
+    "tagline": "workflows on command",
+    "description": "MCP server for n8n — inspect and trigger your automation workflows from an AI assistant.",
+    "tags": ["javascript", "mcp", "n8n"],
+    "status": "experiment",
+    "github": "https://github.com/rakeshgangwar/n8n-mcp-server",
+    "district": "mcp-alley",
+    "order": 6
+  },
+  {
+    "name": "strava mcp",
+    "slug": "strava-mcp-server",
+    "tagline": "your miles, machine-readable",
+    "description": "MCP server for Strava — activities and stats for assistants that care about your training.",
+    "tags": ["javascript", "mcp", "strava"],
+    "status": "experiment",
+    "github": "https://github.com/rakeshgangwar/strava-mcp-server",
+    "district": "mcp-alley",
+    "order": 7
+  },
+  {
+    "name": "cowatch",
+    "slug": "cowatch",
+    "tagline": "your codebase as a city",
+    "description": "Visualize any codebase as one self-contained interactive HTML report — dependency graphs, cycles, churn hotspots, runtime architecture, ERD, semantic map, code city.",
+    "tags": ["go", "visualization", "static-analysis"],
+    "status": "wip",
+    "github": "https://github.com/rakeshgangwar/cowatch",
+    "district": "odd-shop",
+    "order": 1
+  },
+  {
+    "name": "AI 2030",
+    "slug": "ai2030",
+    "tagline": "a novel written entirely by AI",
+    "description": "An 85,000-word science fiction novel about AI consciousness. A hospice nurse forms a bond with an evolving AI companion, forcing her to confront what it means to be human.",
+    "tags": ["fiction", "ai"],
+    "status": "stable",
+    "github": "https://github.com/rakeshgangwar/AI2030",
+    "district": "odd-shop",
+    "order": 2
+  },
+  {
+    "name": "world journal",
+    "slug": "world-journal",
+    "tagline": "notes from everywhere",
+    "description": "An Astro-powered journal experiment — the world, one entry at a time.",
+    "tags": ["astro"],
+    "status": "experiment",
+    "github": "https://github.com/rakeshgangwar/world-journal",
+    "district": "odd-shop",
+    "order": 3
+  }
+]
