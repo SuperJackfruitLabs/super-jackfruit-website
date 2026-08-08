@@ -299,92 +299,119 @@ export async function initStreetScene(
     return hueAnchors[hueAnchors.length - 1].color.clone();
   }
 
-  // generative aurora-smoke wall art: one unique, non-tiling canvas per wall
-  function makeWallArtTexture(flip: boolean): import('three').CanvasTexture {
-    const W = 8192;
-    const H = 512;
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const ctx = c.getContext('2d')!;
-
-    const zAtX = (x: number) => {
-      const f = x / W;
-      return flip ? endZ - 15 + f * streetLen : wallZNear - f * streetLen;
-    };
-    const css = (col: import('three').Color, alpha: number) =>
-      `rgba(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)},${alpha})`;
-
-    // dark panel background with a soft vertical falloff
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#0e0a15');
-    bg.addColorStop(0.55, '#0a0710');
-    bg.addColorStop(1, '#07050b');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-
-    // speckle noise
-    for (let i = 0; i < 5000; i++) {
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      ctx.fillStyle = `rgba(255,255,255,${0.015 + Math.random() * 0.03})`;
-      ctx.fillRect(x, y, 1.5, 1.5);
+  // aurora-smoke walls: live GPU shader — domain-warped fbm noise drifting
+  // slowly, colored by a district-hue lookup along the street. Float
+  // precision + dithering means no banding, and it actually moves.
+  const hueCanvas = document.createElement('canvas');
+  hueCanvas.width = 512;
+  hueCanvas.height = 1;
+  {
+    const hctx = hueCanvas.getContext('2d')!;
+    for (let x = 0; x < 512; x++) {
+      const zWorld = wallZNear - (x / 511) * streetLen;
+      const col = hueAtZ(zWorld);
+      hctx.fillStyle = `rgb(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)})`;
+      hctx.fillRect(x, 0, 1, 1);
     }
+  }
+  const hueTex = new THREE.CanvasTexture(hueCanvas);
+  hueTex.colorSpace = THREE.SRGBColorSpace;
+  hueTex.wrapS = hueTex.wrapT = THREE.ClampToEdgeWrapping;
 
-    // aurora smoke — slow bands of luminous haze drifting along the wall,
-    // built from thousands of soft additive blobs following sine paths
-    ctx.globalCompositeOperation = 'lighter';
-    const BANDS = 120;
-    for (let b = 0; b < BANDS; b++) {
-      const cx = Math.random() * W;
-      const col = hueAtZ(zAtX(cx));
-      const baseY = H * (0.15 + Math.random() * 0.65);
-      const amp = 34 + Math.random() * 78;
-      const len = 500 + Math.random() * 1200;
-      const ph = Math.random() * 7;
-      const wave = 130 + Math.random() * 120;
-      for (let x = cx - len / 2; x < cx + len / 2; x += 18) {
-        const y = baseY + Math.sin(x / wave + ph) * amp;
-        const r = 50 + Math.random() * 85;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, css(col, 0.016));
-        g.addColorStop(1, css(col, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  const auroraVertex = /* glsl */ `
+    varying vec2 vUv;
+    varying vec3 vWorld;
+    void main() {
+      vUv = uv;
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorld = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `;
+
+  const auroraFragment = /* glsl */ `
+    uniform float uTime;
+    uniform float uFlip;
+    uniform float uScaleX;
+    uniform sampler2D uHue;
+    uniform vec3 uFogColor;
+    uniform float uFogDensity;
+    varying vec2 vUv;
+    varying vec3 vWorld;
+
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    }
+    float vnoise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(
+        mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+        mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+        u.y
+      );
+    }
+    float fbm(vec2 p) {
+      float v = 0.0;
+      float a = 0.5;
+      for (int i = 0; i < 4; i++) {
+        v += a * vnoise(p);
+        p *= 2.03;
+        a *= 0.5;
       }
-    }
-    ctx.globalCompositeOperation = 'source-over';
-
-    // glints — the only marks bright enough to catch the bloom
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * W;
-      const y = 30 + Math.random() * (H - 60);
-      const col = hueAtZ(zAtX(x)).lerp(new THREE.Color('#ffffff'), 0.55);
-      ctx.fillStyle = css(col, 0.85);
-      ctx.beginPath();
-      ctx.arc(x, y, 1.6 + Math.random() * 1.4, 0, Math.PI * 2);
-      ctx.fill();
+      return v;
     }
 
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAniso;
-    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-    return tex;
+    void main() {
+      vec2 uv = vec2(mix(vUv.x, 1.0 - vUv.x, uFlip), vUv.y);
+      vec3 hue = texture2D(uHue, vec2(uv.x, 0.5)).rgb;
+
+      vec2 p = vec2(uv.x * uScaleX, uv.y * 2.4);
+      float t = uTime * 0.045;
+      vec2 q = vec2(
+        fbm(p + vec2(t * 0.7, t * 0.25)),
+        fbm(p + vec2(-t * 0.4, t * 0.55) + 5.2)
+      );
+      float n = fbm(p + 2.2 * q);
+      float band = smoothstep(0.42, 0.9, n);
+      float glow = band * (0.12 + 0.5 * n) * 0.55;
+
+      vec3 base = mix(vec3(0.020, 0.014, 0.030), vec3(0.008, 0.006, 0.014), uv.y);
+      vec3 col = base + hue * glow;
+
+      float d = distance(cameraPosition, vWorld);
+      float f = clamp(1.0 - exp(-uFogDensity * d), 0.0, 1.0);
+      col = mix(col, uFogColor, f);
+
+      // dither to keep the darks band-free
+      col += (hash(gl_FragCoord.xy + fract(uTime)) - 0.5) / 128.0;
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function makeAuroraMaterial(flip: boolean) {
+    return new THREE.ShaderMaterial({
+      vertexShader: auroraVertex,
+      fragmentShader: auroraFragment,
+      uniforms: {
+        uTime: { value: 0 },
+        uFlip: { value: flip ? 1 : 0 },
+        uScaleX: { value: streetLen * 0.09 },
+        uHue: { value: hueTex },
+        uFogColor: { value: new THREE.Color(INK) },
+        uFogDensity: { value: 0.042 },
+      },
+    });
   }
 
   const wallGeo = new THREE.PlaneGeometry(streetLen, 16);
-  const leftWall = new THREE.Mesh(
-    wallGeo,
-    new THREE.MeshBasicMaterial({ map: makeWallArtTexture(false) })
-  );
+  const wallMaterials = [makeAuroraMaterial(false), makeAuroraMaterial(true)];
+  const leftWall = new THREE.Mesh(wallGeo, wallMaterials[0]);
   leftWall.position.set(-WALL_X, 8, wallCenterZ);
   leftWall.rotation.y = Math.PI / 2;
   scene.add(leftWall);
-  const rightWall = new THREE.Mesh(
-    wallGeo,
-    new THREE.MeshBasicMaterial({ map: makeWallArtTexture(true) })
-  );
+  const rightWall = new THREE.Mesh(wallGeo, wallMaterials[1]);
   rightWall.position.set(WALL_X, 8, wallCenterZ);
   rightWall.rotation.y = -Math.PI / 2;
   scene.add(rightWall);
@@ -436,23 +463,6 @@ export async function initStreetScene(
     scene.add(mesh);
     clickables.push(mesh);
     endTexts.push(mesh);
-  }
-
-  // lamps along the street
-  const lampGlowTex = makeGlowTexture('#ffd678');
-  for (let lz = -24; lz > endZ; lz -= 34) {
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.09, 6.4),
-      new THREE.MeshBasicMaterial({ color: 0x08080c })
-    );
-    pole.position.set(-WALL_X + 1.1, 3.2, lz);
-    scene.add(pole);
-    const head = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: lampGlowTex, color: 0xffc860, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })
-    );
-    head.scale.set(2.6, 2.6, 1);
-    head.position.set(-WALL_X + 1.1, 6.6, lz);
-    scene.add(head);
   }
 
   // rain
@@ -703,6 +713,9 @@ export async function initStreetScene(
       (textMesh.material as import('three').MeshBasicMaterial).opacity = reveal;
       textMesh.visible = textVisible;
     }
+
+    // aurora drift
+    for (const wm of wallMaterials) wm.uniforms.uTime.value = t;
 
     // rain fall
     const pos = rainGeo.getAttribute('position') as import('three').BufferAttribute;
