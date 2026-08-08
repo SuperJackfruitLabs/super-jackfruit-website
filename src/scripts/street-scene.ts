@@ -73,8 +73,7 @@ export async function initStreetScene(
     c.width = 2048;
     c.height = 1024;
     const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#050508';
-    ctx.fillRect(0, 0, c.width, c.height);
+    // transparent background — the sign is just tube, text, and glow on the wall
 
     // border tube: glow pass, then clean stroke on top (shadows paint over
     // earlier strokes, so never re-stroke with a shadow active)
@@ -508,20 +507,182 @@ export async function initStreetScene(
     targetZ = Math.max(minZ, Math.min(CAM_START_Z, targetZ));
   };
 
-  // "enter the shop" focus mode — set on sign click, cleared when the panel closes
+  // "enter the shop" focus mode — set on sign click; details appear on an
+  // in-world info board on the wall beside the sign, not a DOM overlay
   let focusPose: { pos: import('three').Vector3; look: import('three').Vector3 } | null = null;
   let focusedMesh: import('three').Object3D | null = null;
-  const panelOpen = () => document.body.classList.contains('panel-open');
+
+  const STATUS_COPY: Record<string, string> = {
+    stable: 'lit & steady · open for business',
+    wip: 'wet paint · mind the sparks',
+    experiment: 'half-lit · enter at your own risk',
+  };
+  const STATUS_COLOR: Record<string, string> = {
+    stable: '#0fe513',
+    wip: '#f2a707',
+    experiment: '#a12cf9',
+  };
+
+  function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const probe = line ? `${line} ${word}` : word;
+      if (ctx.measureText(probe).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = probe;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function makeBoardTexture(project: Project, accent: string): import('three').CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = 1350;
+    c.height = 1000;
+    const ctx = c.getContext('2d')!;
+
+    // whisper of backing so the text reads over the aurora
+    ctx.fillStyle = 'rgba(4, 4, 10, 0.55)';
+    roundRect(ctx, 8, 8, c.width - 16, c.height - 16, 44);
+    ctx.fill();
+    ctx.strokeStyle = `${accent}55`;
+    ctx.lineWidth = 3;
+    roundRect(ctx, 8, 8, c.width - 16, c.height - 16, 44);
+    ctx.stroke();
+
+    let y = 130;
+    // status line
+    ctx.fillStyle = STATUS_COLOR[project.status] ?? '#0fe513';
+    ctx.beginPath();
+    ctx.arc(90, y - 16, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = '52px "Inconsolata Variable", monospace';
+    ctx.fillStyle = 'rgba(239,233,220,0.7)';
+    ctx.fillText(STATUS_COPY[project.status] ?? '', 130, y);
+    y += 110;
+
+    // description
+    ctx.font = '58px "Inconsolata Variable", monospace';
+    ctx.fillStyle = '#efe9dc';
+    const lines = wrapText(ctx, project.description, c.width - 180);
+    for (const line of lines.slice(0, 8)) {
+      ctx.fillText(line, 90, y);
+      y += 86;
+    }
+
+    // tags
+    y = Math.min(y + 40, c.height - 90);
+    ctx.font = '48px "Inconsolata Variable", monospace';
+    ctx.fillStyle = 'rgba(239,233,220,0.6)';
+    ctx.fillText(project.tags.map((tag) => `[${tag}]`).join('  '), 90, y);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    return tex;
+  }
+
+  function makeButtonTexture(label: string, accent: string): import('three').CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = 900;
+    c.height = 220;
+    const ctx = c.getContext('2d')!;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6;
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 24;
+    roundRect(ctx, 14, 14, c.width - 28, c.height - 28, 36);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+    ctx.font = '82px "Inconsolata Variable", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, c.width / 2, c.height / 2 + 4);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    return tex;
+  }
+
+  // reusable board + buttons, retextured per project
+  const BOARD_DZ = 7.9; // how far past the sign, along the wall
+  const boardMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.2, 3.85),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: false })
+  );
+  const githubBtn = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.2, 0.78),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: false })
+  );
+  const demoBtn = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.2, 0.78),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: false })
+  );
+  boardMesh.visible = githubBtn.visible = demoBtn.visible = false;
+  scene.add(boardMesh, githubBtn, demoBtn);
+  clickables.push(githubBtn, demoBtn);
+  let boardTargetOpacity = 0;
+  let boardOpacity = 0;
+
+  function closeBoard(): void {
+    boardTargetOpacity = 0;
+    focusPose = null;
+    focusedMesh = null;
+  }
 
   function focusOnSign(mesh: import('three').Object3D): void {
+    const project = mesh.userData.project as Project;
+    const accent = mesh.userData.accent as string;
     const normal = new THREE.Vector3(0, 0, 1).applyEuler(mesh.rotation).normalize();
-    const pos = mesh.position.clone().addScaledVector(normal, 6.8);
-    pos.y = SIGN_Y - 0.2;
-    const forward = mesh.position.clone().sub(pos).normalize();
-    const right = forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
-    // aim right of the sign so it settles on the left half, clear of the panel
-    const look = mesh.position.clone().addScaledVector(right, 1.15);
-    focusPose = { pos, look };
+
+    // dress the board and its buttons for this project
+    const bm = boardMesh.material as import('three').MeshBasicMaterial;
+    bm.map?.dispose();
+    bm.map = makeBoardTexture(project, accent);
+    bm.needsUpdate = true;
+    boardMesh.position.copy(mesh.position);
+    boardMesh.position.z -= BOARD_DZ;
+    boardMesh.position.y = SIGN_Y - 0.2;
+    // lift slightly off the wall so the sign's tilted far edge can't occlude it
+    boardMesh.position.addScaledVector(normal, 0.45);
+    boardMesh.rotation.copy(mesh.rotation);
+
+    const gm = githubBtn.material as import('three').MeshBasicMaterial;
+    gm.map?.dispose();
+    gm.map = makeButtonTexture('view source →', accent);
+    gm.needsUpdate = true;
+    githubBtn.position.copy(boardMesh.position);
+    githubBtn.position.y = SIGN_Y - 2.65;
+    githubBtn.rotation.copy(mesh.rotation);
+    githubBtn.userData.url = project.github;
+
+    if (project.demo) {
+      const dm = demoBtn.material as import('three').MeshBasicMaterial;
+      dm.map?.dispose();
+      dm.map = makeButtonTexture('live demo →', accent);
+      dm.needsUpdate = true;
+      demoBtn.position.copy(boardMesh.position);
+      demoBtn.position.y = SIGN_Y - 3.6;
+      demoBtn.rotation.copy(mesh.rotation);
+      demoBtn.userData.url = project.demo;
+    }
+    demoBtn.visible = Boolean(project.demo);
+    boardMesh.visible = githubBtn.visible = true;
+    boardTargetOpacity = 1;
+
+    // frame the sign + board pair like reading a shop's menu
+    const mid = mesh.position.clone().lerp(boardMesh.position, 0.5);
+    mid.y = SIGN_Y - 0.9;
+    const pos = mid.clone().addScaledVector(normal, 9.2);
+    pos.y = SIGN_Y - 0.4;
+    focusPose = { pos, look: mid };
     focusedMesh = mesh;
   }
 
@@ -529,7 +690,7 @@ export async function initStreetScene(
     'wheel',
     (e) => {
       e.preventDefault();
-      if (panelOpen()) return;
+      if (focusedMesh) closeBoard(); // walking away dismisses the board
       const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
       targetZ -= delta * 0.02;
       clampZ();
@@ -549,9 +710,10 @@ export async function initStreetScene(
   });
   window.addEventListener('pointermove', (e) => {
     mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-    if (!dragging || panelOpen()) return;
+    if (!dragging) return;
     const dy = e.clientY - dragStartY;
     moved = Math.max(moved, Math.abs(dy));
+    if (moved > 6 && focusedMesh) closeBoard();
     targetZ = dragStartZ + dy * 0.05;
     clampZ();
   });
@@ -561,14 +723,16 @@ export async function initStreetScene(
 
   const KEY_STEP = 6;
   window.addEventListener('keydown', (e) => {
-    if (document.body.classList.contains('panel-open')) return;
-    if (['ArrowUp', 'w', 'W', 'ArrowRight'].includes(e.key)) {
-      targetZ -= KEY_STEP;
-      clampZ();
-    } else if (['ArrowDown', 's', 'S', 'ArrowLeft'].includes(e.key)) {
-      targetZ += KEY_STEP;
-      clampZ();
+    if (e.key === 'Escape' && focusedMesh) {
+      closeBoard();
+      return;
     }
+    const fwd = ['ArrowUp', 'w', 'W', 'ArrowRight'].includes(e.key);
+    const back = ['ArrowDown', 's', 'S', 'ArrowLeft'].includes(e.key);
+    if (!fwd && !back) return;
+    if (focusedMesh) closeBoard(); // walking away dismisses the board
+    targetZ += fwd ? -KEY_STEP : KEY_STEP;
+    clampZ();
   });
 
   const raycaster = new THREE.Raycaster();
@@ -601,14 +765,6 @@ export async function initStreetScene(
     }
     if (obj.userData.project) {
       focusOnSign(obj);
-      // let the camera start its glide before the panel slides in
-      window.setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent('project:open', {
-            detail: { project: obj.userData.project, accent: obj.userData.accent },
-          })
-        );
-      }, 380);
     }
   });
 
@@ -631,20 +787,11 @@ export async function initStreetScene(
   };
   const lookTarget = new THREE.Vector3(0, CAM_Y - 0.3, CAM_START_Z - 12);
   const desiredLook = new THREE.Vector3();
-  let panelWasOpen = false;
   let reflectionsHidden = false;
 
   renderer.setAnimationLoop(() => {
     if (document.hidden) return;
     const t = (performance.now() - startTime) / 1000;
-
-    // step back onto the street once the panel closes
-    if (panelOpen()) panelWasOpen = true;
-    else if (panelWasOpen) {
-      panelWasOpen = false;
-      focusPose = null;
-      focusedMesh = null;
-    }
 
     const dt = Math.min(0.1, Math.max(0.001, t - lastT));
     lastT = t;
@@ -733,6 +880,15 @@ export async function initStreetScene(
 
     // aurora drift
     auroraMaterial.uniforms.uTime.value = t;
+
+    // info board fade
+    boardOpacity += (boardTargetOpacity - boardOpacity) * (1 - Math.exp(-10 * dt));
+    for (const m of [boardMesh, githubBtn, demoBtn]) {
+      (m.material as import('three').MeshBasicMaterial).opacity = boardOpacity;
+    }
+    if (boardTargetOpacity === 0 && boardOpacity < 0.02) {
+      boardMesh.visible = githubBtn.visible = demoBtn.visible = false;
+    }
 
     // rain fall
     const pos = rainGeo.getAttribute('position') as import('three').BufferAttribute;
