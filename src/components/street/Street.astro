@@ -1,0 +1,286 @@
+---
+import NeonText from '../NeonText.astro';
+import ProjectSign from './ProjectSign.astro';
+import { districts, byDistrict } from '../../data/projects';
+import '@fontsource-variable/inconsolata';
+import '@fontsource/neonderthaw';
+---
+
+<div class="scene" id="scene">
+  <canvas id="atmosphere" aria-hidden="true"></canvas>
+
+  <div class="layer layer--backdrop" aria-hidden="true"></div>
+
+  <div class="layer layer--street" id="street">
+    <header class="entrance">
+      <NeonText text="Super Jackfruit Labs" />
+      <p class="entrance__script">open source experiments · open late</p>
+      <p class="entrance__hint">← drag, scroll, or arrow keys to walk the street →</p>
+    </header>
+
+    <ol class="districts">
+      {districts.map((d) => (
+        <li class="district" style={`--accent: ${d.accent}`}>
+          <div class="district__header">
+            <h2 class="district__sign">{d.name}</h2>
+            <p class="district__blurb">{d.blurb}</p>
+          </div>
+          <ol class="district__signs">
+            {byDistrict(d.id).map((p) => (
+              <ProjectSign project={p} accent={d.accent} />
+            ))}
+          </ol>
+        </li>
+      ))}
+    </ol>
+
+    <footer class="street-end">
+      <h2 class="street-end__title">end of the street</h2>
+      <p class="street-end__copy">everything here is open source. come say hi:</p>
+      <nav class="street-end__links">
+        <a href="https://github.com/rakeshgangwar" target="_blank" rel="noopener noreferrer">github.com/rakeshgangwar</a>
+        <a href="https://github.com/SuperJackfruitLabs" target="_blank" rel="noopener noreferrer">github.com/SuperJackfruitLabs</a>
+      </nav>
+    </footer>
+  </div>
+
+  <div class="layer layer--fore" aria-hidden="true">
+    <div class="lamppost" style="--x: calc(100vw + 60rem)"></div>
+    <div class="lamppost" style="--x: calc(100vw + 230rem)"></div>
+    <div class="lamppost" style="--x: calc(100vw + 400rem)"></div>
+  </div>
+</div>
+
+<style>
+  .scene {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #07070a;
+    touch-action: none;
+    user-select: none;
+  }
+
+  #atmosphere {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    will-change: transform;
+  }
+
+  /* distant glow — pans slowest */
+  .layer--backdrop {
+    z-index: 1;
+    width: 400vw;
+    background:
+      radial-gradient(ellipse 60rem 30rem at 20% 70%, rgba(76, 5, 77, 0.55), transparent 70%),
+      radial-gradient(ellipse 70rem 32rem at 55% 65%, rgba(9, 41, 60, 0.5), transparent 70%),
+      radial-gradient(ellipse 55rem 28rem at 85% 72%, rgba(76, 5, 77, 0.45), transparent 70%);
+  }
+
+  /* the wall + sidewalk — pans 1:1 */
+  .layer--street {
+    z-index: 2;
+    display: flex;
+    align-items: stretch;
+    width: max-content;
+  }
+
+  .layer--street::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 14% 0;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(76, 5, 77, 0.85) 0%, rgba(12, 16, 13, 0.92) 75%),
+      url('/brick-pattern.jpg');
+    background-size: cover, 90rem auto;
+    background-blend-mode: multiply;
+    z-index: -1;
+  }
+
+  .layer--street::after {
+    content: '';
+    position: absolute;
+    inset: 86% 0 0 0;
+    background: linear-gradient(#15151d, #0a0a10 40%);
+    border-top: 1px solid rgba(239, 233, 220, 0.12);
+    z-index: -1;
+  }
+
+  .entrance {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.4rem;
+    width: 100vw;
+    padding: 0 6vw;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .entrance__script {
+    font-family: 'Neonderthaw', cursive;
+    font-size: 3.4rem;
+    color: #09e6f2;
+    text-shadow: 0 0 8px rgba(9, 230, 242, 0.8), 0 0 24px rgba(9, 230, 242, 0.5);
+    margin: 0;
+  }
+
+  .entrance__hint {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.4rem;
+    letter-spacing: 0.08em;
+    color: rgba(239, 233, 220, 0.55);
+    margin: 0;
+  }
+
+  .districts {
+    display: flex;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+  }
+
+  .district {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    list-style: none;
+    padding: 0 3rem;
+    border-left: 1px dashed rgba(239, 233, 220, 0.12);
+  }
+
+  .district__header {
+    position: absolute;
+    top: 7%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .district__sign {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-size: 2.6rem;
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 10px var(--accent), 0 0 30px var(--accent);
+    margin: 0;
+  }
+
+  .district__blurb {
+    font-family: 'Neonderthaw', cursive;
+    font-size: 2.4rem;
+    color: rgba(239, 233, 220, 0.7);
+    margin: 0.4rem 0 0;
+  }
+
+  .district__signs {
+    display: flex;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+  }
+
+  .street-end {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.6rem;
+    width: 100vw;
+    background:
+      linear-gradient(rgba(7, 7, 10, 0.72), rgba(7, 7, 10, 0.85)),
+      url('/graffiti-wall.jpg') center / cover;
+    text-align: center;
+  }
+
+  .street-end__title {
+    font-family: 'Neonderthaw', cursive;
+    font-size: 5.6rem;
+    font-weight: 400;
+    color: #fc5553;
+    text-shadow: 0 0 10px rgba(252, 85, 83, 0.8), 0 0 34px rgba(252, 85, 83, 0.5);
+    margin: 0;
+  }
+
+  .street-end__copy {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.6rem;
+    color: rgba(239, 233, 220, 0.8);
+    margin: 0;
+  }
+
+  .street-end__links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .street-end__links a {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.6rem;
+    color: #bfee21;
+    text-shadow: 0 0 8px rgba(191, 238, 33, 0.6);
+    text-decoration: none;
+  }
+
+  .street-end__links a:hover,
+  .street-end__links a:focus-visible {
+    text-decoration: underline;
+    outline: none;
+  }
+
+  /* foreground silhouettes — pan fastest */
+  .layer--fore {
+    z-index: 3;
+    width: 600rem;
+    pointer-events: none;
+  }
+
+  .lamppost {
+    position: absolute;
+    left: var(--x);
+    bottom: 8%;
+    width: 0.8rem;
+    height: 46%;
+    background: #030306;
+    border-radius: 0.4rem 0.4rem 0 0;
+  }
+
+  .lamppost::after {
+    content: '';
+    position: absolute;
+    top: -1.6rem;
+    left: -1.2rem;
+    width: 3.2rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(242, 167, 7, 0.9), transparent 70%);
+    filter: blur(2px);
+  }
+
+  @media (max-width: 640px) {
+    .entrance__script { font-size: 2.6rem; }
+    .district__sign { font-size: 2rem; letter-spacing: 0.2em; }
+    .district__blurb { font-size: 2rem; }
+  }
+</style>
+
+<script>
+  import { initStreet } from '../../scripts/street-controller';
+  initStreet();
+</script>
