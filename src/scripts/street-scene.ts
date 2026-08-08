@@ -332,7 +332,6 @@ export async function initStreetScene(
     uniform float uTime;
     uniform float uZNear;
     uniform float uLen;
-    uniform vec4 uComets[3];
     uniform sampler2D uHue;
     uniform vec3 uFogColor;
     uniform float uFogDensity;
@@ -382,22 +381,6 @@ export async function initStreetScene(
       float height = clamp(vWorld.y / 16.0, 0.0, 1.0);
       vec3 base = mix(vec3(0.020, 0.014, 0.030), vec3(0.008, 0.006, 0.014), height);
       vec3 col = base + hue * glow;
-
-      // comets: crisp bright head + exponential tail, diffused by the smoke
-      for (int i = 0; i < 3; i++) {
-        vec4 cm = uComets[i];
-        if (cm.w > 0.001) {
-          vec2 cdir = vec2(cos(cm.z), sin(cm.z));
-          vec2 dvec = p - cm.xy;
-          float along = dot(dvec, cdir);
-          float perp = dot(dvec, vec2(-cdir.y, cdir.x));
-          float lateral = exp(-perp * perp * 90.0);
-          float profile = along > 0.0 ? exp(-along * along * 60.0) : exp(along * 2.4);
-          float star = lateral * profile * cm.w;
-          star *= 0.6 + 0.4 * n;
-          col += vec3(0.80, 0.95, 1.05) * star;
-        }
-      }
 
       float d = distance(cameraPosition, vWorld);
       float f = clamp(1.0 - exp(-uFogDensity * d), 0.0, 1.0);
@@ -485,147 +468,6 @@ export async function initStreetScene(
     scene.add(mesh);
     clickables.push(mesh);
     endTexts.push(mesh);
-  }
-
-  // ---------- sky life ----------
-  // shooting stars live INSIDE the aurora: comet streaks computed in the
-  // wall/ceiling shader, diffused by the smoke. Ships are real geometry
-  // cruising the corridor overhead.
-
-  interface Comet {
-    x: number;
-    y: number;
-    angle: number;
-    speed: number;
-    life: number;
-    maxLife: number;
-    active: boolean;
-    nextAt: number;
-  }
-
-  const comets: Comet[] = [
-    { x: 0, y: 0, angle: 0, speed: 0, life: 0, maxLife: 0, active: false, nextAt: 2 },
-    { x: 0, y: 0, angle: 0, speed: 0, life: 0, maxLife: 0, active: false, nextAt: 6 },
-    { x: 0, y: 0, angle: 0, speed: 0, life: 0, maxLife: 0, active: false, nextAt: 11 },
-  ];
-  const cometUniform = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
-  auroraMaterial.uniforms.uComets = { value: cometUniform };
-
-  function updateComets(now: number, dt: number): void {
-    comets.forEach((c, i) => {
-      if (!c.active) {
-        cometUniform[i].set(0, 0, 0, 0);
-        if (now >= c.nextAt) {
-          // spawn just ahead of the camera in aurora p-space so it's on screen
-          const camP = (wallZNear - camera.position.z) * 0.09;
-          c.x = camP + 0.6 + Math.random() * 4;
-          c.y = 0.6 + Math.random() * 2.8;
-          c.angle = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.9;
-          c.speed = 1.4 + Math.random() * 1.3;
-          c.maxLife = 1.5 + Math.random() * 1.0;
-          c.life = c.maxLife;
-          c.active = true;
-        }
-        return;
-      }
-      c.life -= dt;
-      if (c.life <= 0) {
-        c.active = false;
-        c.nextAt = now + 2.5 + Math.random() * 5;
-        cometUniform[i].set(0, 0, 0, 0);
-        return;
-      }
-      c.x += Math.cos(c.angle) * c.speed * dt;
-      c.y += Math.sin(c.angle) * c.speed * dt * 0.3;
-      const env = Math.min(1, c.life / 0.5, (c.maxLife - c.life) / 0.2);
-      cometUniform[i].set(c.x, c.y, c.angle, env * 0.9);
-    });
-  }
-
-  // little spaceships: dark hull, cyan stripe, flickering exhaust
-  interface Ship {
-    group: import('three').Group;
-    flame: import('three').Mesh;
-    flameGlow: import('three').Sprite;
-    vel: import('three').Vector3;
-    baseY: number;
-    phase: number;
-    active: boolean;
-    nextAt: number;
-  }
-
-  const emberGlowTex = makeGlowTexture('#ffc37a');
-  const ships: Ship[] = [];
-
-  function makeShip(firstAt: number): void {
-    const group = new THREE.Group();
-    const hullMat = new THREE.MeshBasicMaterial({ color: 0x141926, fog: false });
-    const stripeMat = new THREE.MeshBasicMaterial({ color: 0x09e6f2, fog: false });
-
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.72, 10).rotateX(Math.PI / 2), hullMat);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 10).rotateX(Math.PI / 2), hullMat);
-    nose.position.z = 0.53;
-    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.152, 0.152, 0.07, 10).rotateX(Math.PI / 2), stripeMat);
-    stripe.position.z = 0.12;
-    group.add(body, nose, stripe);
-    for (let i = 0; i < 3; i++) {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.30, 0.26), hullMat);
-      const a = (i / 3) * Math.PI * 2;
-      fin.position.set(Math.cos(a) * 0.17, Math.sin(a) * 0.17, -0.30);
-      fin.rotation.z = a + Math.PI / 2;
-      group.add(fin);
-    }
-    const flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.09, 0.55, 8).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
-    );
-    flame.position.z = -0.68;
-    const flameGlow = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: emberGlowTex, color: 0xffb057, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })
-    );
-    flameGlow.scale.setScalar(0.9);
-    flameGlow.position.z = -0.8;
-    group.add(flame, flameGlow);
-    group.scale.setScalar(1.6);
-    group.visible = false;
-    scene.add(group);
-    ships.push({
-      group, flame, flameGlow, vel: new THREE.Vector3(), baseY: 0, phase: Math.random() * 7, active: false, nextAt: firstAt,
-    });
-  }
-
-  makeShip(4);
-  makeShip(13);
-
-  function updateShips(now: number, dt: number): void {
-    for (const s of ships) {
-      if (!s.active) {
-        if (now >= s.nextAt) {
-          const fromLeft = Math.random() < 0.5;
-          s.baseY = 9.5 + Math.random() * 2.5;
-          s.group.position.set((fromLeft ? -1 : 1) * (2 + Math.random() * 3.5), s.baseY, camera.position.z - 55);
-          s.vel.set((fromLeft ? 1 : -1) * (0.4 + Math.random() * 0.7), 0, 14 + Math.random() * 5);
-          s.active = true;
-          s.group.visible = true;
-        }
-        continue;
-      }
-      s.group.position.addScaledVector(s.vel, dt);
-      s.group.position.y = s.baseY + Math.sin(now * 0.9 + s.phase) * 0.6;
-      // face along travel, with a gentle bank
-      const ahead = s.group.position.clone().addScaledVector(s.vel, 0.5);
-      ahead.y = s.baseY + Math.sin((now + 0.5) * 0.9 + s.phase) * 0.6;
-      s.group.lookAt(ahead);
-      s.group.rotation.z = Math.sin(now * 0.7 + s.phase) * 0.25;
-      // exhaust flicker
-      s.flame.scale.y = 1 + Math.sin(now * 42 + s.phase) * 0.3;
-      (s.flameGlow.material as import('three').SpriteMaterial).opacity = 0.65 + 0.25 * Math.sin(now * 31 + s.phase);
-      if (s.group.position.z > camera.position.z + 8) {
-        s.active = false;
-        s.group.visible = false;
-        s.nextAt = now + 8 + Math.random() * 9;
-      }
-    }
   }
 
   // ---------- post-processing ----------
@@ -1035,8 +877,6 @@ export async function initStreetScene(
       boardMesh.visible = githubBtn.visible = demoBtn.visible = false;
     }
 
-    updateComets(t, dt);
-    updateShips(t, dt);
 
     composer.render();
   });
@@ -1057,10 +897,6 @@ export async function initStreetScene(
     },
     cameraZ: () => camera.position.z,
     pitch: () => camera.rotation.x,
-    sky: () => ({
-      ships: ships.map((s) => ({ active: s.active, z: +s.group.position.z.toFixed(1), y: +s.group.position.y.toFixed(1) })),
-      comets: comets.map((c) => ({ active: c.active, x: +c.x.toFixed(2), y: +c.y.toFixed(2) })),
-    }),
     intensityOf: (slug: string) => signs.find((x) => x.project.slug === slug)?.intensity ?? null,
     setBloom: (strength: number) => {
       bloom.intensity = strength;
