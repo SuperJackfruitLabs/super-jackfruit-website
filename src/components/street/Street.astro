@@ -96,18 +96,6 @@ import '@fontsource/neonderthaw';
     width: max-content;
   }
 
-  .layer--street::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 14% 0;
-    background:
-      radial-gradient(ellipse at 30% 40%, rgba(76, 5, 77, 0.85) 0%, rgba(12, 16, 13, 0.92) 75%),
-      url('/brick-pattern.jpg');
-    background-size: cover, 90rem auto;
-    background-blend-mode: multiply;
-    z-index: -1;
-  }
-
   .layer--street::after {
     content: '';
     position: absolute;
@@ -115,6 +103,16 @@ import '@fontsource/neonderthaw';
     background: linear-gradient(#15151d, #0a0a10 40%);
     border-top: 1px solid rgba(239, 233, 220, 0.12);
     z-index: -1;
+  }
+
+  /* each section is its own building facade — brick wall stops at the sidewalk */
+  .entrance,
+  .district {
+    background:
+      radial-gradient(ellipse at 50% 45%, rgba(76, 5, 77, 0.9) 0%, rgba(12, 16, 13, 0.96) 75%)
+        top / 100% 86% no-repeat,
+      url('/brick-pattern.jpg') top / 100% 86% no-repeat;
+    background-blend-mode: multiply;
   }
 
   .entrance {
@@ -264,13 +262,13 @@ import '@fontsource/neonderthaw';
   .lamppost::after {
     content: '';
     position: absolute;
-    top: -1.6rem;
-    left: -1.2rem;
-    width: 3.2rem;
-    height: 1.6rem;
+    top: -3.6rem;
+    left: -3.6rem;
+    width: 8rem;
+    height: 5rem;
     border-radius: 50%;
-    background: radial-gradient(ellipse, rgba(242, 167, 7, 0.9), transparent 70%);
-    filter: blur(2px);
+    background: radial-gradient(ellipse at center, rgba(255, 214, 120, 0.95) 0%, rgba(242, 167, 7, 0.5) 35%, transparent 70%);
+    filter: blur(3px);
   }
 
   @media (max-width: 640px) {
