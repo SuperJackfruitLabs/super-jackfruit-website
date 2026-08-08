@@ -328,8 +328,8 @@ export async function initStreetScene(
 
   const auroraFragment = /* glsl */ `
     uniform float uTime;
-    uniform float uFlip;
-    uniform float uScaleX;
+    uniform float uZNear;
+    uniform float uLen;
     uniform sampler2D uHue;
     uniform vec3 uFogColor;
     uniform float uFogDensity;
@@ -361,10 +361,12 @@ export async function initStreetScene(
     }
 
     void main() {
-      vec2 uv = vec2(mix(vUv.x, 1.0 - vUv.x, uFlip), vUv.y);
-      vec3 hue = texture2D(uHue, vec2(uv.x, 0.5)).rgb;
+      // world-space pattern: one continuous volume of haze across every
+      // surface (side walls, ceiling), not a per-plane wallpaper
+      float along = clamp((uZNear - vWorld.z) / uLen, 0.0, 1.0);
+      vec3 hue = texture2D(uHue, vec2(along, 0.5)).rgb;
 
-      vec2 p = vec2(uv.x * uScaleX, uv.y * 2.4);
+      vec2 p = vec2((uZNear - vWorld.z) * 0.09, (vWorld.y + vWorld.x) * 0.15);
       float t = uTime * 0.045;
       vec2 q = vec2(
         fbm(p + vec2(t * 0.7, t * 0.25)),
@@ -374,7 +376,8 @@ export async function initStreetScene(
       float band = smoothstep(0.42, 0.9, n);
       float glow = band * (0.12 + 0.5 * n) * 0.55;
 
-      vec3 base = mix(vec3(0.020, 0.014, 0.030), vec3(0.008, 0.006, 0.014), uv.y);
+      float height = clamp(vWorld.y / 16.0, 0.0, 1.0);
+      vec3 base = mix(vec3(0.020, 0.014, 0.030), vec3(0.008, 0.006, 0.014), height);
       vec3 col = base + hue * glow;
 
       float d = distance(cameraPosition, vWorld);
@@ -387,31 +390,34 @@ export async function initStreetScene(
     }
   `;
 
-  function makeAuroraMaterial(flip: boolean) {
-    return new THREE.ShaderMaterial({
-      vertexShader: auroraVertex,
-      fragmentShader: auroraFragment,
-      uniforms: {
-        uTime: { value: 0 },
-        uFlip: { value: flip ? 1 : 0 },
-        uScaleX: { value: streetLen * 0.09 },
-        uHue: { value: hueTex },
-        uFogColor: { value: new THREE.Color(INK) },
-        uFogDensity: { value: 0.042 },
-      },
-    });
-  }
+  const auroraMaterial = new THREE.ShaderMaterial({
+    vertexShader: auroraVertex,
+    fragmentShader: auroraFragment,
+    uniforms: {
+      uTime: { value: 0 },
+      uZNear: { value: wallZNear },
+      uLen: { value: streetLen },
+      uHue: { value: hueTex },
+      uFogColor: { value: new THREE.Color(INK) },
+      uFogDensity: { value: 0.042 },
+    },
+  });
 
   const wallGeo = new THREE.PlaneGeometry(streetLen, 16);
-  const wallMaterials = [makeAuroraMaterial(false), makeAuroraMaterial(true)];
-  const leftWall = new THREE.Mesh(wallGeo, wallMaterials[0]);
+  const leftWall = new THREE.Mesh(wallGeo, auroraMaterial);
   leftWall.position.set(-WALL_X, 8, wallCenterZ);
   leftWall.rotation.y = Math.PI / 2;
   scene.add(leftWall);
-  const rightWall = new THREE.Mesh(wallGeo, wallMaterials[1]);
+  const rightWall = new THREE.Mesh(wallGeo, auroraMaterial);
   rightWall.position.set(WALL_X, 8, wallCenterZ);
   rightWall.rotation.y = -Math.PI / 2;
   scene.add(rightWall);
+
+  // ceiling: the same haze volume wraps overhead
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(WALL_X * 2, streetLen), auroraMaterial);
+  ceiling.position.set(0, 16, wallCenterZ);
+  ceiling.rotation.x = Math.PI / 2;
+  scene.add(ceiling);
 
   // ground: semi-transparent so reflections beneath show through
   const ground = new THREE.Mesh(
@@ -713,7 +719,7 @@ export async function initStreetScene(
     }
 
     // aurora drift
-    for (const wm of wallMaterials) wm.uniforms.uTime.value = t;
+    auroraMaterial.uniforms.uTime.value = t;
 
     // rain fall
     const pos = rainGeo.getAttribute('position') as import('three').BufferAttribute;
