@@ -7,6 +7,7 @@
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
+    "deploy": "astro check && astro build && wrangler pages deploy dist --project-name=extinct-eclipse --branch=master",
     "astro": "astro"
   },
   "dependencies": {
