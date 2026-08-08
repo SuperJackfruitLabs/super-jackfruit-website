@@ -77,7 +77,10 @@ const statusCopy: Record<string, string> = {
     text-align: center;
     padding: 0 6vw;
     pointer-events: none;
-    transition: opacity 0.3s linear;
+    /* own compositor layer: opacity changes and the marquee's shadow
+       animation must never trigger repaints over the WebGL canvas */
+    will-change: opacity;
+    transform: translateZ(0);
   }
 
   .overlay__script {
@@ -210,9 +213,12 @@ const statusCopy: Record<string, string> = {
       .catch(() => document.body.classList.add('no-webgl'));
   }
 
+  let lastOpacity = -1;
   window.addEventListener('street3d:progress', ((e: CustomEvent<{ progress: number }>) => {
     if (!overlay) return;
-    const o = Math.max(0, 1 - e.detail.progress * 3);
+    const o = Math.round(Math.max(0, 1 - e.detail.progress * 3) * 100) / 100;
+    if (o === lastOpacity) return; // don't touch style while standing still
+    lastOpacity = o;
     overlay.style.opacity = String(o);
     overlay.style.visibility = o <= 0.01 ? 'hidden' : 'visible';
   }) as EventListener);

@@ -665,6 +665,12 @@ export async function initStreetScene(
       desiredLook.set(camera.position.x * 0.4, CAM_Y - 0.3, camera.position.z - 12);
     }
     lookTarget.lerp(desiredLook, 0.08);
+    if (!focusPose) {
+      // z must track the camera rigidly: any lag here shortens the look
+      // distance while walking and pitches the camera down with speed (bob)
+      lookTarget.z = desiredLook.z;
+      lookTarget.y = desiredLook.y;
+    }
     camera.lookAt(lookTarget);
 
     const progress = Math.min(1, Math.max(0, (CAM_START_Z - camera.position.z) / 18));
@@ -755,6 +761,7 @@ export async function initStreetScene(
       };
     },
     cameraZ: () => camera.position.z,
+    pitch: () => camera.rotation.x,
     intensityOf: (slug: string) => signs.find((x) => x.project.slug === slug)?.intensity ?? null,
     setBloom: (strength: number) => {
       bloom.intensity = strength;
