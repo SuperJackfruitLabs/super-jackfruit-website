@@ -458,6 +458,9 @@ export async function initStreetScene(
   endTitle.position.set(0, 6.6, endZ - 5.8);
   scene.add(endTitle);
 
+  // text meshes that stay hidden until the visitor walks past the marquee
+  const endTexts: import('three').Mesh[] = [endTitle];
+
   const links: Array<{ text: string; url: string; color: string; y: number }> = [
     { text: 'github.com/rakeshgangwar', url: 'https://github.com/rakeshgangwar', color: '#bfee21', y: 4.4 },
     { text: 'github.com/SuperJackfruitLabs', url: 'https://github.com/SuperJackfruitLabs', color: '#09e6f2', y: 2.9 },
@@ -471,6 +474,7 @@ export async function initStreetScene(
     mesh.userData.url = link.url;
     scene.add(mesh);
     clickables.push(mesh);
+    endTexts.push(mesh);
   }
 
   // lamps along the street
@@ -599,7 +603,8 @@ export async function initStreetScene(
   function raycast(clientX: number, clientY: number): import('three').Object3D | null {
     pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(clickables, false)[0];
+    // Raycaster ignores `visible`, so filter out text hidden behind the marquee
+    const hit = raycaster.intersectObjects(clickables.filter((o) => o.visible), false)[0];
     return hit ? hit.object : null;
   }
 
@@ -647,6 +652,7 @@ export async function initStreetScene(
   const lookTarget = new THREE.Vector3(0, CAM_Y - 0.3, CAM_START_Z - 12);
   const desiredLook = new THREE.Vector3();
   let panelWasOpen = false;
+  let reflectionsHidden = false;
 
   renderer.setAnimationLoop(() => {
     if (document.hidden) return;
@@ -675,24 +681,34 @@ export async function initStreetScene(
     const progress = Math.min(1, Math.max(0, (CAM_START_Z - camera.position.z) / 18));
     window.dispatchEvent(new CustomEvent('street3d:progress', { detail: { progress } }));
 
+    // the marquee owns the entrance: scene text stays hidden until the
+    // visitor walks past it, then the alley fades in
+    const reveal = Math.min(1, Math.max(0, (progress - 0.3) / 0.35));
+    const textVisible = reveal > 0.02;
+
     // status behavior
     for (const s of signs) {
       const m = s.mesh.material as import('three').MeshBasicMaterial;
       const rm = s.reflection.material as import('three').MeshBasicMaterial;
+      m.opacity = reveal;
+      s.mesh.visible = textVisible;
+      s.reflection.visible = textVisible && !reflectionsHidden;
       if (s.mesh === focusedMesh) {
         // the shopkeeper turns the sign fully on when you step to the window
         m.color.copy(white);
-        rm.opacity = 0.16;
+        rm.opacity = 0.16 * reveal;
       } else if (s.status === 'wip') {
         // irregular flicker: mostly on, occasional dropouts
         const n = Math.sin(t * 7 + s.seed) * Math.sin(t * 13.7 + s.seed * 2) * Math.sin(t * 3.1 + s.seed);
         const on = n > -0.88;
         m.color.copy(on ? white : dim);
-        rm.opacity = on ? 0.16 : 0.05;
+        rm.opacity = (on ? 0.16 : 0.05) * reveal;
       } else if (s.status === 'experiment') {
         const buzz = 0.62 + 0.1 * Math.sin(t * 40 + s.seed) + 0.06 * Math.sin(t * 9 + s.seed);
         m.color.copy(white).multiplyScalar(buzz);
-        rm.opacity = 0.1;
+        rm.opacity = 0.1 * reveal;
+      } else {
+        rm.opacity = 0.16 * reveal;
       }
     }
 
@@ -700,7 +716,13 @@ export async function initStreetScene(
     for (const gate of gates) {
       const dist = camera.position.z - gate.position.z;
       const mat = gate.material as import('three').MeshBasicMaterial;
-      mat.opacity = Math.max(0, Math.min(1, (dist - 8) / 14));
+      mat.opacity = Math.max(0, Math.min(1, (dist - 8) / 14)) * reveal;
+      gate.visible = textVisible;
+    }
+
+    for (const textMesh of endTexts) {
+      (textMesh.material as import('three').MeshBasicMaterial).opacity = reveal;
+      textMesh.visible = textVisible;
     }
 
     // rain fall
@@ -744,7 +766,7 @@ export async function initStreetScene(
       return true;
     },
     hideReflections: (hide: boolean) => {
-      for (const s of signs) s.reflection.visible = !hide;
+      reflectionsHidden = hide;
     },
     signTexture: (slug: string) => {
       const s = signs.find((x) => x.project.slug === slug);
