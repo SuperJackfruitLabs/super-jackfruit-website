@@ -2,7 +2,6 @@
 import NeonText from '../NeonText.astro';
 import { districts, byDistrict, projects } from '../../data/projects';
 import '@fontsource-variable/inconsolata';
-import '@fontsource/neonderthaw';
 import '@fontsource/tilt-neon';
 
 const statusCopy: Record<string, string> = {
@@ -84,8 +83,9 @@ const statusCopy: Record<string, string> = {
   }
 
   .overlay__script {
-    font-family: 'Neonderthaw', cursive;
-    font-size: 3.4rem;
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-size: 2.4rem;
+    letter-spacing: 0.28em;
     color: #09e6f2;
     text-shadow: 0 0 8px rgba(9, 230, 242, 0.8), 0 0 24px rgba(9, 230, 242, 0.5);
     margin: 0;
@@ -130,8 +130,9 @@ const statusCopy: Record<string, string> = {
   }
 
   .fallback__head p {
-    font-family: 'Neonderthaw', cursive;
-    font-size: 2.6rem;
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.24em;
     color: #09e6f2;
     margin: 0.4rem 0 3rem;
   }
@@ -148,8 +149,9 @@ const statusCopy: Record<string, string> = {
   }
 
   .fallback__blurb {
-    font-family: 'Neonderthaw', cursive;
-    font-size: 2.2rem;
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
     color: rgba(239, 233, 220, 0.7);
     margin: 0 0 1.2rem;
   }
