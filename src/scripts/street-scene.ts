@@ -19,6 +19,7 @@ interface SignEntry {
   baseColor: import('three').Color;
   status: string;
   seed: number;
+  intensity: number;
 }
 
 export async function initStreetScene(
@@ -262,7 +263,7 @@ export async function initStreetScene(
       scene.add(pool);
 
       const baseColor = new THREE.Color(0xffffff);
-      signs.push({ mesh, reflection: refl, project, baseColor, status: project.status, seed: Math.random() * 100 });
+      signs.push({ mesh, reflection: refl, project, baseColor, status: project.status, seed: Math.random() * 100, intensity: 1 });
       side *= -1;
       z -= SIGN_SPACING;
     }
@@ -646,9 +647,14 @@ export async function initStreetScene(
 
   // ---------- render loop ----------
 
-  const dim = new THREE.Color(0x555555);
   const white = new THREE.Color(0xffffff);
   const startTime = performance.now();
+  let lastT = 0;
+
+  const smoothstep = (edge0: number, edge1: number, x: number) => {
+    const u = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+    return u * u * (3 - 2 * u);
+  };
   const lookTarget = new THREE.Vector3(0, CAM_Y - 0.3, CAM_START_Z - 12);
   const desiredLook = new THREE.Vector3();
   let panelWasOpen = false;
@@ -686,30 +692,43 @@ export async function initStreetScene(
     const reveal = Math.min(1, Math.max(0, (progress - 0.3) / 0.35));
     const textVisible = reveal > 0.02;
 
-    // status behavior
+    // status behavior — a continuous intensity signal per sign: noise shaped
+    // through smoothstep (dips ease in and out) then low-pass filtered so the
+    // tube dims and re-ignites with inertia instead of snapping between frames
+    const dt = Math.min(0.1, Math.max(0.001, t - lastT));
+    lastT = t;
+    const ease = 1 - Math.exp(-9 * dt);
     for (const s of signs) {
       const m = s.mesh.material as import('three').MeshBasicMaterial;
       const rm = s.reflection.material as import('three').MeshBasicMaterial;
-      m.opacity = reveal;
       s.mesh.visible = textVisible;
       s.reflection.visible = textVisible && !reflectionsHidden;
+
+      let target: number;
       if (s.mesh === focusedMesh) {
         // the shopkeeper turns the sign fully on when you step to the window
-        m.color.copy(white);
-        rm.opacity = 0.16 * reveal;
+        target = 1;
       } else if (s.status === 'wip') {
-        // irregular flicker: mostly on, occasional dropouts
+        // mostly lit, with occasional dips that ramp down and recover
         const n = Math.sin(t * 7 + s.seed) * Math.sin(t * 13.7 + s.seed * 2) * Math.sin(t * 3.1 + s.seed);
-        const on = n > -0.88;
-        m.color.copy(on ? white : dim);
-        rm.opacity = (on ? 0.16 : 0.05) * reveal;
+        const lit = smoothstep(-0.92, -0.5, n);
+        target = (0.45 + 0.55 * lit) * (0.97 + 0.03 * Math.sin(t * 2.3 + s.seed));
       } else if (s.status === 'experiment') {
-        const buzz = 0.62 + 0.1 * Math.sin(t * 40 + s.seed) + 0.06 * Math.sin(t * 9 + s.seed);
-        m.color.copy(white).multiplyScalar(buzz);
-        rm.opacity = 0.1 * reveal;
+        // half-lit hum: slow wander + faint fast shimmer, occasional sag
+        const sag = smoothstep(-0.95, -0.7, Math.sin(t * 1.9 + s.seed * 3) * Math.sin(t * 5.3 + s.seed));
+        target = (0.5 + 0.16 * sag) + 0.06 * Math.sin(t * 8 + s.seed) + 0.03 * Math.sin(t * 19.3 + s.seed * 2);
       } else {
-        rm.opacity = 0.16 * reveal;
+        // stable: steady with the faintest breathing so it reads as gas, not pixels
+        target = 0.985 + 0.015 * Math.sin(t * 1.7 + s.seed);
       }
+
+      // slew-limited: even on a dropped frame the step stays gentle
+      const maxStep = 2.2 * dt;
+      const step = (target - s.intensity) * ease;
+      s.intensity += Math.max(-maxStep, Math.min(maxStep, step));
+      m.color.copy(white).multiplyScalar(s.intensity);
+      m.opacity = reveal;
+      rm.opacity = 0.16 * s.intensity * reveal;
     }
 
     // gates fade out as you walk up to them instead of blooming across the view
@@ -752,6 +771,7 @@ export async function initStreetScene(
       };
     },
     cameraZ: () => camera.position.z,
+    intensityOf: (slug: string) => signs.find((x) => x.project.slug === slug)?.intensity ?? null,
     setBloom: (strength: number) => {
       bloom.strength = strength;
     },
