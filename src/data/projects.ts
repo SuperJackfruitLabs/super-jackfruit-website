@@ -24,9 +24,9 @@ export interface District {
 }
 
 export const districts: District[] = [
-  { id: 'agent-works', name: 'Agent Works', blurb: 'machines that do things', accent: '#09e6f2' },
-  { id: 'mcp-alley', name: 'MCP Alley', blurb: 'plumbing for AI assistants', accent: '#f2a707' },
-  { id: 'odd-shop', name: 'The Odd Shop', blurb: 'curiosities & one-offs', accent: '#a12cf9' },
+  { id: 'agent-works', name: 'Agent Works', blurb: 'machines that work the night shift', accent: '#09e6f2' },
+  { id: 'mcp-alley', name: 'MCP Alley', blurb: 'wiring AI into everything', accent: '#f2a707' },
+  { id: 'odd-shop', name: 'The Odd Shop', blurb: 'no refunds on curiosity', accent: '#a12cf9' },
 ];
 
 export const projects = raw as Project[];

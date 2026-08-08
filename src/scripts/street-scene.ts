@@ -34,6 +34,7 @@ export async function initStreetScene(
   const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
   const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
   const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
+  const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
 
   // fonts must be ready before we draw sign textures
   await Promise.all([
@@ -67,87 +68,98 @@ export async function initStreetScene(
     ctx.closePath();
   }
 
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
   function makeSignTexture(project: Project, accent: string): import('three').CanvasTexture {
     const c = document.createElement('canvas');
-    c.width = 1024;
-    c.height = 512;
+    c.width = 2048;
+    c.height = 1024;
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#050508';
     ctx.fillRect(0, 0, c.width, c.height);
 
-    // border tube
+    // border tube: glow pass, then clean stroke on top (shadows paint over
+    // earlier strokes, so never re-stroke with a shadow active)
     ctx.save();
+    if (project.status === 'experiment') ctx.setLineDash([56, 44]);
+    roundRect(ctx, 80, 80, c.width - 160, c.height - 160, 72);
     ctx.shadowColor = accent;
-    ctx.shadowBlur = 36;
+    ctx.shadowBlur = 60;
     ctx.strokeStyle = accent;
-    ctx.lineWidth = 10;
-    if (project.status === 'experiment') ctx.setLineDash([28, 22]);
-    roundRect(ctx, 40, 40, c.width - 80, c.height - 80, 36);
+    ctx.lineWidth = 18;
     ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.stroke();
     ctx.restore();
 
     // name — per-char so experiments get a dead letter
     const chars = [...project.name];
     const deadIndex = project.status === 'experiment' ? Math.floor(chars.length / 2) : -1;
-    ctx.font = '90px "Tilt Neon", sans-serif';
+    ctx.font = '180px "Tilt Neon", sans-serif';
     ctx.textBaseline = 'middle';
     const widths = chars.map((ch) => ctx.measureText(ch).width);
     const total = widths.reduce((a, b) => a + b, 0);
-    let x = (c.width - total) / 2;
-    const nameY = c.height / 2 - 30;
+    const startX = (c.width - total) / 2;
+    const nameY = c.height / 2 - 60;
+    // pass 1: glow for every live character
+    ctx.save();
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 26;
+    ctx.fillStyle = '#ffffff';
+    let x = startX;
+    chars.forEach((ch, i) => {
+      if (i !== deadIndex) ctx.fillText(ch, x, nameY);
+      x += widths[i];
+    });
+    ctx.restore();
+    // pass 2: clean cores on top, no shadow — nothing veils them afterwards
+    ctx.fillStyle = '#ffffff';
+    x = startX;
     chars.forEach((ch, i) => {
       if (i === deadIndex) {
         ctx.save();
-        ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(255,255,255,0.14)';
         ctx.fillText(ch, x, nameY);
         ctx.restore();
       } else {
-        ctx.save();
-        ctx.shadowColor = accent;
-        ctx.shadowBlur = 42;
-        ctx.fillStyle = '#ffffff';
         ctx.fillText(ch, x, nameY);
-        ctx.fillText(ch, x, nameY); // double pass = hotter core
-        ctx.restore();
       }
       x += widths[i];
     });
 
     // tagline
-    ctx.font = '40px "Inconsolata Variable", monospace';
-    ctx.fillStyle = 'rgba(239,233,220,0.8)';
+    ctx.font = '80px "Inconsolata Variable", monospace';
+    ctx.fillStyle = 'rgba(239,233,220,0.85)';
     ctx.textAlign = 'center';
-    ctx.fillText(project.tagline, c.width / 2, c.height / 2 + 88);
+    ctx.fillText(project.tagline, c.width / 2, c.height / 2 + 176);
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
+    tex.anisotropy = maxAniso;
     return tex;
   }
 
   function makeDistrictTexture(d: District): import('three').CanvasTexture {
     const c = document.createElement('canvas');
-    c.width = 1400;
-    c.height = 360;
+    c.width = 2800;
+    c.height = 720;
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '110px "Tilt Neon", sans-serif';
+    ctx.font = '220px "Tilt Neon", sans-serif';
     ctx.shadowColor = d.accent;
-    ctx.shadowBlur = 48;
+    ctx.shadowBlur = 60;
     ctx.fillStyle = d.accent;
     const spaced = d.name.toUpperCase().split('').join(' ');
-    ctx.fillText(spaced, c.width / 2, 130);
-    ctx.fillText(spaced, c.width / 2, 130);
-    ctx.font = '64px "Neonderthaw", cursive';
-    ctx.shadowBlur = 24;
+    ctx.fillText(spaced, c.width / 2, 260);
+    ctx.font = '128px "Neonderthaw", cursive';
+    ctx.shadowBlur = 32;
     ctx.fillStyle = 'rgba(239,233,220,0.9)';
-    ctx.fillText(d.blurb, c.width / 2, 268);
+    ctx.fillText(d.blurb, c.width / 2, 536);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
     return tex;
   }
 
@@ -166,6 +178,7 @@ export async function initStreetScene(
     ctx.fillText(text, c.width / 2, c.height / 2);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
     return tex;
   }
 
@@ -209,10 +222,10 @@ export async function initStreetScene(
     for (const project of group.items) {
       const accent = group.district.accent;
       const tex = makeSignTexture(project, accent);
-      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 3.6), mat);
       mesh.position.set(side * (WALL_X - 1.4), SIGN_Y, z);
-      mesh.rotation.y = side * -Math.PI / 2 + side * 0.28;
+      mesh.rotation.y = side * -Math.PI / 2 + side * 0.42;
       mesh.userData.project = project;
       mesh.userData.accent = accent;
       scene.add(mesh);
@@ -294,14 +307,25 @@ export async function initStreetScene(
   endWall.position.set(0, 8, endZ - 6);
   scene.add(endWall);
 
+  const endTitle = new THREE.Mesh(
+    new THREE.PlaneGeometry(13, 2.1),
+    new THREE.MeshBasicMaterial({
+      map: makeTextTexture("the street ends, the work doesn't", '#fc5553', 88, '"Neonderthaw", cursive'),
+      transparent: true,
+      fog: false,
+    })
+  );
+  endTitle.position.set(0, 6.6, endZ - 5.8);
+  scene.add(endTitle);
+
   const links: Array<{ text: string; url: string; color: string; y: number }> = [
-    { text: 'github.com/rakeshgangwar', url: 'https://github.com/rakeshgangwar', color: '#bfee21', y: 4.6 },
-    { text: 'github.com/SuperJackfruitLabs', url: 'https://github.com/SuperJackfruitLabs', color: '#09e6f2', y: 3.0 },
+    { text: 'github.com/rakeshgangwar', url: 'https://github.com/rakeshgangwar', color: '#bfee21', y: 4.4 },
+    { text: 'github.com/SuperJackfruitLabs', url: 'https://github.com/SuperJackfruitLabs', color: '#09e6f2', y: 2.9 },
   ];
   for (const link of links) {
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(11, 1.65),
-      new THREE.MeshBasicMaterial({ map: makeTextTexture(link.text, link.color), transparent: true })
+      new THREE.MeshBasicMaterial({ map: makeTextTexture(link.text, link.color), transparent: true, fog: false })
     );
     mesh.position.set(0, link.y, endZ - 5.8);
     mesh.userData.url = link.url;
@@ -345,14 +369,16 @@ export async function initStreetScene(
   // ---------- post-processing ----------
 
   const composer = new EffectComposer(renderer);
+  composer.setPixelRatio(renderer.getPixelRatio());
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.0,
-    0.6,
-    0.2
+    0.42,
+    0.32,
+    0.5
   );
   composer.addPass(bloom);
+  composer.addPass(new OutputPass());
 
   // ---------- movement & interaction ----------
 
@@ -363,10 +389,28 @@ export async function initStreetScene(
     targetZ = Math.max(minZ, Math.min(CAM_START_Z, targetZ));
   };
 
+  // "enter the shop" focus mode — set on sign click, cleared when the panel closes
+  let focusPose: { pos: import('three').Vector3; look: import('three').Vector3 } | null = null;
+  let focusedMesh: import('three').Object3D | null = null;
+  const panelOpen = () => document.body.classList.contains('panel-open');
+
+  function focusOnSign(mesh: import('three').Object3D): void {
+    const normal = new THREE.Vector3(0, 0, 1).applyEuler(mesh.rotation).normalize();
+    const pos = mesh.position.clone().addScaledVector(normal, 6.8);
+    pos.y = SIGN_Y - 0.2;
+    const forward = mesh.position.clone().sub(pos).normalize();
+    const right = forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
+    // aim right of the sign so it settles on the left half, clear of the panel
+    const look = mesh.position.clone().addScaledVector(right, 1.15);
+    focusPose = { pos, look };
+    focusedMesh = mesh;
+  }
+
   canvas.addEventListener(
     'wheel',
     (e) => {
       e.preventDefault();
+      if (panelOpen()) return;
       const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
       targetZ -= delta * 0.02;
       clampZ();
@@ -386,7 +430,7 @@ export async function initStreetScene(
   });
   window.addEventListener('pointermove', (e) => {
     mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-    if (!dragging) return;
+    if (!dragging || panelOpen()) return;
     const dy = e.clientY - dragStartY;
     moved = Math.max(moved, Math.abs(dy));
     targetZ = dragStartZ + dy * 0.05;
@@ -436,11 +480,15 @@ export async function initStreetScene(
       return;
     }
     if (obj.userData.project) {
-      window.dispatchEvent(
-        new CustomEvent('project:open', {
-          detail: { project: obj.userData.project, accent: obj.userData.accent },
-        })
-      );
+      focusOnSign(obj);
+      // let the camera start its glide before the panel slides in
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('project:open', {
+            detail: { project: obj.userData.project, accent: obj.userData.accent },
+          })
+        );
+      }, 380);
     }
   });
 
@@ -454,17 +502,35 @@ export async function initStreetScene(
   // ---------- render loop ----------
 
   const dim = new THREE.Color(0x555555);
-  const dark = new THREE.Color(0x222222);
   const white = new THREE.Color(0xffffff);
   const startTime = performance.now();
+  const lookTarget = new THREE.Vector3(0, CAM_Y - 0.3, CAM_START_Z - 12);
+  const desiredLook = new THREE.Vector3();
+  let panelWasOpen = false;
 
   renderer.setAnimationLoop(() => {
     if (document.hidden) return;
     const t = (performance.now() - startTime) / 1000;
 
-    camera.position.z += (targetZ - camera.position.z) * 0.06;
-    camera.position.x += (mouseX * 0.9 - camera.position.x) * 0.04;
-    camera.lookAt(camera.position.x * 0.4, CAM_Y - 0.3, camera.position.z - 12);
+    // step back onto the street once the panel closes
+    if (panelOpen()) panelWasOpen = true;
+    else if (panelWasOpen) {
+      panelWasOpen = false;
+      focusPose = null;
+      focusedMesh = null;
+    }
+
+    if (focusPose) {
+      camera.position.lerp(focusPose.pos, 0.06);
+      desiredLook.copy(focusPose.look);
+    } else {
+      camera.position.z += (targetZ - camera.position.z) * 0.06;
+      camera.position.x += (mouseX * 0.9 - camera.position.x) * 0.04;
+      camera.position.y += (CAM_Y - camera.position.y) * 0.06;
+      desiredLook.set(camera.position.x * 0.4, CAM_Y - 0.3, camera.position.z - 12);
+    }
+    lookTarget.lerp(desiredLook, 0.08);
+    camera.lookAt(lookTarget);
 
     const progress = Math.min(1, Math.max(0, (CAM_START_Z - camera.position.z) / 18));
     window.dispatchEvent(new CustomEvent('street3d:progress', { detail: { progress } }));
@@ -473,7 +539,11 @@ export async function initStreetScene(
     for (const s of signs) {
       const m = s.mesh.material as import('three').MeshBasicMaterial;
       const rm = s.reflection.material as import('three').MeshBasicMaterial;
-      if (s.status === 'wip') {
+      if (s.mesh === focusedMesh) {
+        // the shopkeeper turns the sign fully on when you step to the window
+        m.color.copy(white);
+        rm.opacity = 0.16;
+      } else if (s.status === 'wip') {
         // irregular flicker: mostly on, occasional dropouts
         const n = Math.sin(t * 7 + s.seed) * Math.sin(t * 13.7 + s.seed * 2) * Math.sin(t * 3.1 + s.seed);
         const on = n > -0.88;
@@ -490,7 +560,7 @@ export async function initStreetScene(
     for (const gate of gates) {
       const dist = camera.position.z - gate.position.z;
       const mat = gate.material as import('three').MeshBasicMaterial;
-      mat.opacity = Math.max(0, Math.min(1, (dist - 5) / 9));
+      mat.opacity = Math.max(0, Math.min(1, (dist - 8) / 14));
     }
 
     // rain fall
@@ -520,6 +590,39 @@ export async function initStreetScene(
       };
     },
     cameraZ: () => camera.position.z,
+    setBloom: (strength: number) => {
+      bloom.strength = strength;
+    },
+    teleportFacing: (slug: string, dist: number) => {
+      const s = signs.find((x) => x.project.slug === slug);
+      if (!s) return false;
+      const normal = new THREE.Vector3(0, 0, 1).applyEuler(s.mesh.rotation).normalize();
+      const pos = s.mesh.position.clone().addScaledVector(normal, dist);
+      focusPose = { pos, look: s.mesh.position.clone() };
+      camera.position.copy(pos);
+      lookTarget.copy(s.mesh.position);
+      return true;
+    },
+    hideReflections: (hide: boolean) => {
+      for (const s of signs) s.reflection.visible = !hide;
+    },
+    signTexture: (slug: string) => {
+      const s = signs.find((x) => x.project.slug === slug);
+      const img = (s?.mesh.material as import('three').MeshBasicMaterial | undefined)?.map?.image;
+      return img instanceof HTMLCanvasElement ? img.toDataURL('image/png') : null;
+    },
+    focusInfo: () => {
+      const s = signs.find((x) => x.mesh === focusedMesh);
+      if (!s) return null;
+      const m = s.mesh.material as import('three').MeshBasicMaterial;
+      return {
+        slug: s.project.slug,
+        color: m.color.getHexString(),
+        fog: m.fog,
+        scale: s.mesh.scale.x,
+        camDist: camera.position.distanceTo(s.mesh.position),
+      };
+    },
   };
 
   return true;

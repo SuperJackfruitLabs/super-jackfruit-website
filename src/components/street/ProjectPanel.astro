@@ -14,18 +14,16 @@
 </aside>
 
 <style>
+  /* click-outside-to-close hit area; no darkening — the camera focus IS the
+     emphasis, and a veil would dim the sign we just walked up to */
   .panel-backdrop {
     position: fixed;
     inset: 0;
     z-index: 9;
-    background: rgba(3, 3, 6, 0.6);
-    opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease;
   }
 
   .panel-backdrop[data-open='true'] {
-    opacity: 1;
     pointer-events: auto;
   }
 
@@ -163,9 +161,9 @@
 
 <script>
   const STATUS_COPY: Record<string, string> = {
-    stable: 'lit & steady — used in the wild',
-    wip: 'under active wiring — expect sparks',
-    experiment: 'half-lit — enter at your own risk',
+    stable: 'lit & steady · open for business',
+    wip: 'wet paint · mind the sparks',
+    experiment: 'half-lit · enter at your own risk',
   };
 
   const STATUS_COLOR: Record<string, string> = {

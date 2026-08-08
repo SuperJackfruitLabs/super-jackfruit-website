@@ -6,9 +6,9 @@ import '@fontsource/neonderthaw';
 import '@fontsource/tilt-neon';
 
 const statusCopy: Record<string, string> = {
-  stable: 'lit & steady',
-  wip: 'under active wiring',
-  experiment: 'half-lit experiment',
+  stable: 'lit & steady · open for business',
+  wip: 'wet paint · mind the sparks',
+  experiment: 'half-lit · enter at your own risk',
 };
 ---
 
@@ -17,15 +17,15 @@ const statusCopy: Record<string, string> = {
 
   <div class="overlay" id="entrance-overlay">
     <NeonText text="Super Jackfruit Labs" />
-    <p class="overlay__script">open source experiments · open late</p>
-    <p class="overlay__hint">scroll, drag, or ↑ to walk the street · click a sign</p>
+    <p class="overlay__script">the lab never closes</p>
+    <p class="overlay__hint">walk in · browse the signs · everything's open</p>
   </div>
 
   <!-- fallback + crawlable content; shown when the 3D scene can't run -->
   <div class="fallback" id="fallback">
     <header class="fallback__head">
       <h1>Super Jackfruit Labs</h1>
-      <p>open source experiments · open late</p>
+      <p>the lab never closes</p>
     </header>
     {districts.map((d) => (
       <section class="fallback__district" style={`--accent: ${d.accent}`}>
