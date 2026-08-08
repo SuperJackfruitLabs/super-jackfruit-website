@@ -646,11 +646,20 @@ export async function initStreetScene(
       focusedMesh = null;
     }
 
+    const dt = Math.min(0.1, Math.max(0.001, t - lastT));
+    lastT = t;
+
     if (focusPose) {
       camera.position.lerp(focusPose.pos, 0.06);
       desiredLook.copy(focusPose.look);
     } else {
-      camera.position.z += (targetZ - camera.position.z) * 0.06;
+      // holding a key can't glitch the walk: the target never runs far
+      // ahead of the camera, and speed is capped in real units/second
+      targetZ = Math.max(camera.position.z - 26, Math.min(camera.position.z + 26, targetZ));
+      let dz = (targetZ - camera.position.z) * 0.06;
+      const maxStep = 40 * dt;
+      dz = Math.max(-maxStep, Math.min(maxStep, dz));
+      camera.position.z += dz;
       camera.position.x += (mouseX * 0.9 - camera.position.x) * 0.04;
       camera.position.y += (CAM_Y - camera.position.y) * 0.06;
       desiredLook.set(camera.position.x * 0.4, CAM_Y - 0.3, camera.position.z - 12);
@@ -669,8 +678,6 @@ export async function initStreetScene(
     // status behavior — a continuous intensity signal per sign: noise shaped
     // through smoothstep (dips ease in and out) then low-pass filtered so the
     // tube dims and re-ignites with inertia instead of snapping between frames
-    const dt = Math.min(0.1, Math.max(0.001, t - lastT));
-    lastT = t;
     const ease = 1 - Math.exp(-9 * dt);
     for (const s of signs) {
       const m = s.mesh.material as import('three').MeshBasicMaterial;
