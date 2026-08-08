@@ -187,33 +187,44 @@
 
   let lastFocus: HTMLElement | null = null;
 
-  function openPanel(sign: HTMLElement) {
-    const d = sign.dataset;
-    nameEl.textContent = d.name ?? '';
-    taglineEl.textContent = d.tagline ?? '';
-    statusEl.textContent = STATUS_COPY[d.status ?? ''] ?? '';
-    descEl.textContent = d.description ?? '';
+  interface OpenDetail {
+    project: {
+      name: string;
+      tagline: string;
+      description: string;
+      tags: string[];
+      status: string;
+      github: string;
+      demo?: string;
+    };
+    accent: string;
+  }
+
+  function openPanel({ project, accent }: OpenDetail) {
+    nameEl.textContent = project.name;
+    taglineEl.textContent = project.tagline;
+    statusEl.textContent = STATUS_COPY[project.status] ?? '';
+    descEl.textContent = project.description;
     tagsEl.innerHTML = '';
-    for (const tag of (d.tags ?? '').split(',').filter(Boolean)) {
+    for (const tag of project.tags) {
       const li = document.createElement('li');
       li.textContent = tag;
       tagsEl.appendChild(li);
     }
-    githubEl.href = d.github ?? '#';
-    if (d.demo) {
-      demoEl.href = d.demo;
+    githubEl.href = project.github;
+    if (project.demo) {
+      demoEl.href = project.demo;
       demoEl.hidden = false;
     } else {
       demoEl.hidden = true;
     }
-    const accent = sign.style.getPropertyValue('--accent').trim();
     panel.style.setProperty('--accent', accent);
-    panel.style.setProperty('--status-color', STATUS_COLOR[d.status ?? ''] ?? '#0fe513');
+    panel.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#0fe513');
 
     panel.dataset.open = 'true';
     backdrop.dataset.open = 'true';
     document.body.classList.add('panel-open');
-    lastFocus = sign;
+    lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeBtn.focus();
   }
 
@@ -225,13 +236,9 @@
     lastFocus = null;
   }
 
-  document.addEventListener('click', (e) => {
-    const sign = (e.target as HTMLElement).closest<HTMLElement>('a.sign');
-    if (sign) {
-      e.preventDefault();
-      openPanel(sign);
-    }
-  });
+  window.addEventListener('project:open', ((e: CustomEvent<OpenDetail>) => {
+    openPanel(e.detail);
+  }) as EventListener);
 
   closeBtn.addEventListener('click', closePanel);
   backdrop.addEventListener('click', closePanel);

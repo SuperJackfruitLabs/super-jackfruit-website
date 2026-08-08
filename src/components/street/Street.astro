@@ -1,133 +1,86 @@
 ---
 import NeonText from '../NeonText.astro';
-import ProjectSign from './ProjectSign.astro';
-import { districts, byDistrict } from '../../data/projects';
+import { districts, byDistrict, projects } from '../../data/projects';
 import '@fontsource-variable/inconsolata';
 import '@fontsource/neonderthaw';
+import '@fontsource/tilt-neon';
+
+const statusCopy: Record<string, string> = {
+  stable: 'lit & steady',
+  wip: 'under active wiring',
+  experiment: 'half-lit experiment',
+};
 ---
 
 <div class="scene" id="scene">
-  <canvas id="atmosphere" aria-hidden="true"></canvas>
+  <canvas id="street-canvas"></canvas>
 
-  <div class="layer layer--backdrop" aria-hidden="true"></div>
-
-  <div class="layer layer--street" id="street">
-    <header class="entrance">
-      <NeonText text="Super Jackfruit Labs" />
-      <p class="entrance__script">open source experiments · open late</p>
-      <p class="entrance__hint">← drag, scroll, or arrow keys to walk the street →</p>
-    </header>
-
-    <ol class="districts">
-      {districts.map((d) => (
-        <li class="district" style={`--accent: ${d.accent}`}>
-          <div class="district__header">
-            <h2 class="district__sign">{d.name}</h2>
-            <p class="district__blurb">{d.blurb}</p>
-          </div>
-          <ol class="district__signs">
-            {byDistrict(d.id).map((p) => (
-              <ProjectSign project={p} accent={d.accent} />
-            ))}
-          </ol>
-        </li>
-      ))}
-    </ol>
-
-    <footer class="street-end">
-      <h2 class="street-end__title">end of the street</h2>
-      <p class="street-end__copy">everything here is open source. come say hi:</p>
-      <nav class="street-end__links">
-        <a href="https://github.com/rakeshgangwar" target="_blank" rel="noopener noreferrer">github.com/rakeshgangwar</a>
-        <a href="https://github.com/SuperJackfruitLabs" target="_blank" rel="noopener noreferrer">github.com/SuperJackfruitLabs</a>
-      </nav>
-    </footer>
+  <div class="overlay" id="entrance-overlay">
+    <NeonText text="Super Jackfruit Labs" />
+    <p class="overlay__script">open source experiments · open late</p>
+    <p class="overlay__hint">scroll, drag, or ↑ to walk the street · click a sign</p>
   </div>
 
-  <div class="layer layer--fore" aria-hidden="true">
-    <div class="lamppost" style="--x: calc(100vw + 60rem)"></div>
-    <div class="lamppost" style="--x: calc(100vw + 230rem)"></div>
-    <div class="lamppost" style="--x: calc(100vw + 400rem)"></div>
+  <!-- fallback + crawlable content; shown when the 3D scene can't run -->
+  <div class="fallback" id="fallback">
+    <header class="fallback__head">
+      <h1>Super Jackfruit Labs</h1>
+      <p>open source experiments · open late</p>
+    </header>
+    {districts.map((d) => (
+      <section class="fallback__district" style={`--accent: ${d.accent}`}>
+        <h2>{d.name}</h2>
+        <p class="fallback__blurb">{d.blurb}</p>
+        <ul>
+          {byDistrict(d.id).map((p) => (
+            <li>
+              <a href={p.github} target="_blank" rel="noopener noreferrer">{p.name}</a>
+              <span class="fallback__tagline">{p.tagline}</span>
+              <span class={`fallback__status fallback__status--${p.status}`}>{statusCopy[p.status]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+    <footer class="fallback__foot">
+      <a href="https://github.com/rakeshgangwar" target="_blank" rel="noopener noreferrer">github.com/rakeshgangwar</a>
+      <a href="https://github.com/SuperJackfruitLabs" target="_blank" rel="noopener noreferrer">github.com/SuperJackfruitLabs</a>
+    </footer>
   </div>
 </div>
 
-<style>
+<style define:vars={{}}>
   .scene {
     position: fixed;
     inset: 0;
-    overflow: hidden;
     background: #07070a;
-    touch-action: none;
-    user-select: none;
+    overflow: hidden;
   }
 
-  #atmosphere {
+  #street-canvas {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    z-index: 0;
-    pointer-events: none;
+    touch-action: none;
+    display: block;
   }
 
-  .layer {
+  .overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    will-change: transform;
-  }
-
-  /* distant glow — pans slowest */
-  .layer--backdrop {
-    z-index: 1;
-    width: 400vw;
-    background:
-      radial-gradient(ellipse 60rem 30rem at 20% 70%, rgba(76, 5, 77, 0.55), transparent 70%),
-      radial-gradient(ellipse 70rem 32rem at 55% 65%, rgba(9, 41, 60, 0.5), transparent 70%),
-      radial-gradient(ellipse 55rem 28rem at 85% 72%, rgba(76, 5, 77, 0.45), transparent 70%);
-  }
-
-  /* the wall + sidewalk — pans 1:1 */
-  .layer--street {
-    z-index: 2;
-    display: flex;
-    align-items: stretch;
-    width: max-content;
-  }
-
-  .layer--street::after {
-    content: '';
-    position: absolute;
-    inset: 86% 0 0 0;
-    background: linear-gradient(#15151d, #0a0a10 40%);
-    border-top: 1px solid rgba(239, 233, 220, 0.12);
-    z-index: -1;
-  }
-
-  /* each section is its own building facade — brick wall stops at the sidewalk */
-  .entrance,
-  .district {
-    background:
-      radial-gradient(ellipse at 50% 45%, rgba(76, 5, 77, 0.9) 0%, rgba(12, 16, 13, 0.96) 75%)
-        top / 100% 86% no-repeat,
-      url('/brick-pattern.jpg') top / 100% 86% no-repeat;
-    background-blend-mode: multiply;
-  }
-
-  .entrance {
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 2.4rem;
-    width: 100vw;
-    padding: 0 6vw;
-    box-sizing: border-box;
     text-align: center;
+    padding: 0 6vw;
+    pointer-events: none;
+    transition: opacity 0.3s linear;
   }
 
-  .entrance__script {
+  .overlay__script {
     font-family: 'Neonderthaw', cursive;
     font-size: 3.4rem;
     color: #09e6f2;
@@ -135,162 +88,132 @@ import '@fontsource/neonderthaw';
     margin: 0;
   }
 
-  .entrance__hint {
+  .overlay__hint {
     font-family: 'Inconsolata Variable', monospace;
     font-size: 1.4rem;
     letter-spacing: 0.08em;
-    color: rgba(239, 233, 220, 0.55);
+    color: rgba(239, 233, 220, 0.6);
     margin: 0;
-  }
-
-  .districts {
-    display: flex;
-    align-items: stretch;
-    margin: 0;
-    padding: 0;
-  }
-
-  .district {
-    position: relative;
-    display: flex;
-    align-items: stretch;
-    list-style: none;
-    padding: 0 3rem;
-    border-left: 1px dashed rgba(239, 233, 220, 0.12);
-  }
-
-  .district__header {
-    position: absolute;
-    top: 7%;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    white-space: nowrap;
-  }
-
-  .district__sign {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
-    font-size: 2.6rem;
-    font-weight: 400;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--accent);
-    text-shadow: 0 0 10px var(--accent), 0 0 30px var(--accent);
-    margin: 0;
-  }
-
-  .district__blurb {
-    font-family: 'Neonderthaw', cursive;
-    font-size: 2.4rem;
-    color: rgba(239, 233, 220, 0.7);
-    margin: 0.4rem 0 0;
-  }
-
-  .district__signs {
-    display: flex;
-    align-items: stretch;
-    margin: 0;
-    padding: 0;
-  }
-
-  .street-end {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.6rem;
-    width: 100vw;
-    background:
-      linear-gradient(rgba(7, 7, 10, 0.72), rgba(7, 7, 10, 0.85)),
-      url('/graffiti-wall.jpg') center / cover;
-    text-align: center;
-  }
-
-  .street-end__title {
-    font-family: 'Neonderthaw', cursive;
-    font-size: 5.6rem;
-    font-weight: 400;
-    color: #fc5553;
-    text-shadow: 0 0 10px rgba(252, 85, 83, 0.8), 0 0 34px rgba(252, 85, 83, 0.5);
-    margin: 0;
-  }
-
-  .street-end__copy {
-    font-family: 'Inconsolata Variable', monospace;
-    font-size: 1.6rem;
-    color: rgba(239, 233, 220, 0.8);
-    margin: 0;
-  }
-
-  .street-end__links {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .street-end__links a {
-    font-family: 'Inconsolata Variable', monospace;
-    font-size: 1.6rem;
-    color: #bfee21;
-    text-shadow: 0 0 8px rgba(191, 238, 33, 0.6);
-    text-decoration: none;
-  }
-
-  .street-end__links a:hover,
-  .street-end__links a:focus-visible {
-    text-decoration: underline;
-    outline: none;
-  }
-
-  /* foreground silhouettes — pan fastest */
-  .layer--fore {
-    z-index: 3;
-    width: 600rem;
-    pointer-events: none;
-  }
-
-  .lamppost {
-    position: absolute;
-    left: var(--x);
-    bottom: 8%;
-    width: 0.8rem;
-    height: 46%;
-    background: #030306;
-    border-radius: 0.4rem 0.4rem 0 0;
-  }
-
-  .lamppost::after {
-    content: '';
-    position: absolute;
-    top: -3.6rem;
-    left: -3.6rem;
-    width: 8rem;
-    height: 5rem;
-    border-radius: 50%;
-    background: radial-gradient(ellipse at center, rgba(255, 214, 120, 0.95) 0%, rgba(242, 167, 7, 0.5) 35%, transparent 70%);
-    filter: blur(3px);
   }
 
   @media (max-width: 640px) {
-    .entrance__script { font-size: 2.6rem; }
-    .district__sign { font-size: 2rem; letter-spacing: 0.2em; }
-    .district__blurb { font-size: 2rem; }
+    .overlay__script { font-size: 2.4rem; }
+    .overlay__hint { font-size: 1.2rem; }
+  }
+
+  /* fallback list — hidden while the scene runs */
+  .fallback {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 6rem 8vw;
+    box-sizing: border-box;
+    font-family: 'Inconsolata Variable', monospace;
+    color: #efe9dc;
+    display: none;
+  }
+
+  :global(body.no-webgl) .fallback { display: block; }
+  :global(body.no-webgl) .overlay,
+  :global(body.no-webgl) #street-canvas { display: none; }
+
+  .fallback__head h1 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 4.2rem;
+    color: #fff;
+    text-shadow: 0 0 12px #a12cf9, 0 0 40px #a12cf9;
+    margin: 0;
+  }
+
+  .fallback__head p {
+    font-family: 'Neonderthaw', cursive;
+    font-size: 2.6rem;
+    color: #09e6f2;
+    margin: 0.4rem 0 3rem;
+  }
+
+  .fallback__district h2 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 2.4rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 10px var(--accent);
+    margin: 3rem 0 0.2rem;
+  }
+
+  .fallback__blurb {
+    font-family: 'Neonderthaw', cursive;
+    font-size: 2.2rem;
+    color: rgba(239, 233, 220, 0.7);
+    margin: 0 0 1.2rem;
+  }
+
+  .fallback__district ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .fallback__district a {
+    color: #fff;
+    font-size: 1.7rem;
+    text-decoration: none;
+    border-bottom: 1px solid var(--accent);
+  }
+
+  .fallback__tagline {
+    margin-left: 1.2rem;
+    font-size: 1.4rem;
+    color: rgba(239, 233, 220, 0.7);
+  }
+
+  .fallback__status {
+    margin-left: 1.2rem;
+    font-size: 1.2rem;
+    letter-spacing: 0.06em;
+  }
+
+  .fallback__status--stable { color: #0fe513; }
+  .fallback__status--wip { color: #f2a707; }
+  .fallback__status--experiment { color: #a12cf9; }
+
+  .fallback__foot {
+    display: flex;
+    gap: 2.4rem;
+    margin-top: 4rem;
+  }
+
+  .fallback__foot a {
+    color: #bfee21;
+    font-size: 1.5rem;
   }
 </style>
 
 <script>
-  import { initStreet } from '../../scripts/street-controller';
-  import { initAtmosphere } from '../../scripts/atmosphere';
+  import { initStreetScene } from '../../scripts/street-scene';
+  import { projects, districts } from '../../data/projects';
 
-  initStreet();
+  const canvas = document.getElementById('street-canvas');
+  const overlay = document.getElementById('entrance-overlay');
 
-  const atmosphereCanvas = document.getElementById('atmosphere');
-  if (atmosphereCanvas instanceof HTMLCanvasElement) {
-    const start = () => void initAtmosphere(atmosphereCanvas);
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(start);
-    } else {
-      setTimeout(start, 300);
-    }
+  if (canvas instanceof HTMLCanvasElement) {
+    initStreetScene(canvas, projects, districts)
+      .then((ok) => {
+        if (!ok) document.body.classList.add('no-webgl');
+      })
+      .catch(() => document.body.classList.add('no-webgl'));
   }
+
+  window.addEventListener('street3d:progress', ((e: CustomEvent<{ progress: number }>) => {
+    if (!overlay) return;
+    const o = Math.max(0, 1 - e.detail.progress * 3);
+    overlay.style.opacity = String(o);
+    overlay.style.visibility = o <= 0.01 ? 'hidden' : 'visible';
+  }) as EventListener);
 </script>
