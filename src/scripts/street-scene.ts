@@ -199,6 +199,7 @@ export async function initStreetScene(
   const signs: SignEntry[] = [];
   const clickables: import('three').Object3D[] = [];
   const gates: import('three').Mesh[] = [];
+  const districtZones: Array<{ accent: string; mid: number }> = [];
   let z = -30;
 
   const districtGroups = districts.map((d) => ({
@@ -208,6 +209,7 @@ export async function initStreetScene(
 
   let side = -1;
   for (const group of districtGroups) {
+    const zoneStart = z;
     // district gate floating over the street
     const gateTex = makeDistrictTexture(group.district);
     const gate = new THREE.Mesh(
@@ -264,6 +266,7 @@ export async function initStreetScene(
       side *= -1;
       z -= SIGN_SPACING;
     }
+    districtZones.push({ accent: group.district.accent, mid: (zoneStart + z) / 2 });
     z -= 6;
   }
 
@@ -271,20 +274,157 @@ export async function initStreetScene(
 
   // ---------- walls / ground / end wall ----------
 
-  const brickTex = texLoader.load('/brick-pattern.jpg');
-  brickTex.wrapS = brickTex.wrapT = THREE.RepeatWrapping;
-  brickTex.colorSpace = THREE.SRGBColorSpace;
   const streetLen = Math.abs(endZ) + CAM_START_Z + 30;
-  brickTex.repeat.set(streetLen / 8, 2.2);
+  const wallCenterZ = endZ / 2 + CAM_START_Z / 2;
+  const wallZNear = wallCenterZ + streetLen / 2;
 
-  const wallMat = new THREE.MeshBasicMaterial({ map: brickTex, color: 0x4a2a44 });
+  // hue anchors along the street: entrance purple → district accents → ember end
+  const hueAnchors: Array<{ z: number; color: import('three').Color }> = [
+    { z: wallZNear, color: new THREE.Color('#7a2f7c') },
+    ...districtZones.map((d) => ({ z: d.mid, color: new THREE.Color(d.accent) })),
+    { z: endZ - 15, color: new THREE.Color('#fc5553') },
+  ];
+
+  function hueAtZ(zWorld: number): import('three').Color {
+    if (zWorld >= hueAnchors[0].z) return hueAnchors[0].color.clone();
+    for (let i = 0; i < hueAnchors.length - 1; i++) {
+      const a = hueAnchors[i];
+      const b = hueAnchors[i + 1];
+      if (zWorld <= a.z && zWorld >= b.z) {
+        const t = (a.z - zWorld) / (a.z - b.z);
+        return a.color.clone().lerp(b.color, t);
+      }
+    }
+    return hueAnchors[hueAnchors.length - 1].color.clone();
+  }
+
+  // generative circuit-trace wall art: one unique, non-tiling canvas per wall
+  function makeWallArtTexture(flip: boolean): import('three').CanvasTexture {
+    const W = 8192;
+    const H = 512;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d')!;
+
+    const zAtX = (x: number) => {
+      const f = x / W;
+      return flip ? endZ - 15 + f * streetLen : wallZNear - f * streetLen;
+    };
+    const css = (col: import('three').Color, alpha: number) =>
+      `rgba(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)},${alpha})`;
+
+    // dark panel background with a soft vertical falloff
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0e0a15');
+    bg.addColorStop(0.55, '#0a0710');
+    bg.addColorStop(1, '#07050b');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // speckle noise
+    for (let i = 0; i < 5000; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      ctx.fillStyle = `rgba(255,255,255,${0.015 + Math.random() * 0.03})`;
+      ctx.fillRect(x, y, 1.5, 1.5);
+    }
+
+    // Manhattan-routed traces
+    const TRACES = 110;
+    for (let i = 0; i < TRACES; i++) {
+      let x = Math.random() * W;
+      let y = 40 + Math.random() * (H - 80);
+      const col = hueAtZ(zAtX(x));
+      const isBus = Math.random() < 0.18;
+      ctx.lineWidth = isBus ? 4 : 2;
+      ctx.strokeStyle = css(col, isBus ? 0.2 : 0.11 + Math.random() * 0.08);
+      ctx.shadowColor = css(col, 0.5);
+      ctx.shadowBlur = 5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      const segments = 3 + Math.floor(Math.random() * 5);
+      for (let s = 0; s < segments; s++) {
+        if (s % 2 === 0) {
+          x += (Math.random() < 0.5 ? -1 : 1) * (100 + Math.random() * 360);
+        } else {
+          y += (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 110);
+          y = Math.max(24, Math.min(H - 24, y));
+        }
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // node at the end of the run
+      ctx.fillStyle = css(col, 0.4);
+      ctx.fillRect(x - 3, y - 3, 6, 6);
+    }
+
+    // vias — small open rings
+    for (let i = 0; i < 70; i++) {
+      const x = Math.random() * W;
+      const y = 30 + Math.random() * (H - 60);
+      const col = hueAtZ(zAtX(x));
+      ctx.strokeStyle = css(col, 0.3);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // IC chips — rectangles with pin stubs
+    for (let i = 0; i < 16; i++) {
+      const x = Math.random() * (W - 80);
+      const y = 60 + Math.random() * (H - 160);
+      const col = hueAtZ(zAtX(x));
+      const w = 44 + Math.random() * 40;
+      const h = 22 + Math.random() * 18;
+      ctx.strokeStyle = css(col, 0.32);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+      ctx.lineWidth = 1.5;
+      for (let px = x + 6; px < x + w - 4; px += 9) {
+        ctx.beginPath();
+        ctx.moveTo(px, y);
+        ctx.lineTo(px, y - 5);
+        ctx.moveTo(px, y + h);
+        ctx.lineTo(px, y + h + 5);
+        ctx.stroke();
+      }
+    }
+
+    // glints — the only marks bright enough to catch the bloom
+    for (let i = 0; i < 60; i++) {
+      const x = Math.random() * W;
+      const y = 30 + Math.random() * (H - 60);
+      const col = hueAtZ(zAtX(x)).lerp(new THREE.Color('#ffffff'), 0.55);
+      ctx.fillStyle = css(col, 0.85);
+      ctx.beginPath();
+      ctx.arc(x, y, 1.6 + Math.random() * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+  }
+
   const wallGeo = new THREE.PlaneGeometry(streetLen, 16);
-  const leftWall = new THREE.Mesh(wallGeo, wallMat);
-  leftWall.position.set(-WALL_X, 8, endZ / 2 + CAM_START_Z / 2);
+  const leftWall = new THREE.Mesh(
+    wallGeo,
+    new THREE.MeshBasicMaterial({ map: makeWallArtTexture(false) })
+  );
+  leftWall.position.set(-WALL_X, 8, wallCenterZ);
   leftWall.rotation.y = Math.PI / 2;
   scene.add(leftWall);
-  const rightWall = new THREE.Mesh(wallGeo, wallMat);
-  rightWall.position.set(WALL_X, 8, endZ / 2 + CAM_START_Z / 2);
+  const rightWall = new THREE.Mesh(
+    wallGeo,
+    new THREE.MeshBasicMaterial({ map: makeWallArtTexture(true) })
+  );
+  rightWall.position.set(WALL_X, 8, wallCenterZ);
   rightWall.rotation.y = -Math.PI / 2;
   scene.add(rightWall);
 
