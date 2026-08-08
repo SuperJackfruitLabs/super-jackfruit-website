@@ -299,7 +299,7 @@ export async function initStreetScene(
     return hueAnchors[hueAnchors.length - 1].color.clone();
   }
 
-  // generative circuit-trace wall art: one unique, non-tiling canvas per wall
+  // generative aurora-smoke wall art: one unique, non-tiling canvas per wall
   function makeWallArtTexture(flip: boolean): import('three').CanvasTexture {
     const W = 8192;
     const H = 512;
@@ -331,69 +331,29 @@ export async function initStreetScene(
       ctx.fillRect(x, y, 1.5, 1.5);
     }
 
-    // Manhattan-routed traces
-    const TRACES = 110;
-    for (let i = 0; i < TRACES; i++) {
-      let x = Math.random() * W;
-      let y = 40 + Math.random() * (H - 80);
-      const col = hueAtZ(zAtX(x));
-      const isBus = Math.random() < 0.18;
-      ctx.lineWidth = isBus ? 4 : 2;
-      ctx.strokeStyle = css(col, isBus ? 0.2 : 0.11 + Math.random() * 0.08);
-      ctx.shadowColor = css(col, 0.5);
-      ctx.shadowBlur = 5;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      const segments = 3 + Math.floor(Math.random() * 5);
-      for (let s = 0; s < segments; s++) {
-        if (s % 2 === 0) {
-          x += (Math.random() < 0.5 ? -1 : 1) * (100 + Math.random() * 360);
-        } else {
-          y += (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 110);
-          y = Math.max(24, Math.min(H - 24, y));
-        }
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // node at the end of the run
-      ctx.fillStyle = css(col, 0.4);
-      ctx.fillRect(x - 3, y - 3, 6, 6);
-    }
-
-    // vias — small open rings
-    for (let i = 0; i < 70; i++) {
-      const x = Math.random() * W;
-      const y = 30 + Math.random() * (H - 60);
-      const col = hueAtZ(zAtX(x));
-      ctx.strokeStyle = css(col, 0.3);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(x, y, 3 + Math.random() * 3, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // IC chips — rectangles with pin stubs
-    for (let i = 0; i < 16; i++) {
-      const x = Math.random() * (W - 80);
-      const y = 60 + Math.random() * (H - 160);
-      const col = hueAtZ(zAtX(x));
-      const w = 44 + Math.random() * 40;
-      const h = 22 + Math.random() * 18;
-      ctx.strokeStyle = css(col, 0.32);
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, w, h);
-      ctx.lineWidth = 1.5;
-      for (let px = x + 6; px < x + w - 4; px += 9) {
-        ctx.beginPath();
-        ctx.moveTo(px, y);
-        ctx.lineTo(px, y - 5);
-        ctx.moveTo(px, y + h);
-        ctx.lineTo(px, y + h + 5);
-        ctx.stroke();
+    // aurora smoke — slow bands of luminous haze drifting along the wall,
+    // built from thousands of soft additive blobs following sine paths
+    ctx.globalCompositeOperation = 'lighter';
+    const BANDS = 120;
+    for (let b = 0; b < BANDS; b++) {
+      const cx = Math.random() * W;
+      const col = hueAtZ(zAtX(cx));
+      const baseY = H * (0.15 + Math.random() * 0.65);
+      const amp = 34 + Math.random() * 78;
+      const len = 500 + Math.random() * 1200;
+      const ph = Math.random() * 7;
+      const wave = 130 + Math.random() * 120;
+      for (let x = cx - len / 2; x < cx + len / 2; x += 18) {
+        const y = baseY + Math.sin(x / wave + ph) * amp;
+        const r = 50 + Math.random() * 85;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, css(col, 0.016));
+        g.addColorStop(1, css(col, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
       }
     }
+    ctx.globalCompositeOperation = 'source-over';
 
     // glints — the only marks bright enough to catch the bloom
     for (let i = 0; i < 60; i++) {
