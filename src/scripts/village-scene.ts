@@ -441,6 +441,32 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   playerRoot.position.set(0, 0, 8);
   scene.add(playerRoot);
 
+  // nitro exhaust flames
+  const flameTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,220,150,1)');
+    grad.addColorStop(0.4, 'rgba(255,140,60,0.9)');
+    grad.addColorStop(1, 'rgba(255,80,30,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const nitroFlames: import('three').Sprite[] = [];
+  for (const fx of [-0.32, 0.32]) {
+    const flame = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: flameTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    flame.position.set(fx, 0.35, -1.55);
+    flame.scale.setScalar(0.5);
+    playerRoot.add(flame);
+    nitroFlames.push(flame);
+  }
+
   // the villager stays on as a greeter beside the first gate
   const gltf = await loader.loadAsync('/assets/village/rogue.glb');
   const greeter = gltf.scene;
@@ -477,6 +503,66 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (idle) mixer.clipAction(idle).play();
   }
 
+  // ---------- procedural engine sound ----------
+  // detuned saw pair + sub through a lowpass; pitch/brightness follow speed.
+  // Created lazily on first input (autoplay policy), silent at rest.
+  let engineAudio: {
+    ctx: AudioContext;
+    gain: GainNode;
+    filter: BiquadFilterNode;
+    oscs: OscillatorNode[];
+  } | null = null;
+  let muted = false;
+
+  function ensureEngineAudio(): void {
+    if (engineAudio || muted) return;
+    try {
+      const actx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const gain = actx.createGain();
+      gain.gain.value = 0;
+      const filter = actx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 300;
+      filter.Q.value = 0.8;
+      const comp = actx.createDynamicsCompressor();
+      filter.connect(gain);
+      gain.connect(comp);
+      comp.connect(actx.destination);
+      const oscs: OscillatorNode[] = [];
+      const mk = (type: OscillatorType, freq: number, level: number) => {
+        const o = actx.createOscillator();
+        o.type = type;
+        o.frequency.value = freq;
+        const g = actx.createGain();
+        g.gain.value = level;
+        o.connect(g);
+        g.connect(filter);
+        o.start();
+        oscs.push(o);
+      };
+      mk('sawtooth', 55, 0.5);
+      mk('sawtooth', 55.6, 0.5);
+      mk('sine', 27.5, 0.8);
+      engineAudio = { ctx: actx, gain, filter, oscs };
+    } catch {
+      engineAudio = null;
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'm') {
+      muted = !muted;
+      if (engineAudio) {
+        engineAudio.gain.gain.setTargetAtTime(0, engineAudio.ctx.currentTime, 0.05);
+        if (muted) engineAudio.ctx.suspend();
+        else engineAudio.ctx.resume();
+      }
+      return;
+    }
+    ensureEngineAudio();
+  });
+  window.addEventListener('pointerdown', ensureEngineAudio);
+
   // ---------- input ----------
   const keys = new Set<string>();
   window.addEventListener('keydown', (e) => {
@@ -500,8 +586,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   // ---------- driving + camera ----------
   const MAX_SPEED = 11;
+  const NITRO_MAX = 18;
   const MAX_REVERSE = 4;
   const ACCEL = 9;
+  const NITRO_ACCEL = 17;
   const BRAKE = 16;
   const DRAG = 3.2;
   const STEER_RATE = 1.9;
@@ -538,16 +626,38 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       iz += Math.max(-1, Math.min(1, joy.dy));
     }
     // arcade car: throttle on the screen-vertical axis, steering on horizontal
+    // gamepad: left stick steers, RT throttle, LT brake/reverse, A = nitro
+    let padNitro = false;
+    const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    for (const pad of pads) {
+      if (!pad || !pad.connected) continue;
+      const dz = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
+      ix += dz(pad.axes[0] ?? 0);
+      const rt = pad.buttons[7]?.value ?? 0;
+      const lt = pad.buttons[6]?.value ?? 0;
+      const trigger = rt - lt;
+      iz += trigger !== 0 ? -trigger : dz(pad.axes[1] ?? 0);
+      if (pad.buttons[0]?.pressed) padNitro = true;
+      break;
+    }
+    ix = Math.max(-1, Math.min(1, ix));
+    iz = Math.max(-1, Math.min(1, iz));
+
     const throttle = -iz; // up = forward
     const steer = -ix; // right key steers right (heading decreases visually)
-    if (throttle > 0.05) {
-      speed += ACCEL * throttle * dt;
+    const nitro = (keys.has('shift') || padNitro) && throttle > 0.05;
+    const topSpeed = nitro ? NITRO_MAX : MAX_SPEED;
+    if (speed > topSpeed + 0.01) {
+      // over the current cap (boost just released) — bleed off smoothly
+      speed = Math.max(topSpeed, speed - 14 * dt);
+    } else if (throttle > 0.05) {
+      speed = Math.min(topSpeed, speed + (nitro ? NITRO_ACCEL : ACCEL) * throttle * dt);
     } else if (throttle < -0.05) {
       speed += (speed > 0 ? -BRAKE : ACCEL * throttle) * dt;
     } else {
       speed -= Math.sign(speed) * Math.min(Math.abs(speed), DRAG * dt);
     }
-    speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, speed));
+    speed = Math.max(-MAX_REVERSE, speed);
 
     // steering authority grows with speed, flips in reverse
     const steerAuthority = Math.max(-1, Math.min(1, speed / 4));
@@ -564,6 +674,33 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const roll = (speed * dt) / 0.35;
     for (const w of wheels.all) w.rotation.x += roll;
     for (const pv of frontPivots) pv.rotation.y = steer * 0.45 * Math.max(0, steerAuthority);
+
+    // nitro juice: flames flicker, camera FOV widens with the surge
+    for (const flame of nitroFlames) {
+      const m = flame.material as import('three').SpriteMaterial;
+      const targetO = nitro ? 0.85 + Math.sin(t * 47 + flame.position.x * 9) * 0.15 : 0;
+      m.opacity += (targetO - m.opacity) * Math.min(1, dt * 14);
+      flame.scale.setScalar(0.4 + (nitro ? 0.25 + Math.sin(t * 39 + flame.position.x * 7) * 0.1 : 0));
+    }
+    const targetFov = 50 + 8 * Math.max(0, (speed - MAX_SPEED * 0.7) / (NITRO_MAX - MAX_SPEED * 0.7));
+    if (Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 5);
+      camera.updateProjectionMatrix();
+    }
+
+    // engine follows the wheels
+    if (engineAudio && !muted) {
+      const sp = Math.abs(speed);
+      const load = Math.min(1, sp / NITRO_MAX);
+      const now = engineAudio.ctx.currentTime;
+      const base = 45 + load * (nitro ? 165 : 120);
+      engineAudio.oscs[0].frequency.setTargetAtTime(base, now, 0.08);
+      engineAudio.oscs[1].frequency.setTargetAtTime(base * 1.012, now, 0.08);
+      engineAudio.oscs[2].frequency.setTargetAtTime(base / 2, now, 0.08);
+      engineAudio.filter.frequency.setTargetAtTime(260 + load * (nitro ? 2100 : 1300), now, 0.1);
+      const vol = sp < 0.15 ? 0 : Math.min(0.085, 0.02 + load * 0.075) + (nitro ? 0.02 : 0);
+      engineAudio.gain.gain.setTargetAtTime(vol, now, 0.12);
+    }
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
     playerRoot.position.z = Math.max(Z_END + 4, Math.min(Z_START - 2, playerRoot.position.z));
 
