@@ -325,7 +325,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const house = houses[Math.floor(rand() * houses.length)];
         place(house, 7.5 + rand() * 1.8, x, z, rotY, 'box');
         place(driveway, 3.2, side * 6.4, z + 1.2, rotY);
-        makeProjectBoard(project, d.accent, side * 5.7, z + 3.4, side === 1 ? -Math.PI / 2 - 0.35 : Math.PI / 2 + 0.35);
+        // face the road, tilted toward walkers arriving from the entrance
+        makeProjectBoard(project, d.accent, side * 5.7, z + 3.4, side === 1 ? -Math.PI / 2 + 0.35 : Math.PI / 2 - 0.35);
         stations.push({ project, accent: d.accent, x: side * 5.7, z: z + 3.4 });
 
         // yard dressing
@@ -334,10 +335,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if (rand() < 0.7) place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), 0, 'box');
         if (rand() < 0.6) place(planter, 1.1, side * 5.2, z - 2.6, rotY, 'box');
 
-        // filler house across the street to keep both sides alive
-        const fx = -side * (10 + rand() * 2);
-        place(houses[Math.floor(rand() * houses.length)], 7 + rand() * 2, fx, z - 4 - rand() * 3, -rotY, 'box');
-        place(rand() < 0.5 ? kTreeLarge : kTreeSmall, 2 + rand() * 1.5, fx + (rand() - 0.5) * 5, z + 2 + rand() * 2, rand() * 6.28, 'trunk', 0.012);
+        // garden cluster across the street — every house on the street is a
+        // project house, so the opposite side gets greenery instead
+        const gx = -side * (8.5 + rand() * 3);
+        place(nTrees[Math.floor(rand() * nTrees.length)], 3 + rand() * 2, gx, z - rand() * 4, rand() * 6.28, 'trunk', 0.01);
+        place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, gx + (rand() - 0.5) * 4, z + 1 + rand() * 3, rand() * 6.28, false, 0.02);
+        if (rand() < 0.7) {
+          place(flowers[Math.floor(rand() * flowers.length)], 0.6, -side * (6 + rand() * 2), z + rand() * 4, rand() * 6.28, false, 0.05);
+        }
 
         z -= 14 + rand() * 3;
         side *= -1;
