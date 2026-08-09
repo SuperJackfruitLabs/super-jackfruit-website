@@ -8,6 +8,7 @@ import '@fontsource-variable/inconsolata';
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
     <p class="tag">the village — work in progress</p>
+    <p class="credit">engine sound: qubodup (CC-BY, opengameart.org)</p>
 
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
       <h2 id="card-name"></h2>
@@ -61,6 +62,18 @@ import '@fontsource-variable/inconsolata';
     font-size: 1.2rem;
     letter-spacing: 0.08em;
     color: rgba(40, 50, 60, 0.55);
+  }
+
+  .credit {
+    position: absolute;
+    right: 1.2rem;
+    bottom: 0.9rem;
+    left: auto;
+    transform: none;
+    margin: 0;
+    font-size: 0.95rem;
+    color: rgba(40, 50, 60, 0.45);
+    pointer-events: none;
   }
 
   /* the project card — warm paper, day theme */

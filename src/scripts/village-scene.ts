@@ -506,90 +506,41 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // ---------- procedural engine sound ----------
   // detuned saw pair + sub through a lowpass; pitch/brightness follow speed.
   // Created lazily on first input (autoplay policy), silent at rest.
+  // engine: a real petrol loop (CC-BY qubodup, opengameart.org), looped and
+  // pitch-bent by RPM. Lazily created on first input; silent at rest.
   let engineAudio: {
     ctx: AudioContext;
     gain: GainNode;
-    lowpass: BiquadFilterNode;
-    noiseBand: BiquadFilterNode;
-    noiseGain: GainNode;
-    oscSaw: OscillatorNode;
-    oscSq: OscillatorNode;
+    src: AudioBufferSourceNode;
   } | null = null;
+  let engineLoading = false;
   let muted = false;
 
   function ensureEngineAudio(): void {
-    if (engineAudio || muted) return;
-    try {
-      const actx = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-      // combustion buzz: saw + half-order square, crushed through a soft
-      // clipper so it fires like cylinders instead of humming like a synth
-      const oscSaw = actx.createOscillator();
-      oscSaw.type = 'sawtooth';
-      oscSaw.frequency.value = 40;
-      const sawGain = actx.createGain();
-      sawGain.gain.value = 0.6;
-      const oscSq = actx.createOscillator();
-      oscSq.type = 'square';
-      oscSq.frequency.value = 20;
-      const sqGain = actx.createGain();
-      sqGain.gain.value = 0.45;
-
-      // exhaust rasp: noise through a tracking bandpass
-      const noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
-      const nd = noiseBuf.getChannelData(0);
-      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-      const noise = actx.createBufferSource();
-      noise.buffer = noiseBuf;
-      noise.loop = true;
-      const noiseBand = actx.createBiquadFilter();
-      noiseBand.type = 'bandpass';
-      noiseBand.frequency.value = 400;
-      noiseBand.Q.value = 1.1;
-      const noiseGain = actx.createGain();
-      noiseGain.gain.value = 0.2;
-
-      const shaper = actx.createWaveShaper();
-      {
-        const n = 512;
-        const curve = new Float32Array(n);
-        for (let i = 0; i < n; i++) curve[i] = Math.tanh(((i / (n - 1)) * 2 - 1) * 3.2);
-        shaper.curve = curve;
+    if (engineAudio || engineLoading || muted) return;
+    engineLoading = true;
+    (async () => {
+      try {
+        const actx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const res = await fetch('/assets/village/engine-petrol.mp3');
+        const buf = await actx.decodeAudioData(await res.arrayBuffer());
+        const src = actx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const gain = actx.createGain();
+        gain.gain.value = 0;
+        const comp = actx.createDynamicsCompressor();
+        src.connect(gain);
+        gain.connect(comp);
+        comp.connect(actx.destination);
+        src.start();
+        engineAudio = { ctx: actx, gain, src };
+      } catch {
+        engineAudio = null;
+      } finally {
+        engineLoading = false;
       }
-      // exhaust-pipe formant + overall muffling
-      const formant = actx.createBiquadFilter();
-      formant.type = 'peaking';
-      formant.frequency.value = 520;
-      formant.Q.value = 1.1;
-      formant.gain.value = 6;
-      const lowpass = actx.createBiquadFilter();
-      lowpass.type = 'lowpass';
-      lowpass.frequency.value = 900;
-      lowpass.Q.value = 0.7;
-      const gain = actx.createGain();
-      gain.gain.value = 0;
-      const comp = actx.createDynamicsCompressor();
-
-      oscSaw.connect(sawGain);
-      sawGain.connect(shaper);
-      oscSq.connect(sqGain);
-      sqGain.connect(shaper);
-      noise.connect(noiseBand);
-      noiseBand.connect(noiseGain);
-      noiseGain.connect(shaper);
-      shaper.connect(formant);
-      formant.connect(lowpass);
-      lowpass.connect(gain);
-      gain.connect(comp);
-      comp.connect(actx.destination);
-      oscSaw.start();
-      oscSq.start();
-      noise.start();
-
-      engineAudio = { ctx: actx, gain, lowpass, noiseBand, noiseGain, oscSaw, oscSq };
-    } catch {
-      engineAudio = null;
-    }
+    })();
   }
 
   window.addEventListener('keydown', (e) => {
@@ -731,21 +682,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       camera.updateProjectionMatrix();
     }
 
-    // engine follows the wheels — with gears, so acceleration revs and
-    // shifts instead of whining upward forever
+    // engine follows the wheels — gear-stepped RPM bends the sample's pitch
     if (engineAudio && !muted) {
       const sp = Math.abs(speed);
       const GEAR_SPAN = 6.5;
       const inGear = sp < 0.15 ? 0 : (sp % GEAR_SPAN) / GEAR_SPAN;
-      const rpm = 0.22 + inGear * 0.78 + (nitro ? 0.15 : 0);
+      const rpm = Math.min(1, 0.18 + inGear * 0.82 + (nitro ? 0.12 : 0));
       const now = engineAudio.ctx.currentTime;
-      const f = 28 + rpm * (nitro ? 120 : 92);
-      engineAudio.oscSaw.frequency.setTargetAtTime(f, now, 0.05);
-      engineAudio.oscSq.frequency.setTargetAtTime(f / 2, now, 0.05);
-      engineAudio.noiseBand.frequency.setTargetAtTime(300 + rpm * 1400, now, 0.06);
-      engineAudio.noiseGain.gain.setTargetAtTime(0.12 + rpm * 0.4, now, 0.08);
-      engineAudio.lowpass.frequency.setTargetAtTime(600 + rpm * (nitro ? 3200 : 2100), now, 0.07);
-      const vol = sp < 0.15 ? 0 : Math.min(0.11, 0.035 + (sp / NITRO_MAX) * 0.075) + (nitro ? 0.025 : 0);
+      engineAudio.src.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
+      const vol = sp < 0.15 ? 0 : Math.min(0.4, 0.16 + (sp / NITRO_MAX) * 0.22) + (nitro ? 0.06 : 0);
       engineAudio.gain.gain.setTargetAtTime(vol, now, 0.1);
     }
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
