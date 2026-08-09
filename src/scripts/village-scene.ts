@@ -191,19 +191,50 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // ribbon builder: a strip of constant width following the curve
-  function buildRibbon(width: number, color: number, y: number, offset = 0): import('three').Mesh {
-    const SEG = 260;
+  // one textured ribbon: sidewalks, curbs, and dashes are painted into the
+  // surface, so nothing can fold across the asphalt at bends
+  function makeRoadTexture(): import('three').CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 128;
+    const ctx = c.getContext('2d')!;
+    const W = 256;
+    // cross-section: |sidewalk|curb|asphalt+dash|curb|sidewalk|
+    const sw = Math.round(W * 0.15);
+    ctx.fillStyle = '#d8d2c4';
+    ctx.fillRect(0, 0, W, 128);
+    ctx.fillStyle = '#b7bac1';
+    ctx.fillRect(sw, 0, W - sw * 2, 128);
+    ctx.fillStyle = '#9fa3ab';
+    ctx.fillRect(sw - 3, 0, 3, 128);
+    ctx.fillRect(W - sw, 0, 3, 128);
+    // center dash: painted along v, 40% duty
+    ctx.fillStyle = '#f2efe6';
+    ctx.fillRect(W / 2 - 3, 10, 6, 50);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+  }
+
+  {
+    const SEG = 300;
+    const WIDTH = 11.2;
     const pos: number[] = [];
+    const uv: number[] = [];
+    const norm: number[] = [];
     const idx: number[] = [];
     for (let i = 0; i <= SEG; i++) {
       const t = i / SEG;
       const c = roadCurve.getPointAt(t);
       const n = roadPerp(t);
-      const cx = c.x + n.x * offset;
-      const cz = c.z + n.z * offset;
-      pos.push(cx + n.x * (width / 2), y, cz + n.z * (width / 2));
-      pos.push(cx - n.x * (width / 2), y, cz - n.z * (width / 2));
+      pos.push(c.x + n.x * (WIDTH / 2), 0.02, c.z + n.z * (WIDTH / 2));
+      pos.push(c.x - n.x * (WIDTH / 2), 0.02, c.z - n.z * (WIDTH / 2));
+      const v = (t * ROAD_LEN) / 6; // dash cadence
+      uv.push(0, v, 1, v);
+      norm.push(0, 1, 0, 0, 1, 0);
       if (i < SEG) {
         const a = i * 2;
         idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
@@ -211,31 +242,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norm), 3));
     geo.setIndex(idx);
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    return mesh;
-  }
-
-  buildRibbon(6.4, 0xb5b8bf, 0.02);            // asphalt
-  buildRibbon(1.7, 0xd8d2c4, 0.025, 4.1);      // sidewalks
-  buildRibbon(1.7, 0xd8d2c4, 0.025, -4.1);
-
-  // center dashes follow the curve
-  {
-    const dashMat = new THREE.MeshLambertMaterial({ color: 0xf2efe6 });
-    const step = 6 / ROAD_LEN;
-    for (let t = step; t < 1; t += step) {
-      const c = roadCurve.getPointAt(t);
-      const tan = roadCurve.getTangentAt(t);
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 2.2), dashMat);
-      dash.rotation.x = -Math.PI / 2;
-      dash.rotation.z = -Math.atan2(tan.x, tan.z);
-      dash.position.set(c.x, 0.03, c.z);
-      scene.add(dash);
-    }
+    const road = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ map: makeRoadTexture(), side: THREE.DoubleSide })
+    );
+    road.receiveShadow = true;
+    scene.add(road);
   }
 
   // distance from a point to the road (sampled) — used to keep nature off it
@@ -557,7 +572,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const hz = c.z + n.z * 10.5;
         const house = houses[Math.floor(rand() * houses.length)];
         place(house, 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
-        place(driveway, 3.2, c.x + n.x * 6.4, c.z + n.z * 6.4, faceRoad);
+        place(driveway, 3.2, c.x + n.x * 7.3, c.z + n.z * 7.3, faceRoad);
         const bx = c.x + n.x * 5.7 + tan.x * 1.6;
         const bz = c.z + n.z * 5.7 + tan.z * 1.6;
         makeProjectBoard(project, d.accent, bx, bz, faceRoad);
@@ -581,25 +596,25 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const plazaCenter = (() => {
     const c = roadCurve.getPointAt(T_PLAZA);
     const n = roadPerp(T_PLAZA);
-    return { x: c.x + n.x * 15, z: c.z + n.z * 15, n, c };
+    return { x: c.x + n.x * 17.5, z: c.z + n.z * 17.5, n, c };
   })();
   {
     const plaza = new THREE.Mesh(
-      new THREE.CircleGeometry(12, 40),
+      new THREE.CircleGeometry(11, 40),
       new THREE.MeshLambertMaterial({ color: 0xcfc8b8 })
     );
     plaza.rotation.x = -Math.PI / 2;
-    plaza.position.set(plazaCenter.x, 0.02, plazaCenter.z);
+    plaza.position.set(plazaCenter.x, 0.045, plazaCenter.z);
     plaza.receiveShadow = true;
     scene.add(plaza);
 
     // path from road to plaza
-    const px = plazaCenter.c.x + plazaCenter.n.x * 7;
-    const pz = plazaCenter.c.z + plazaCenter.n.z * 7;
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 10), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
+    const px = plazaCenter.c.x + plazaCenter.n.x * 8.5;
+    const pz = plazaCenter.c.z + plazaCenter.n.z * 8.5;
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 8), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
     path.rotation.x = -Math.PI / 2;
     path.rotation.z = -Math.atan2(plazaCenter.n.x, plazaCenter.n.z);
-    path.position.set(px, 0.02, pz);
+    path.position.set(px, 0.035, pz);
     path.receiveShadow = true;
     scene.add(path);
 
@@ -735,6 +750,24 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
   const playerRoot = new THREE.Group();
   playerRoot.add(car);
+  {
+    const bc = document.createElement('canvas');
+    bc.width = bc.height = 128;
+    const bctx = bc.getContext('2d')!;
+    const bg = bctx.createRadialGradient(64, 64, 8, 64, 64, 64);
+    bg.addColorStop(0, 'rgba(20,25,35,0.42)');
+    bg.addColorStop(1, 'rgba(20,25,35,0)');
+    bctx.fillStyle = bg;
+    bctx.fillRect(0, 0, 128, 128);
+    const blobTex = new THREE.CanvasTexture(bc);
+    const blob = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.4, 4.2),
+      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
+    );
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = 0.03;
+    playerRoot.add(blob);
+  }
   playerRoot.position.set(0, 0, 8);
   scene.add(playerRoot);
 
@@ -802,41 +835,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
-  // the villager stays on as a greeter beside the first gate
-  const gltf = await loader.loadAsync('/assets/village/rogue.glb');
-  const greeter = gltf.scene;
-  greeter.traverse((o) => {
-    const mesh = o as import('three').Mesh;
-    if (mesh.isMesh) {
-      mesh.castShadow = true;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const std = m as import('three').MeshStandardMaterial;
-        if ('metalness' in std) {
-          std.metalness = 0;
-          std.roughness = Math.max(0.85, std.roughness ?? 1);
-        }
-      }
-    }
-    if (/dagger|knife|sword|blade|weapon|crossbow|axe|shield|offhand|arrow|quiver/i.test(o.name)) {
-      o.visible = false;
-    }
-  });
-  {
-    const box = new THREE.Box3().setFromObject(greeter);
-    const h = box.getSize(new THREE.Vector3()).y || 1;
-    const sg = 1.75 / h;
-    greeter.scale.setScalar(sg);
-    greeter.position.set(3.2, -box.min.y * sg, -9);
-    greeter.rotation.y = Math.PI * 0.85; // angled toward arrivals
-  }
-  scene.add(greeter);
-  const mixer = new THREE.AnimationMixer(greeter);
-  {
-    const clips = gltf.animations;
-    const idle = THREE.AnimationClip.findByName(clips, 'Idle') ?? clips[0];
-    if (idle) mixer.clipAction(idle).play();
-  }
 
   // ---------- procedural engine sound ----------
   // detuned saw pair + sub through a lowpass; pitch/brightness follow speed.
@@ -1048,10 +1046,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if ((pad.axes[ai] ?? 0) < -0.9) triggerAxes.add(ai); // seen at rest → it's a trigger
       }
       if (rt < 0.02 && lt < 0.02 && triggerAxes.size > 0) {
-        const axisVals = [...triggerAxes].map((ai) => (pad.axes[ai] ?? -1) * 0.5 + 0.5).sort((a, b) => b - a);
-        // convention: the more-pressed detected trigger accelerates, second brakes
-        rt = axisVals[0] ?? 0;
-        lt = axisVals[1] ?? 0;
+        // deterministic: lower axis index is the LEFT trigger (brake) on both
+        // Xbox (2/5) and PlayStation (3/4) non-standard mappings
+        const ordered = [...triggerAxes].sort((a, b) => a - b);
+        const val = (ai: number | undefined) => (ai === undefined ? 0 : ((pad.axes[ai] ?? -1) + 1) / 2);
+        lt = val(ordered[0]);
+        rt = val(ordered[1]);
       }
       const trigger = rt - lt;
       if (Math.abs(trigger) > 0.03) iz = -trigger; // triggers take priority over stick-Y
@@ -1154,7 +1154,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }
     }
 
-    mixer.update(dt); // greeter idle
 
     // environment transition
     {
