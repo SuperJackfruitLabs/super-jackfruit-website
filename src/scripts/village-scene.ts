@@ -1,7 +1,9 @@
 // "Lab by day" village — Summer Afternoon-inspired third-person stroll.
 // Assets: Kenney City Kit Suburban + Nature Kit (CC0), KayKit Adventurers
-// character (CC0). Everything auto-scaled from bounding boxes so the two
-// packs and the character agree on world scale.
+// character (CC0). Each project from the lab's data gets a house and a
+// curbside signboard; walking up to one raises the info card in the DOM.
+
+import { projects, districts, byDistrict, type Project, type District } from '../data/projects';
 
 export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boolean> {
   const probe = document.createElement('canvas');
@@ -10,24 +12,58 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const THREE = await import('three');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
 
+  await Promise.all([
+    document.fonts.load('700 90px "Inconsolata Variable"'),
+    document.fonts.load('44px "Inconsolata Variable"'),
+  ]).catch(() => {});
+
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.18;
 
   const scene = new THREE.Scene();
-  const SKY = 0x9ed4f5;
-  scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, 55, 130);
+  scene.fog = new THREE.Fog(0xdfe9ef, 55, 150);
 
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 300);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+
+  // ---------- golden-hour sky ----------
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        float h = clamp(vDir.y, 0.0, 1.0);
+        vec3 horizon = vec3(1.0, 0.85, 0.66);   // warm cream
+        vec3 mid = vec3(0.66, 0.85, 0.96);      // soft day blue
+        vec3 zenith = vec3(0.38, 0.66, 0.90);   // deeper blue
+        vec3 col = mix(horizon, mid, smoothstep(0.0, 0.28, h));
+        col = mix(col, zenith, smoothstep(0.28, 0.85, h));
+        // warm bloom around the sun direction
+        float sunGlow = pow(max(dot(normalize(vDir), normalize(vec3(0.5, 0.35, 0.4))), 0.0), 6.0);
+        col += vec3(0.35, 0.2, 0.05) * sunGlow;
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  });
+  const skyDome = new THREE.Mesh(new THREE.SphereGeometry(320, 24, 16), skyMat);
+  scene.add(skyDome);
 
   // ---------- light ----------
-  const sun = new THREE.DirectionalLight(0xfff2d0, 3.2);
-  sun.position.set(18, 30, 12);
+  const sun = new THREE.DirectionalLight(0xffe2b0, 3.4);
+  sun.position.set(18, 26, 14);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -35;
@@ -36,7 +72,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   sun.shadow.camera.bottom = -35;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x9bb068, 1.35));
+  scene.add(new THREE.HemisphereLight(0xbfe0ff, 0xd8c090, 1.25));
 
   // ---------- deterministic layout randomness ----------
   let seed = 20260809;
@@ -45,25 +81,28 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return seed / 2147483647;
   };
 
-  // ---------- ground + road ----------
+  // ---------- street geometry ----------
+  const Z_START = 14;
+  const Z_END = -252;
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(320, 320),
+    new THREE.PlaneGeometry(360, 400),
     new THREE.MeshLambertMaterial({ color: 0x9fc178 })
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.position.z = (Z_START + Z_END) / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
   const road = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.4, 250),
+    new THREE.PlaneGeometry(6.4, Z_START - Z_END + 30),
     new THREE.MeshLambertMaterial({ color: 0xb5b8bf })
   );
   road.rotation.x = -Math.PI / 2;
-  road.position.y = 0.02;
+  road.position.set(0, 0.02, (Z_START + Z_END) / 2);
   road.receiveShadow = true;
   scene.add(road);
 
-  for (let z = -115; z < 115; z += 6) {
+  for (let z = Z_END - 6; z < Z_START + 8; z += 6) {
     const dash = new THREE.Mesh(
       new THREE.PlaneGeometry(0.24, 2.2),
       new THREE.MeshLambertMaterial({ color: 0xf2efe6 })
@@ -73,14 +112,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     scene.add(dash);
   }
 
-  // sidewalks
   for (const side of [-1, 1]) {
     const walk = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.7, 250),
+      new THREE.PlaneGeometry(1.7, Z_START - Z_END + 30),
       new THREE.MeshLambertMaterial({ color: 0xd8d2c4 })
     );
     walk.rotation.x = -Math.PI / 2;
-    walk.position.set(side * 4.1, 0.025, 0);
+    walk.position.set(side * 4.1, 0.025, (Z_START + Z_END) / 2);
     walk.receiveShadow = true;
     scene.add(walk);
   }
@@ -115,7 +153,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return cache.get(name)!;
   }
 
-  // static colliders the player can't walk through
+  // ---------- colliders + sway ----------
   interface ColliderBox {
     minX: number;
     maxX: number;
@@ -123,15 +161,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     maxZ: number;
   }
   const colliders: ColliderBox[] = [];
+  const swayers: Array<{ obj: import('three').Object3D; phase: number; amp: number; rate: number }> = [];
 
-  // place a clone scaled so its largest horizontal dimension ≈ targetSize
   function place(
     proto: import('three').Group,
     targetSize: number,
     x: number,
     z: number,
     rotY: number,
-    solid: 'box' | 'trunk' | false = false
+    solid: 'box' | 'trunk' | false = false,
+    sway = 0
   ): import('three').Object3D {
     const inst = proto.clone(true);
     const box = new THREE.Box3().setFromObject(inst);
@@ -139,7 +178,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const current = Math.max(dims.x, dims.z) || 1;
     const s = targetSize / current;
     inst.scale.setScalar(s);
-    // sit on the ground
     inst.position.set(x, -box.min.y * s, z);
     inst.rotation.y = rotY;
     scene.add(inst);
@@ -149,88 +187,196 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     } else if (solid === 'trunk') {
       colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: z - 0.45, maxZ: z + 0.45 });
     }
+    if (sway > 0) {
+      swayers.push({ obj: inst, phase: rand() * 6.28, amp: sway, rate: 0.7 + rand() * 0.7 });
+    }
     return inst;
   }
 
-  const [
-    houses,
-    driveway,
-    fence,
-    planter,
-    kTreeLarge,
-    kTreeSmall,
-    flowers,
-    bushes,
-    rocks,
-    nTrees,
-  ] = await Promise.all([
-    Promise.all(['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'].map(loadAsset)),
-    loadAsset('driveway-short'),
-    loadAsset('fence-1x3'),
-    loadAsset('planter'),
-    loadAsset('tree-large'),
-    loadAsset('tree-small'),
-    Promise.all(['flower_purpleA', 'flower_redA', 'flower_yellowA'].map(loadAsset)),
-    Promise.all(['plant_bush', 'plant_bushLarge'].map(loadAsset)),
-    Promise.all(['rock_smallA', 'rock_smallC'].map(loadAsset)),
-    Promise.all(['tree_default', 'tree_detailed', 'tree_oak', 'tree_default_fall'].map(loadAsset)),
-  ]);
+  const [houses, driveway, fence, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees] =
+    await Promise.all([
+      Promise.all(['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'].map(loadAsset)),
+      loadAsset('driveway-short'),
+      loadAsset('fence-1x3'),
+      loadAsset('planter'),
+      loadAsset('tree-large'),
+      loadAsset('tree-small'),
+      Promise.all(['flower_purpleA', 'flower_redA', 'flower_yellowA'].map(loadAsset)),
+      Promise.all(['plant_bush', 'plant_bushLarge'].map(loadAsset)),
+      Promise.all(['rock_smallA', 'rock_smallC'].map(loadAsset)),
+      Promise.all(['tree_default', 'tree_detailed', 'tree_oak', 'tree_default_fall'].map(loadAsset)),
+    ]);
 
-  // ---------- village layout ----------
-  // houses face the road from both sides, with driveways and yard dressing
-  for (const side of [-1, 1]) {
-    let z = -96;
-    while (z < 100) {
-      const house = houses[Math.floor(rand() * houses.length)];
-      const width = 7 + rand() * 2.5;
-      const x = side * (9.5 + rand() * 2.5);
-      const rotY = side === 1 ? -Math.PI / 2 : Math.PI / 2;
-      place(house, width, x, z, rotY, 'box');
-      place(driveway, 3.2, side * 6.4, z + 1.2, rotY);
+  // ---------- signboards ----------
+  const boardWood = new THREE.MeshLambertMaterial({ color: 0x8a6a4a });
+  const cream = '#f6f0e2';
+  const inkText = '#2c2a26';
 
-      // yard dressing
-      const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
-      place(treeKind, 2.2 + rand() * 1.6, x + (rand() - 0.5) * 5, z - (4.5 + rand() * 2), rand() * 6.28, 'trunk');
-      if (rand() < 0.7) {
-        place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), 0, 'box');
+  function makeBoardTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 640, h = 360): import('three').CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d')!;
+    draw(ctx, w, h);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+  }
+
+  function statusDotColor(status: string): string {
+    return status === 'stable' ? '#3f9e3f' : status === 'wip' ? '#d98a1f' : '#8a5fc9';
+  }
+
+  function makeProjectBoard(project: Project, accent: string, x: number, z: number, facing: number): void {
+    const group = new THREE.Group();
+    const tex = makeBoardTexture((ctx, w, h) => {
+      ctx.fillStyle = cream;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 14;
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+      ctx.fillStyle = inkText;
+      ctx.font = '700 68px "Inconsolata Variable", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(project.name, w / 2, 120, w - 80);
+      ctx.font = '38px "Inconsolata Variable", monospace';
+      ctx.fillStyle = 'rgba(44,42,38,0.75)';
+      ctx.fillText(project.tagline, w / 2, 190, w - 80);
+      ctx.fillStyle = statusDotColor(project.status);
+      ctx.beginPath();
+      ctx.arc(w / 2 - 90, 265, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(44,42,38,0.6)';
+      ctx.font = '34px "Inconsolata Variable", monospace';
+      ctx.fillText(project.status, w / 2 + 20, 277);
+    });
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.9, 1.07),
+      new THREE.MeshLambertMaterial({ map: tex })
+    );
+    panel.position.y = 1.45;
+    panel.castShadow = true;
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.17, 0.06), boardWood);
+    backing.position.set(0, 1.45, -0.045);
+    backing.castShadow = true;
+    for (const px of [-0.8, 0.8]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.5, 0.09), boardWood);
+      post.position.set(px, 0.72, -0.045);
+      post.castShadow = true;
+      group.add(post);
+    }
+    group.add(panel, backing);
+    group.position.set(x, 0, z);
+    group.rotation.y = facing;
+    scene.add(group);
+    colliders.push({ minX: x - 0.5, maxX: x + 0.5, minZ: z - 0.25, maxZ: z + 0.25 });
+  }
+
+  function makeDistrictBoard(d: District, z: number): void {
+    const tex = makeBoardTexture((ctx, w, h) => {
+      ctx.fillStyle = d.accent;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.font = '700 74px "Inconsolata Variable", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.name.toUpperCase(), w / 2, 150, w - 60);
+      ctx.font = '40px "Inconsolata Variable", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(d.blurb, w / 2, 235, w - 60);
+    }, 760, 300);
+    const group = new THREE.Group();
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.9, 1.15),
+      new THREE.MeshLambertMaterial({ map: tex })
+    );
+    panel.position.y = 2.0;
+    panel.castShadow = true;
+    const panelBack = panel.clone();
+    panelBack.rotation.y = Math.PI;
+    for (const px of [-1.3, 1.3]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.11, 2.6, 0.11), boardWood);
+      post.position.set(px, 1.3, 0);
+      post.castShadow = true;
+      group.add(post);
+    }
+    group.add(panel, panelBack);
+    group.position.set(0, 0, z);
+    scene.add(group);
+  }
+
+  // ---------- project stations ----------
+  interface Station {
+    project: Project;
+    accent: string;
+    x: number;
+    z: number;
+  }
+  const stations: Station[] = [];
+  {
+    let z = -10;
+    let side = -1;
+    for (const d of districts) {
+      makeDistrictBoard(d, z);
+      z -= 8;
+      for (const project of byDistrict(d.id)) {
+        const x = side * (10 + rand() * 1.5);
+        const rotY = side === 1 ? -Math.PI / 2 : Math.PI / 2;
+        const house = houses[Math.floor(rand() * houses.length)];
+        place(house, 7.5 + rand() * 1.8, x, z, rotY, 'box');
+        place(driveway, 3.2, side * 6.4, z + 1.2, rotY);
+        makeProjectBoard(project, d.accent, side * 5.7, z + 3.4, side === 1 ? -Math.PI / 2 - 0.35 : Math.PI / 2 + 0.35);
+        stations.push({ project, accent: d.accent, x: side * 5.7, z: z + 3.4 });
+
+        // yard dressing
+        const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
+        place(treeKind, 2.2 + rand() * 1.6, x + (rand() - 0.5) * 5, z - (4.8 + rand() * 2), rand() * 6.28, 'trunk', 0.012);
+        if (rand() < 0.7) place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), 0, 'box');
+        if (rand() < 0.6) place(planter, 1.1, side * 5.2, z - 2.6, rotY, 'box');
+
+        // filler house across the street to keep both sides alive
+        const fx = -side * (10 + rand() * 2);
+        place(houses[Math.floor(rand() * houses.length)], 7 + rand() * 2, fx, z - 4 - rand() * 3, -rotY, 'box');
+        place(rand() < 0.5 ? kTreeLarge : kTreeSmall, 2 + rand() * 1.5, fx + (rand() - 0.5) * 5, z + 2 + rand() * 2, rand() * 6.28, 'trunk', 0.012);
+
+        z -= 14 + rand() * 3;
+        side *= -1;
       }
-      if (rand() < 0.6) place(planter, 1.1, side * 5.2, z + (2.5 + rand() * 1.5), rotY, 'box');
-
-      z += 13 + rand() * 6;
+      z -= 6;
     }
   }
 
   // flowers + bushes along the sidewalks
-  for (let z = -100; z < 100; z += 3.5 + rand() * 3) {
+  for (let z = Z_END + 6; z < Z_START; z += 3.5 + rand() * 3) {
     for (const side of [-1, 1]) {
       if (rand() < 0.55) {
         const f = flowers[Math.floor(rand() * flowers.length)];
-        place(f, 0.55 + rand() * 0.3, side * (5.3 + rand() * 0.6), z + rand() * 2, rand() * 6.28);
+        place(f, 0.55 + rand() * 0.3, side * (5.3 + rand() * 0.6), z + rand() * 2, rand() * 6.28, false, 0.05);
       }
-      if (rand() < 0.22) {
-        place(bushes[Math.floor(rand() * bushes.length)], 1.1 + rand() * 0.7, side * (5.6 + rand()), z + rand() * 2, rand() * 6.28);
+      if (rand() < 0.2) {
+        place(bushes[Math.floor(rand() * bushes.length)], 1.1 + rand() * 0.7, side * (5.9 + rand()), z + rand() * 2, rand() * 6.28, false, 0.02);
       }
     }
   }
 
-  // background nature beyond the houses
-  for (let i = 0; i < 110; i++) {
-    const x = (rand() - 0.5) * 260;
-    const z = (rand() - 0.5) * 260;
-    if (Math.abs(x) < 18) continue;
-    const t = nTrees[Math.floor(rand() * nTrees.length)];
-    place(t, 3 + rand() * 3.5, x, z, rand() * 6.28, 'trunk');
+  // background nature
+  for (let i = 0; i < 150; i++) {
+    const x = (rand() - 0.5) * 300;
+    const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
+    if (Math.abs(x) < 19) continue;
+    place(nTrees[Math.floor(rand() * nTrees.length)], 3 + rand() * 3.5, x, z, rand() * 6.28, 'trunk', 0.01);
   }
-  for (let i = 0; i < 40; i++) {
-    const x = (rand() - 0.5) * 240;
-    const z = (rand() - 0.5) * 240;
-    if (Math.abs(x) < 17) continue;
+  for (let i = 0; i < 50; i++) {
+    const x = (rand() - 0.5) * 280;
+    const z = Z_END - 10 + rand() * (Z_START - Z_END + 40);
+    if (Math.abs(x) < 18) continue;
     place(rocks[Math.floor(rand() * rocks.length)], 0.5 + rand() * 0.8, x, z, rand() * 6.28);
   }
 
-  // soft cartoon clouds
-  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  for (let i = 0; i < 14; i++) {
+  // drifting cartoon clouds
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
+  const clouds: import('three').Group[] = [];
+  for (let i = 0; i < 16; i++) {
     const cloud = new THREE.Group();
     const puffs = 3 + Math.floor(rand() * 3);
     for (let p = 0; p < puffs; p++) {
@@ -238,14 +384,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       puff.position.set(p * 2.6 + rand(), rand() * 1.2, rand() * 1.5);
       cloud.add(puff);
     }
-    cloud.position.set((rand() - 0.5) * 260, 34 + rand() * 14, (rand() - 0.5) * 260);
+    cloud.position.set((rand() - 0.5) * 280, 36 + rand() * 16, Z_END + rand() * (Z_START - Z_END + 40));
     scene.add(cloud);
+    clouds.push(cloud);
   }
 
   // ---------- character ----------
   const gltf = await loader.loadAsync('/assets/village/rogue.glb');
   const player = gltf.scene;
-  const hideNames: string[] = [];
   player.traverse((o) => {
     const mesh = o as import('three').Mesh;
     if (mesh.isMesh) {
@@ -259,13 +405,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         }
       }
     }
-    // a villager out for a stroll doesn't carry daggers
     if (/dagger|knife|sword|blade|weapon|crossbow|axe|shield|offhand|arrow|quiver/i.test(o.name)) {
       o.visible = false;
-      hideNames.push(o.name);
     }
   });
-  // normalize to a friendly height
   {
     const box = new THREE.Box3().setFromObject(player);
     const h = box.getSize(new THREE.Vector3()).y || 1;
@@ -275,7 +418,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
   const playerRoot = new THREE.Group();
   playerRoot.add(player);
-  playerRoot.position.set(0, 0, 6);
+  playerRoot.position.set(0, 0, 8);
   scene.add(playerRoot);
 
   const mixer = new THREE.AnimationMixer(player);
@@ -287,17 +430,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
     return null;
   };
-  const actions: Record<string, import('three').AnimationAction | null> = {
-    idle: null,
-    walk: null,
-    run: null,
+  const actions = {
+    idle: pick(['Idle', 'Idle_A']) ? mixer.clipAction(pick(['Idle', 'Idle_A'])!) : null,
+    walk: pick(['Walking_A', 'Walking_B', 'Walk']) ? mixer.clipAction(pick(['Walking_A', 'Walking_B', 'Walk'])!) : null,
+    run: pick(['Running_A', 'Running_B', 'Run']) ? mixer.clipAction(pick(['Running_A', 'Running_B', 'Run'])!) : null,
   };
-  const idleClip = pick(['Idle', 'Idle_A']);
-  const walkClip = pick(['Walking_A', 'Walking_B', 'Walk']);
-  const runClip = pick(['Running_A', 'Running_B', 'Run']);
-  if (idleClip) actions.idle = mixer.clipAction(idleClip);
-  if (walkClip) actions.walk = mixer.clipAction(walkClip);
-  if (runClip) actions.run = mixer.clipAction(runClip);
   for (const a of Object.values(actions)) {
     if (a) {
       a.play();
@@ -328,20 +465,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   window.addEventListener('pointerup', () => (joy = null));
 
   // ---------- movement + camera ----------
-  // Camera-relative controls with a FIXED camera azimuth (Summer Afternoon
-  // style): the camera never orbits to chase the character's heading, so
-  // pressing S shows her face and pressing A/D crosses the screen — the
-  // world stays put. The character alone rotates toward where she walks.
   const WALK_SPEED = 2.4;
   const RUN_SPEED = 6.4;
   const TURN_RATE = 11;
-  const CAM_AZIMUTH = 0; // looking down -z along the street
-  let heading = Math.PI; // model faces +z at rest — face the camera side... she turns on first step
+  const CAM_AZIMUTH = 0;
+  let heading = Math.PI;
   let speed = 0;
   const moveDir = new THREE.Vector3(0, 0, -1);
 
-  const camTarget = new THREE.Vector3(0, 1.6, 6);
-  const camPos = new THREE.Vector3(0, 4.5, 14);
+  const camTarget = new THREE.Vector3(0, 1.6, 8);
+  const camPos = new THREE.Vector3(0, 4.5, 16);
   camera.position.copy(camPos);
 
   window.addEventListener('resize', () => {
@@ -350,9 +483,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  // ---------- proximity stations → DOM card ----------
+  let activeStation: Station | null = null;
+
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
+    const t = clock.elapsedTime;
 
     let ix = 0;
     let iz = 0;
@@ -370,8 +507,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     speed += (targetSpeed - speed) * Math.min(1, dt * 6);
 
     if (mag > 0.05) {
-      // input → world direction through the fixed camera frame:
-      // screen-up walks into the scene, screen-right walks right
       const fx = -Math.sin(CAM_AZIMUTH);
       const fz = -Math.cos(CAM_AZIMUTH);
       const rx = Math.cos(CAM_AZIMUTH);
@@ -390,7 +525,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     playerRoot.position.x += moveDir.x * speed * dt;
     playerRoot.position.z += moveDir.z * speed * dt;
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
-    playerRoot.position.z = Math.max(-115, Math.min(115, playerRoot.position.z));
+    playerRoot.position.z = Math.max(Z_END + 4, Math.min(Z_START - 2, playerRoot.position.z));
 
     // circle-vs-AABB collision: push the player out of anything solid
     const R = 0.5;
@@ -410,7 +545,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
             playerRoot.position.x += (dx / d) * (R - d);
             playerRoot.position.z += (dz / d) * (R - d);
           } else {
-            // center inside the box: exit through the nearest face
             const exits = [
               { d: px - c.minX + R, x: -(px - c.minX + R), z: 0 },
               { d: c.maxX - px + R, x: c.maxX - px + R, z: 0 },
@@ -431,19 +565,45 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     actions.run?.setEffectiveWeight(moveW * runW);
     mixer.update(dt);
 
-    // fixed-azimuth follow: position tracks the character, direction never spins
+    // wind
+    for (const s of swayers) {
+      s.obj.rotation.z = Math.sin(t * s.rate + s.phase) * s.amp;
+    }
+    for (const cloud of clouds) {
+      cloud.position.x += dt * 0.6;
+      if (cloud.position.x > 150) cloud.position.x = -150;
+    }
+
+    // nearest station within reach → raise the card
+    let nearest: Station | null = null;
+    let bestD = 3.4;
+    for (const st of stations) {
+      const d = Math.hypot(st.x - playerRoot.position.x, st.z - playerRoot.position.z);
+      if (d < bestD) {
+        bestD = d;
+        nearest = st;
+      }
+    }
+    if (nearest !== activeStation) {
+      activeStation = nearest;
+      window.dispatchEvent(
+        new CustomEvent('village:station', {
+          detail: nearest ? { project: nearest.project, accent: nearest.accent } : null,
+        })
+      );
+    }
+
+    // fixed-azimuth follow camera
     const desiredCam = playerRoot.position
       .clone()
       .add(new THREE.Vector3(Math.sin(CAM_AZIMUTH) * 7.2, 4.0, Math.cos(CAM_AZIMUTH) * 7.2));
     camPos.lerp(desiredCam, Math.min(1, dt * 3.5));
     camera.position.copy(camPos);
-    camTarget.lerp(
-      playerRoot.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
-      Math.min(1, dt * 6)
-    );
+    camTarget.lerp(playerRoot.position.clone().add(new THREE.Vector3(0, 1.6, 0)), Math.min(1, dt * 6));
     camera.lookAt(camTarget);
+    skyDome.position.copy(camera.position);
 
-    sun.position.set(playerRoot.position.x + 18, 30, playerRoot.position.z + 12);
+    sun.position.set(playerRoot.position.x + 18, 26, playerRoot.position.z + 14);
     sun.target.position.copy(playerRoot.position);
     sun.target.updateMatrixWorld();
 
@@ -456,9 +616,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       z: +playerRoot.position.z.toFixed(2),
       speed: +speed.toFixed(2),
     }),
-    anims: () => clips.map((c) => c.name).slice(0, 40),
-    keys: () => [...keys],
+    stations: () => stations.map((s) => ({ slug: s.project.slug, x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => colliders.length,
+    keys: () => [...keys],
   };
 
   return true;

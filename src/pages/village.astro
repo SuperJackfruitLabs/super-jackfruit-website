@@ -3,11 +3,23 @@ import Layout from '../layouts/Layout.astro';
 import '@fontsource-variable/inconsolata';
 ---
 
-<Layout title="Super Jackfruit Labs — the village (feel prototype)">
+<Layout title="Super Jackfruit Labs — the village">
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">wasd / arrows to walk · shift to run · drag to move on touch</p>
     <p class="tag">the village — work in progress</p>
+
+    <aside class="card" id="station-card" data-open="false" aria-live="polite">
+      <h2 id="card-name"></h2>
+      <p class="card__tagline" id="card-tagline"></p>
+      <p class="card__status" id="card-status"></p>
+      <p class="card__desc" id="card-desc"></p>
+      <p class="card__tags" id="card-tags"></p>
+      <div class="card__actions">
+        <a id="card-github" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
+        <a id="card-demo" href="#" target="_blank" rel="noopener noreferrer" hidden>live demo →</a>
+      </div>
+    </aside>
   </div>
 </Layout>
 
@@ -16,6 +28,7 @@ import '@fontsource-variable/inconsolata';
     position: fixed;
     inset: 0;
     background: #9ed4f5;
+    font-family: 'Inconsolata Variable', monospace;
   }
 
   #village-canvas {
@@ -32,7 +45,6 @@ import '@fontsource-variable/inconsolata';
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    font-family: 'Inconsolata Variable', monospace;
     margin: 0;
     pointer-events: none;
     text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
@@ -50,6 +62,96 @@ import '@fontsource-variable/inconsolata';
     letter-spacing: 0.08em;
     color: rgba(40, 50, 60, 0.55);
   }
+
+  /* the project card — warm paper, day theme */
+  .card {
+    position: absolute;
+    left: 2.4rem;
+    bottom: 2.4rem;
+    width: min(37rem, calc(100vw - 4.8rem));
+    background: #f6f0e2;
+    color: #2c2a26;
+    border: 3px solid var(--accent, #d98a1f);
+    border-radius: 12px;
+    padding: 2rem 2.2rem;
+    box-shadow: 0 10px 30px rgba(40, 50, 60, 0.25);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+
+  .card[data-open='true'] {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .card h2 {
+    margin: 0 0 0.2rem;
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .card__tagline {
+    margin: 0 0 1rem;
+    font-size: 1.35rem;
+    color: rgba(44, 42, 38, 0.75);
+  }
+
+  .card__status {
+    margin: 0 0 1rem;
+    font-size: 1.15rem;
+    letter-spacing: 0.05em;
+    color: rgba(44, 42, 38, 0.6);
+  }
+
+  .card__status::before {
+    content: '● ';
+    color: var(--status-color, #3f9e3f);
+  }
+
+  .card__desc {
+    margin: 0 0 1rem;
+    font-size: 1.3rem;
+    line-height: 1.55;
+  }
+
+  .card__tags {
+    margin: 0 0 1.4rem;
+    font-size: 1.15rem;
+    color: rgba(44, 42, 38, 0.6);
+  }
+
+  .card__actions {
+    display: flex;
+    gap: 1.4rem;
+  }
+
+  .card__actions a {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #2c2a26;
+    text-decoration: none;
+    border-bottom: 2px solid var(--accent, #d98a1f);
+    padding-bottom: 0.1rem;
+  }
+
+  .card__actions a:hover,
+  .card__actions a:focus-visible {
+    color: var(--accent, #d98a1f);
+    outline: none;
+  }
+
+  @media (max-width: 640px) {
+    .card {
+      left: 1.2rem;
+      bottom: 5.4rem;
+      padding: 1.4rem 1.6rem;
+    }
+    .hint { font-size: 1.2rem; bottom: 1.2rem; }
+  }
 </style>
 
 <script>
@@ -59,4 +161,60 @@ import '@fontsource-variable/inconsolata';
   if (canvas instanceof HTMLCanvasElement) {
     initVillageScene(canvas).catch((e) => console.error(e));
   }
+
+  const STATUS_COPY: Record<string, string> = {
+    stable: 'lit & steady · open for business',
+    wip: 'wet paint · mind the sparks',
+    experiment: 'half-lit · enter at your own risk',
+  };
+  const STATUS_COLOR: Record<string, string> = {
+    stable: '#3f9e3f',
+    wip: '#d98a1f',
+    experiment: '#8a5fc9',
+  };
+
+  const card = document.getElementById('station-card')!;
+  const nameEl = document.getElementById('card-name')!;
+  const taglineEl = document.getElementById('card-tagline')!;
+  const statusEl = document.getElementById('card-status')!;
+  const descEl = document.getElementById('card-desc')!;
+  const tagsEl = document.getElementById('card-tags')!;
+  const githubEl = document.getElementById('card-github') as HTMLAnchorElement;
+  const demoEl = document.getElementById('card-demo') as HTMLAnchorElement;
+
+  interface StationDetail {
+    project: {
+      name: string;
+      tagline: string;
+      description: string;
+      tags: string[];
+      status: string;
+      github: string;
+      demo?: string;
+    };
+    accent: string;
+  }
+
+  window.addEventListener('village:station', ((e: CustomEvent<StationDetail | null>) => {
+    if (!e.detail) {
+      card.dataset.open = 'false';
+      return;
+    }
+    const { project, accent } = e.detail;
+    nameEl.textContent = project.name;
+    taglineEl.textContent = project.tagline;
+    statusEl.textContent = STATUS_COPY[project.status] ?? project.status;
+    descEl.textContent = project.description;
+    tagsEl.textContent = project.tags.map((t) => `[${t}]`).join('  ');
+    githubEl.href = project.github;
+    if (project.demo) {
+      demoEl.href = project.demo;
+      demoEl.hidden = false;
+    } else {
+      demoEl.hidden = true;
+    }
+    card.style.setProperty('--accent', accent);
+    card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
+    card.dataset.open = 'true';
+  }) as EventListener);
 </script>
