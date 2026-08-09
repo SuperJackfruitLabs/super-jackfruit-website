@@ -1,0 +1,62 @@
+---
+import Layout from '../layouts/Layout.astro';
+import '@fontsource-variable/inconsolata';
+---
+
+<Layout title="Super Jackfruit Labs — the village (feel prototype)">
+  <div class="scene">
+    <canvas id="village-canvas"></canvas>
+    <p class="hint">wasd / arrows to walk · shift to run · drag to move on touch</p>
+    <p class="tag">feel prototype — graybox, placeholder character</p>
+  </div>
+</Layout>
+
+<style>
+  .scene {
+    position: fixed;
+    inset: 0;
+    background: #9ed4f5;
+  }
+
+  #village-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  .hint,
+  .tag {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Inconsolata Variable', monospace;
+    margin: 0;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+  }
+
+  .hint {
+    bottom: 2.2rem;
+    font-size: 1.5rem;
+    color: rgba(40, 50, 60, 0.85);
+  }
+
+  .tag {
+    top: 1.6rem;
+    font-size: 1.2rem;
+    letter-spacing: 0.08em;
+    color: rgba(40, 50, 60, 0.55);
+  }
+</style>
+
+<script>
+  import { initVillageScene } from '../scripts/village-scene';
+
+  const canvas = document.getElementById('village-canvas');
+  if (canvas instanceof HTMLCanvasElement) {
+    initVillageScene(canvas).catch((e) => console.error(e));
+  }
+</script>
