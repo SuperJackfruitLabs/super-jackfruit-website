@@ -115,13 +115,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return cache.get(name)!;
   }
 
+  // static colliders the player can't walk through
+  interface ColliderBox {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  }
+  const colliders: ColliderBox[] = [];
+
   // place a clone scaled so its largest horizontal dimension ≈ targetSize
   function place(
     proto: import('three').Group,
     targetSize: number,
     x: number,
     z: number,
-    rotY: number
+    rotY: number,
+    solid: 'box' | 'trunk' | false = false
   ): import('three').Object3D {
     const inst = proto.clone(true);
     const box = new THREE.Box3().setFromObject(inst);
@@ -133,6 +143,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     inst.position.set(x, -box.min.y * s, z);
     inst.rotation.y = rotY;
     scene.add(inst);
+    if (solid === 'box') {
+      const wb = new THREE.Box3().setFromObject(inst);
+      colliders.push({ minX: wb.min.x, maxX: wb.max.x, minZ: wb.min.z, maxZ: wb.max.z });
+    } else if (solid === 'trunk') {
+      colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: z - 0.45, maxZ: z + 0.45 });
+    }
     return inst;
   }
 
@@ -169,16 +185,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const width = 7 + rand() * 2.5;
       const x = side * (9.5 + rand() * 2.5);
       const rotY = side === 1 ? -Math.PI / 2 : Math.PI / 2;
-      place(house, width, x, z, rotY);
+      place(house, width, x, z, rotY, 'box');
       place(driveway, 3.2, side * 6.4, z + 1.2, rotY);
 
       // yard dressing
       const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
-      place(treeKind, 2.2 + rand() * 1.6, x + (rand() - 0.5) * 5, z - (4.5 + rand() * 2), rand() * 6.28);
+      place(treeKind, 2.2 + rand() * 1.6, x + (rand() - 0.5) * 5, z - (4.5 + rand() * 2), rand() * 6.28, 'trunk');
       if (rand() < 0.7) {
-        place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), side === 1 ? 0 : 0);
+        place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), 0, 'box');
       }
-      if (rand() < 0.6) place(planter, 1.1, side * 5.2, z + (2.5 + rand() * 1.5), rotY);
+      if (rand() < 0.6) place(planter, 1.1, side * 5.2, z + (2.5 + rand() * 1.5), rotY, 'box');
 
       z += 13 + rand() * 6;
     }
@@ -203,7 +219,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const z = (rand() - 0.5) * 260;
     if (Math.abs(x) < 18) continue;
     const t = nTrees[Math.floor(rand() * nTrees.length)];
-    place(t, 3 + rand() * 3.5, x, z, rand() * 6.28);
+    place(t, 3 + rand() * 3.5, x, z, rand() * 6.28, 'trunk');
   }
   for (let i = 0; i < 40; i++) {
     const x = (rand() - 0.5) * 240;
@@ -297,6 +313,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     keys.add(e.key.toLowerCase());
   });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  window.addEventListener('blur', () => keys.clear());
 
   let joy: { sx: number; sy: number; dx: number; dy: number } | null = null;
   canvas.addEventListener('pointerdown', (e) => {
@@ -311,13 +328,19 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   window.addEventListener('pointerup', () => (joy = null));
 
   // ---------- movement + camera ----------
+  // Camera-relative controls with a FIXED camera azimuth (Summer Afternoon
+  // style): the camera never orbits to chase the character's heading, so
+  // pressing S shows her face and pressing A/D crosses the screen — the
+  // world stays put. The character alone rotates toward where she walks.
   const WALK_SPEED = 2.4;
   const RUN_SPEED = 6.4;
   const TURN_RATE = 11;
-  let heading = 0;
+  const CAM_AZIMUTH = 0; // looking down -z along the street
+  let heading = Math.PI; // model faces +z at rest — face the camera side... she turns on first step
   let speed = 0;
+  const moveDir = new THREE.Vector3(0, 0, -1);
 
-  const camTarget = new THREE.Vector3(0, 1.6, 0);
+  const camTarget = new THREE.Vector3(0, 1.6, 6);
   const camPos = new THREE.Vector3(0, 4.5, 14);
   camera.position.copy(camPos);
 
@@ -347,7 +370,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     speed += (targetSpeed - speed) * Math.min(1, dt * 6);
 
     if (mag > 0.05) {
-      const desired = Math.atan2(ix, iz) + Math.PI;
+      // input → world direction through the fixed camera frame:
+      // screen-up walks into the scene, screen-right walks right
+      const fx = -Math.sin(CAM_AZIMUTH);
+      const fz = -Math.cos(CAM_AZIMUTH);
+      const rx = Math.cos(CAM_AZIMUTH);
+      const rz = -Math.sin(CAM_AZIMUTH);
+      const wx = fx * -iz + rx * ix;
+      const wz = fz * -iz + rz * ix;
+      moveDir.set(wx, 0, wz).normalize();
+      const desired = Math.atan2(moveDir.x, moveDir.z);
       let diff = desired - heading;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
@@ -355,10 +387,42 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
 
     playerRoot.rotation.y = heading;
-    playerRoot.position.x += Math.sin(heading) * -speed * dt;
-    playerRoot.position.z += Math.cos(heading) * -speed * dt;
+    playerRoot.position.x += moveDir.x * speed * dt;
+    playerRoot.position.z += moveDir.z * speed * dt;
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
     playerRoot.position.z = Math.max(-115, Math.min(115, playerRoot.position.z));
+
+    // circle-vs-AABB collision: push the player out of anything solid
+    const R = 0.5;
+    for (let pass = 0; pass < 2; pass++) {
+      const px = playerRoot.position.x;
+      const pz = playerRoot.position.z;
+      for (const c of colliders) {
+        if (px < c.minX - 4 || px > c.maxX + 4 || pz < c.minZ - 4 || pz > c.maxZ + 4) continue;
+        const cx = Math.max(c.minX, Math.min(c.maxX, px));
+        const cz = Math.max(c.minZ, Math.min(c.maxZ, pz));
+        const dx = px - cx;
+        const dz = pz - cz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < R * R) {
+          if (d2 > 1e-6) {
+            const d = Math.sqrt(d2);
+            playerRoot.position.x += (dx / d) * (R - d);
+            playerRoot.position.z += (dz / d) * (R - d);
+          } else {
+            // center inside the box: exit through the nearest face
+            const exits = [
+              { d: px - c.minX + R, x: -(px - c.minX + R), z: 0 },
+              { d: c.maxX - px + R, x: c.maxX - px + R, z: 0 },
+              { d: pz - c.minZ + R, x: 0, z: -(pz - c.minZ + R) },
+              { d: c.maxZ - pz + R, x: 0, z: c.maxZ - pz + R },
+            ].sort((a, b) => a.d - b.d)[0];
+            playerRoot.position.x += exits.x;
+            playerRoot.position.z += exits.z;
+          }
+        }
+      }
+    }
 
     const runW = Math.max(0, Math.min(1, (speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)));
     const moveW = Math.max(0, Math.min(1, speed / WALK_SPEED));
@@ -367,16 +431,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     actions.run?.setEffectiveWeight(moveW * runW);
     mixer.update(dt);
 
-    const behind = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    // fixed-azimuth follow: position tracks the character, direction never spins
     const desiredCam = playerRoot.position
       .clone()
-      .addScaledVector(behind, 7.2)
-      .add(new THREE.Vector3(0, 4.0, 0));
-    camPos.lerp(desiredCam, Math.min(1, dt * 3.2));
+      .add(new THREE.Vector3(Math.sin(CAM_AZIMUTH) * 7.2, 4.0, Math.cos(CAM_AZIMUTH) * 7.2));
+    camPos.lerp(desiredCam, Math.min(1, dt * 3.5));
     camera.position.copy(camPos);
     camTarget.lerp(
-      playerRoot.position.clone().add(new THREE.Vector3(0, 1.6, 0)).addScaledVector(behind, -2),
-      Math.min(1, dt * 5)
+      playerRoot.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
+      Math.min(1, dt * 6)
     );
     camera.lookAt(camTarget);
 
@@ -394,6 +457,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       speed: +speed.toFixed(2),
     }),
     anims: () => clips.map((c) => c.name).slice(0, 40),
+    keys: () => [...keys],
+    colliders: () => colliders.length,
   };
 
   return true;
