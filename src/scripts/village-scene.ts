@@ -150,7 +150,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     fog: new THREE.Color(TIME_PRESETS.dusk.fog),
     exposure: 1.18,
   };
-  const nightGlowMats: import('three').MeshLambertMaterial[] = [];
+  interface ThemedBoard {
+    mat: import('three').MeshLambertMaterial;
+    dayTex: import('three').CanvasTexture;
+    nightTex: import('three').CanvasTexture;
+  }
+  const themedBoards: ThemedBoard[] = [];
+  let boardsNightMode = false;
 
   window.addEventListener('village:time', ((e: CustomEvent<string>) => {
     if (TIME_PRESETS[e.detail]) envTarget = TIME_PRESETS[e.detail];
@@ -329,29 +335,43 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   function makeProjectBoard(project: Project, accent: string, x: number, z: number, facing: number): void {
     const group = new THREE.Group();
-    const tex = makeBoardTexture((ctx, w, h) => {
-      ctx.fillStyle = cream;
+    const drawBoard = (night: boolean) => (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      ctx.fillStyle = night ? '#131828' : cream;
       ctx.fillRect(0, 0, w, h);
       ctx.strokeStyle = accent;
       ctx.lineWidth = 14;
+      if (night) {
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 18;
+      }
       ctx.strokeRect(10, 10, w - 20, h - 20);
-      ctx.fillStyle = inkText;
-      ctx.font = '700 68px "Inconsolata Variable", monospace';
+      ctx.shadowBlur = 0;
       ctx.textAlign = 'center';
+      ctx.font = '700 68px "Inconsolata Variable", monospace';
+      if (night) {
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = '#ffffff';
+      } else {
+        ctx.fillStyle = inkText;
+      }
       ctx.fillText(project.name, w / 2, 120, w - 80);
+      ctx.shadowBlur = 0;
       ctx.font = '38px "Inconsolata Variable", monospace';
-      ctx.fillStyle = 'rgba(44,42,38,0.75)';
+      ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(44,42,38,0.75)';
       ctx.fillText(project.tagline, w / 2, 190, w - 80);
       ctx.fillStyle = statusDotColor(project.status);
       ctx.beginPath();
       ctx.arc(w / 2 - 90, 265, 13, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(44,42,38,0.6)';
+      ctx.fillStyle = night ? 'rgba(230,236,255,0.7)' : 'rgba(44,42,38,0.6)';
       ctx.font = '34px "Inconsolata Variable", monospace';
       ctx.fillText(project.status, w / 2 + 20, 277);
-    });
-    const panelMat = new THREE.MeshLambertMaterial({ map: tex, emissiveMap: tex, emissive: 0x000000 });
-    nightGlowMats.push(panelMat);
+    };
+    const dayTex = makeBoardTexture(drawBoard(false));
+    const nightTex = makeBoardTexture(drawBoard(true));
+    const panelMat = new THREE.MeshLambertMaterial({ map: dayTex, emissiveMap: nightTex, emissive: 0x000000 });
+    themedBoards.push({ mat: panelMat, dayTex, nightTex });
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.07), panelMat);
     panel.position.y = 1.45;
     panel.castShadow = true;
@@ -373,20 +393,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   function makeDistrictBoard(d: District, z: number): void {
-    const tex = makeBoardTexture((ctx, w, h) => {
-      ctx.fillStyle = d.accent;
+    const drawGate = (night: boolean) => (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      ctx.fillStyle = night ? '#131828' : d.accent;
       ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.font = '700 74px "Inconsolata Variable", monospace';
       ctx.textAlign = 'center';
+      ctx.font = '700 74px "Inconsolata Variable", monospace';
+      if (night) {
+        ctx.shadowColor = d.accent;
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = d.accent;
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      }
       ctx.fillText(d.name.toUpperCase(), w / 2, 150, w - 60);
+      ctx.shadowBlur = 0;
       ctx.font = '40px "Inconsolata Variable", monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(255,255,255,0.85)';
       ctx.fillText(d.blurb, w / 2, 235, w - 60);
-    }, 760, 300);
+    };
+    const dayTex = makeBoardTexture(drawGate(false), 760, 300);
+    const nightTex = makeBoardTexture(drawGate(true), 760, 300);
     const group = new THREE.Group();
-    const gateMat = new THREE.MeshLambertMaterial({ map: tex, emissiveMap: tex, emissive: 0x000000 });
-    nightGlowMats.push(gateMat);
+    const gateMat = new THREE.MeshLambertMaterial({ map: dayTex, emissiveMap: nightTex, emissive: 0x000000 });
+    themedBoards.push({ mat: gateMat, dayTex, nightTex });
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 1.15), gateMat);
     panel.position.set(0, 2.0, 0.06);
     panel.castShadow = true;
@@ -684,7 +713,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (music || muted) return;
     music = new Audio('/assets/village/music.m4a');
     music.loop = true;
-    music.volume = 0.55;
+    music.volume = 0.8;
     music.play().catch(() => {});
   }
 
@@ -840,7 +869,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const rpm = Math.min(1, 0.18 + inGear * 0.82 + (nitro ? 0.12 : 0));
       const now = engineAudio.ctx.currentTime;
       engineAudio.src.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
-      const vol = sp < 0.15 ? 0 : Math.min(0.2, 0.08 + (sp / NITRO_MAX) * 0.11) + (nitro ? 0.03 : 0);
+      const vol = sp < 0.15 ? 0 : Math.min(0.12, 0.05 + (sp / NITRO_MAX) * 0.06) + (nitro ? 0.02 : 0);
       engineAudio.gain.gain.setTargetAtTime(vol, now, 0.1);
     }
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
@@ -910,7 +939,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       (scene.fog as import('three').Fog).color.copy(envState.fog);
       renderer.toneMappingExposure = envState.exposure;
       starMat.opacity = nightFactor * 0.9;
-      for (const m of nightGlowMats) m.emissive.setScalar(nightFactor * 0.92);
+      const wantNight = boardsNightMode ? nightFactor > 0.45 : nightFactor > 0.55;
+      if (wantNight !== boardsNightMode) {
+        boardsNightMode = wantNight;
+        for (const tb of themedBoards) {
+          tb.mat.map = wantNight ? tb.nightTex : tb.dayTex;
+          tb.mat.needsUpdate = true;
+        }
+      }
+      for (const tb of themedBoards) tb.mat.emissive.setScalar(boardsNightMode ? Math.min(1, nightFactor * 1.1) : 0);
       const headOn = nightFactor > 0.25;
       headlights.forEach((h2) => (h2.intensity = nightFactor * 55));
       lightSprites.forEach((sp2, i2) => {
