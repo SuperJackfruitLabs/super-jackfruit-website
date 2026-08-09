@@ -567,6 +567,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
   }
   const stations: Station[] = [];
+  const houseCenters: Array<{ x: number; z: number }> = [];
   {
     const totalStations = projects.length;
     let idx = 0;
@@ -593,6 +594,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const hz = c.z + n.z * 10.5;
         const house = houses[Math.floor(rand() * houses.length)];
         place(house, 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
+        houseCenters.push({ x: hx, z: hz });
         place(driveway, 3.2, c.x + n.x * 7.3, c.z + n.z * 7.3, faceRoad);
         const bx = c.x + n.x * 6.4 + tan.x * 1.6;
         const bz = c.z + n.z * 6.4 + tan.z * 1.6;
@@ -715,9 +717,39 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const inner = new THREE.Group();
     for (const m of members) inner.add(m.obj.clone(true));
     const groupBox = new THREE.Box3().setFromObject(inner);
-    const gc = groupBox.getCenter(new THREE.Vector3());
-    inner.position.set(-gc.x, -groupBox.min.y, -gc.z);
     proto.add(inner);
+    proto.updateMatrixWorld(true);
+    // pivot at the POLE BASE (bbox center is skewed by the crook arm) and
+    // point the arm toward +z so facing math can aim it over the road
+    {
+      const h = groupBox.max.y - groupBox.min.y;
+      const bottomY = groupBox.min.y + h * 0.15;
+      const topY = groupBox.min.y + h * 0.72;
+      let bx = 0, bz = 0, bn = 0;
+      let tx = 0, tz = 0, tn = 0;
+      const v = new THREE.Vector3();
+      inner.traverse((o) => {
+        const mesh = o as import('three').Mesh;
+        if (!mesh.isMesh) return;
+        const posAttr = mesh.geometry.getAttribute('position');
+        if (!posAttr) return;
+        const stride = Math.max(1, Math.floor(posAttr.count / 600));
+        for (let i = 0; i < posAttr.count; i += stride) {
+          v.fromBufferAttribute(posAttr, i).applyMatrix4(mesh.matrixWorld);
+          if (v.y < bottomY) { bx += v.x; bz += v.z; bn++; }
+          else if (v.y > topY) { tx += v.x; tz += v.z; tn++; }
+        }
+      });
+      if (bn > 0) { bx /= bn; bz /= bn; }
+      if (tn > 0) { tx /= tn; tz /= tn; }
+      const armX = tx - bx;
+      const armZ = tz - bz;
+      const rot = Math.hypot(armX, armZ) > 0.15 ? -Math.atan2(armX, armZ) : 0;
+      inner.rotation.y = rot;
+      const c2 = Math.cos(rot);
+      const s2 = Math.sin(rot);
+      inner.position.set(-(bx * c2 + bz * s2), -groupBox.min.y, -(-bx * s2 + bz * c2));
+    }
     proto.traverse((o) => {
       const mesh = o as import('three').Mesh;
       if (mesh.isMesh) {
@@ -756,6 +788,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const n = roadPerp(t).multiplyScalar(li % 2 === 0 ? 1 : -1);
       const lx = c.x + n.x * 6.9;
       const lz = c.z + n.z * 6.9;
+      // never inside a house footprint or on a signboard
+      let blocked = false;
+      for (const hc of houseCenters) {
+        if (Math.hypot(hc.x - lx, hc.z - lz) < 8.5) { blocked = true; break; }
+      }
+      if (!blocked) {
+        for (const st of stations) {
+          if (Math.hypot(st.x - lx, st.z - lz) < 3) { blocked = true; break; }
+        }
+      }
+      if (blocked) { li++; continue; }
       const inst = proto.clone(true);
       inst.scale.setScalar(lampScale);
       inst.position.set(lx, 0, lz);
