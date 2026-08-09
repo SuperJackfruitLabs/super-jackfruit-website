@@ -8,7 +8,20 @@ import '@fontsource-variable/inconsolata';
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
     <p class="tag">the village — work in progress</p>
-    <p class="credit">engine sound: qubodup (CC-BY, opengameart.org)</p>
+    <p class="credit">music: yd · engine: qubodup (CC-BY) — opengameart.org</p>
+
+    <div class="env" aria-label="time and season">
+      <div class="env__row" id="time-row">
+        <button data-time="dawn">dawn</button>
+        <button data-time="day">day</button>
+        <button data-time="dusk" data-active="true">dusk</button>
+        <button data-time="night">night</button>
+      </div>
+      <div class="env__row" id="season-row">
+        <button data-season="summer" data-active="true">summer</button>
+        <button data-season="autumn">autumn</button>
+      </div>
+    </div>
 
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
       <h2 id="card-name"></h2>
@@ -63,6 +76,38 @@ import '@fontsource-variable/inconsolata';
     letter-spacing: 0.08em;
     color: rgba(40, 50, 60, 0.55);
   }
+
+  .env {
+    position: absolute;
+    top: 1.4rem;
+    right: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-end;
+  }
+
+  .env__row { display: flex; gap: 0.4rem; }
+
+  .env button {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    border: 1.5px solid rgba(40, 50, 60, 0.3);
+    background: rgba(255, 255, 255, 0.55);
+    color: rgba(40, 50, 60, 0.75);
+    cursor: pointer;
+  }
+
+  .env button[data-active='true'] {
+    background: rgba(40, 50, 60, 0.85);
+    color: #f6f0e2;
+    border-color: transparent;
+  }
+
+  .env button:focus-visible { outline: 2px solid rgba(40, 50, 60, 0.6); outline-offset: 2px; }
 
   .credit {
     position: absolute;
@@ -206,6 +251,17 @@ import '@fontsource-variable/inconsolata';
       demo?: string;
     };
     accent: string;
+  }
+
+  for (const row of [document.getElementById('time-row')!, document.getElementById('season-row')!]) {
+    row.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (!btn) return;
+      for (const b of row.querySelectorAll('button')) b.dataset.active = 'false';
+      btn.dataset.active = 'true';
+      if (btn.dataset.time) window.dispatchEvent(new CustomEvent('village:time', { detail: btn.dataset.time }));
+      if (btn.dataset.season) window.dispatchEvent(new CustomEvent('village:season', { detail: btn.dataset.season }));
+    });
   }
 
   window.addEventListener('village:station', ((e: CustomEvent<StationDetail | null>) => {

@@ -35,6 +35,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
+    uniforms: {
+      uHorizon: { value: new THREE.Color(1.0, 0.85, 0.66) },
+      uMid: { value: new THREE.Color(0.66, 0.85, 0.96) },
+      uZenith: { value: new THREE.Color(0.38, 0.66, 0.9) },
+      uGlowColor: { value: new THREE.Color(0.35, 0.2, 0.05) },
+      uSunDir: { value: new THREE.Vector3(0.5, 0.35, 0.4).normalize() },
+    },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
@@ -43,23 +50,42 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }
     `,
     fragmentShader: /* glsl */ `
+      uniform vec3 uHorizon;
+      uniform vec3 uMid;
+      uniform vec3 uZenith;
+      uniform vec3 uGlowColor;
+      uniform vec3 uSunDir;
       varying vec3 vDir;
       void main() {
         float h = clamp(vDir.y, 0.0, 1.0);
-        vec3 horizon = vec3(1.0, 0.85, 0.66);   // warm cream
-        vec3 mid = vec3(0.66, 0.85, 0.96);      // soft day blue
-        vec3 zenith = vec3(0.38, 0.66, 0.90);   // deeper blue
-        vec3 col = mix(horizon, mid, smoothstep(0.0, 0.28, h));
-        col = mix(col, zenith, smoothstep(0.28, 0.85, h));
-        // warm bloom around the sun direction
-        float sunGlow = pow(max(dot(normalize(vDir), normalize(vec3(0.5, 0.35, 0.4))), 0.0), 6.0);
-        col += vec3(0.35, 0.2, 0.05) * sunGlow;
+        vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
+        col = mix(col, uZenith, smoothstep(0.28, 0.85, h));
+        float sunGlow = pow(max(dot(normalize(vDir), uSunDir), 0.0), 6.0);
+        col += uGlowColor * sunGlow;
         gl_FragColor = vec4(col, 1.0);
       }
     `,
   });
   const skyDome = new THREE.Mesh(new THREE.SphereGeometry(320, 24, 16), skyMat);
   scene.add(skyDome);
+
+  // stars, revealed at night
+  const starGeo = new THREE.BufferGeometry();
+  {
+    const pts = new Float32Array(360 * 3);
+    for (let i = 0; i < 360; i++) {
+      const az = Math.random() * Math.PI * 2;
+      const el = Math.asin(Math.random() * 0.9 + 0.08);
+      const r = 310;
+      pts[i * 3] = Math.cos(el) * Math.cos(az) * r;
+      pts[i * 3 + 1] = Math.sin(el) * r;
+      pts[i * 3 + 2] = Math.cos(el) * Math.sin(az) * r;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  }
+  const starMat = new THREE.PointsMaterial({ color: 0xdfe8ff, size: 1.6, transparent: true, opacity: 0, fog: false, sizeAttenuation: false });
+  const stars = new THREE.Points(starGeo, starMat);
+  skyDome.add(stars);
 
   // ---------- light ----------
   const sun = new THREE.DirectionalLight(0xffe2b0, 3.4);
@@ -72,7 +98,63 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   sun.shadow.camera.bottom = -35;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xbfe0ff, 0xd8c090, 1.25));
+  const hemi = new THREE.HemisphereLight(0xbfe0ff, 0xd8c090, 1.25);
+  scene.add(hemi);
+
+  // ---------- environment presets (time of day) ----------
+  interface EnvPreset {
+    horizon: number[]; mid: number[]; zenith: number[]; glow: number[];
+    sunDir: number[]; sunColor: number; sunIntensity: number;
+    hemiSky: number; hemiGround: number; hemiIntensity: number;
+    fog: number; exposure: number; night: number;
+  }
+  const TIME_PRESETS: Record<string, EnvPreset> = {
+    dawn: {
+      horizon: [1.0, 0.78, 0.75], mid: [0.95, 0.85, 0.8], zenith: [0.5, 0.62, 0.82],
+      glow: [0.4, 0.2, 0.12], sunDir: [0.8, 0.18, 0.3],
+      sunColor: 0xffd4ae, sunIntensity: 2.2, hemiSky: 0xe8e0ff, hemiGround: 0xbfae90, hemiIntensity: 1.05,
+      fog: 0xefe2e2, exposure: 1.05, night: 0,
+    },
+    day: {
+      horizon: [0.87, 0.94, 1.0], mid: [0.62, 0.82, 0.96], zenith: [0.29, 0.56, 0.85],
+      glow: [0.22, 0.2, 0.12], sunDir: [0.35, 0.75, 0.25],
+      sunColor: 0xfff6e0, sunIntensity: 3.4, hemiSky: 0xcfe8ff, hemiGround: 0xcfc0a0, hemiIntensity: 1.4,
+      fog: 0xdfeaf2, exposure: 1.15, night: 0,
+    },
+    dusk: {
+      horizon: [1.0, 0.85, 0.66], mid: [0.66, 0.85, 0.96], zenith: [0.38, 0.66, 0.9],
+      glow: [0.35, 0.2, 0.05], sunDir: [0.5, 0.35, 0.4],
+      sunColor: 0xffe2b0, sunIntensity: 3.2, hemiSky: 0xbfe0ff, hemiGround: 0xd8c090, hemiIntensity: 1.25,
+      fog: 0xdfe9ef, exposure: 1.18, night: 0,
+    },
+    night: {
+      horizon: [0.1, 0.13, 0.24], mid: [0.05, 0.08, 0.18], zenith: [0.02, 0.03, 0.09],
+      glow: [0.1, 0.12, 0.2], sunDir: [-0.4, 0.5, -0.3],
+      sunColor: 0xa9c0e8, sunIntensity: 0.75, hemiSky: 0x2a3a58, hemiGround: 0x1a2030, hemiIntensity: 0.55,
+      fog: 0x0e1424, exposure: 1.0, night: 1,
+    },
+  };
+  let envTarget = TIME_PRESETS.dusk;
+  let nightFactor = 0;
+  const envState = {
+    horizon: new THREE.Color().fromArray(TIME_PRESETS.dusk.horizon),
+    mid: new THREE.Color().fromArray(TIME_PRESETS.dusk.mid),
+    zenith: new THREE.Color().fromArray(TIME_PRESETS.dusk.zenith),
+    glow: new THREE.Color().fromArray(TIME_PRESETS.dusk.glow),
+    sunDir: new THREE.Vector3().fromArray(TIME_PRESETS.dusk.sunDir).normalize(),
+    sunColor: new THREE.Color(TIME_PRESETS.dusk.sunColor),
+    sunIntensity: 3.2,
+    hemiSky: new THREE.Color(TIME_PRESETS.dusk.hemiSky),
+    hemiGround: new THREE.Color(TIME_PRESETS.dusk.hemiGround),
+    hemiIntensity: 1.25,
+    fog: new THREE.Color(TIME_PRESETS.dusk.fog),
+    exposure: 1.18,
+  };
+  const nightGlowMats: import('three').MeshLambertMaterial[] = [];
+
+  window.addEventListener('village:time', ((e: CustomEvent<string>) => {
+    if (TIME_PRESETS[e.detail]) envTarget = TIME_PRESETS[e.detail];
+  }) as EventListener);
 
   // ---------- deterministic layout randomness ----------
   let seed = 20260809;
@@ -84,10 +166,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // ---------- street geometry ----------
   const Z_START = 14;
   const Z_END = -252;
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(360, 400),
-    new THREE.MeshLambertMaterial({ color: 0x9fc178 })
-  );
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 400), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.z = (Z_START + Z_END) / 2;
   ground.receiveShadow = true;
@@ -193,7 +273,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return inst;
   }
 
-  const [houses, driveway, fence, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees] =
+  const [houses, driveway, fence, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees] =
     await Promise.all([
       Promise.all(['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'].map(loadAsset)),
       loadAsset('driveway-short'),
@@ -204,8 +284,27 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       Promise.all(['flower_purpleA', 'flower_redA', 'flower_yellowA'].map(loadAsset)),
       Promise.all(['plant_bush', 'plant_bushLarge'].map(loadAsset)),
       Promise.all(['rock_smallA', 'rock_smallC'].map(loadAsset)),
-      Promise.all(['tree_default', 'tree_detailed', 'tree_oak', 'tree_default_fall'].map(loadAsset)),
+      Promise.all(['tree_default', 'tree_detailed', 'tree_oak'].map(loadAsset)),
+      Promise.all(['tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'].map(loadAsset)),
     ]);
+
+  // seasonal tree pairs: summer + autumn variants share a spot, one visible
+  const seasonPairs: Array<{ summer: import('three').Object3D; autumn: import('three').Object3D }> = [];
+  let season: 'summer' | 'autumn' = 'summer';
+  function placeSeasonalTree(i: number, size: number, x: number, z: number, rotY: number): void {
+    const su = place(nTrees[i % nTrees.length], size, x, z, rotY, 'trunk', 0.01);
+    const au = place(fallTrees[i % fallTrees.length], size, x, z, rotY, false, 0.01);
+    au.visible = false;
+    seasonPairs.push({ summer: su, autumn: au });
+  }
+  window.addEventListener('village:season', ((e: CustomEvent<string>) => {
+    season = e.detail === 'autumn' ? 'autumn' : 'summer';
+    for (const pr of seasonPairs) {
+      pr.summer.visible = season === 'summer';
+      pr.autumn.visible = season === 'autumn';
+    }
+    groundMat.color.set(season === 'autumn' ? 0xb3a068 : 0x9fc178);
+  }) as EventListener);
 
   // ---------- signboards ----------
   const boardWood = new THREE.MeshLambertMaterial({ color: 0x8a6a4a });
@@ -251,10 +350,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       ctx.font = '34px "Inconsolata Variable", monospace';
       ctx.fillText(project.status, w / 2 + 20, 277);
     });
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.9, 1.07),
-      new THREE.MeshLambertMaterial({ map: tex })
-    );
+    const panelMat = new THREE.MeshLambertMaterial({ map: tex, emissiveMap: tex, emissive: 0x000000 });
+    nightGlowMats.push(panelMat);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.07), panelMat);
     panel.position.y = 1.45;
     panel.castShadow = true;
     const backing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.17, 0.06), boardWood);
@@ -287,10 +385,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       ctx.fillText(d.blurb, w / 2, 235, w - 60);
     }, 760, 300);
     const group = new THREE.Group();
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.9, 1.15),
-      new THREE.MeshLambertMaterial({ map: tex })
-    );
+    const gateMat = new THREE.MeshLambertMaterial({ map: tex, emissiveMap: tex, emissive: 0x000000 });
+    nightGlowMats.push(gateMat);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 1.15), gateMat);
     panel.position.set(0, 2.0, 0.06);
     panel.castShadow = true;
     const panelBack = panel.clone();
@@ -340,7 +437,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         // garden cluster across the street — every house on the street is a
         // project house, so the opposite side gets greenery instead
         const gx = -side * (8.5 + rand() * 3);
-        place(nTrees[Math.floor(rand() * nTrees.length)], 3 + rand() * 2, gx, z - rand() * 4, rand() * 6.28, 'trunk', 0.01);
+        placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 2, gx, z - rand() * 4, rand() * 6.28);
         place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, gx + (rand() - 0.5) * 4, z + 1 + rand() * 3, rand() * 6.28, false, 0.02);
         if (rand() < 0.7) {
           place(flowers[Math.floor(rand() * flowers.length)], 0.6, -side * (6 + rand() * 2), z + rand() * 4, rand() * 6.28, false, 0.05);
@@ -371,7 +468,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const x = (rand() - 0.5) * 300;
     const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
     if (Math.abs(x) < 19) continue;
-    place(nTrees[Math.floor(rand() * nTrees.length)], 3 + rand() * 3.5, x, z, rand() * 6.28, 'trunk', 0.01);
+    placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 3.5, x, z, rand() * 6.28);
   }
   for (let i = 0; i < 50; i++) {
     const x = (rand() - 0.5) * 280;
@@ -467,6 +564,44 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     nitroFlames.push(flame);
   }
 
+  // headlights + taillights, revealed at night
+  const headlights: import('three').SpotLight[] = [];
+  const lightSprites: import('three').Sprite[] = [];
+  {
+    const headTexCanvas = document.createElement('canvas');
+    headTexCanvas.width = headTexCanvas.height = 64;
+    const hg = headTexCanvas.getContext('2d')!;
+    const grad = hg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,246,214,1)');
+    grad.addColorStop(1, 'rgba(255,246,214,0)');
+    hg.fillStyle = grad;
+    hg.fillRect(0, 0, 64, 64);
+    const headTex = new THREE.CanvasTexture(headTexCanvas);
+    for (const hx of [-0.42, 0.42]) {
+      const spot = new THREE.SpotLight(0xfff2cc, 0, 26, 0.42, 0.5, 1.2);
+      spot.position.set(hx, 0.55, 1.35);
+      const tgt = new THREE.Object3D();
+      tgt.position.set(hx * 0.6, 0.2, 12);
+      playerRoot.add(tgt);
+      spot.target = tgt;
+      playerRoot.add(spot);
+      headlights.push(spot);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, transparent: true, opacity: 0, depthWrite: false }));
+      glow.scale.setScalar(0.4);
+      glow.position.set(hx, 0.55, 1.5);
+      playerRoot.add(glow);
+      lightSprites.push(glow);
+    }
+    // taillights
+    for (const hx of [-0.42, 0.42]) {
+      const tail = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff3324, transparent: true, opacity: 0, depthWrite: false }));
+      tail.scale.setScalar(0.14);
+      tail.position.set(hx, 0.55, -1.42);
+      playerRoot.add(tail);
+      lightSprites.push(tail);
+    }
+  }
+
   // the villager stays on as a greeter beside the first gate
   const gltf = await loader.loadAsync('/assets/village/rogue.glb');
   const greeter = gltf.scene;
@@ -543,6 +678,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     })();
   }
 
+  // background music: "Where Was I" by yd (CC0, opengameart.org)
+  let music: HTMLAudioElement | null = null;
+  function ensureMusic(): void {
+    if (music || muted) return;
+    music = new Audio('/assets/village/music.m4a');
+    music.loop = true;
+    music.volume = 0.32;
+    music.play().catch(() => {});
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'm') {
       muted = !muted;
@@ -551,11 +696,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if (muted) engineAudio.ctx.suspend();
         else engineAudio.ctx.resume();
       }
+      if (music) music.muted = muted;
       return;
     }
     ensureEngineAudio();
+    ensureMusic();
   });
-  window.addEventListener('pointerdown', ensureEngineAudio);
+  window.addEventListener('pointerdown', () => {
+    ensureEngineAudio();
+    ensureMusic();
+  });
 
   // ---------- input ----------
   const keys = new Set<string>();
@@ -728,6 +878,45 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
 
     mixer.update(dt); // greeter idle
+
+    // environment transition
+    {
+      const k = Math.min(1, dt * 1.6);
+      envState.horizon.lerp(new THREE.Color().fromArray(envTarget.horizon), k);
+      envState.mid.lerp(new THREE.Color().fromArray(envTarget.mid), k);
+      envState.zenith.lerp(new THREE.Color().fromArray(envTarget.zenith), k);
+      envState.glow.lerp(new THREE.Color().fromArray(envTarget.glow), k);
+      envState.sunDir.lerp(new THREE.Vector3().fromArray(envTarget.sunDir).normalize(), k).normalize();
+      envState.sunColor.lerp(new THREE.Color(envTarget.sunColor), k);
+      envState.sunIntensity += (envTarget.sunIntensity - envState.sunIntensity) * k;
+      envState.hemiSky.lerp(new THREE.Color(envTarget.hemiSky), k);
+      envState.hemiGround.lerp(new THREE.Color(envTarget.hemiGround), k);
+      envState.hemiIntensity += (envTarget.hemiIntensity - envState.hemiIntensity) * k;
+      envState.fog.lerp(new THREE.Color(envTarget.fog), k);
+      envState.exposure += (envTarget.exposure - envState.exposure) * k;
+      nightFactor += (envTarget.night - nightFactor) * k;
+
+      const u = skyMat.uniforms;
+      (u.uHorizon.value as import('three').Color).copy(envState.horizon);
+      (u.uMid.value as import('three').Color).copy(envState.mid);
+      (u.uZenith.value as import('three').Color).copy(envState.zenith);
+      (u.uGlowColor.value as import('three').Color).copy(envState.glow);
+      (u.uSunDir.value as import('three').Vector3).copy(envState.sunDir);
+      sun.color.copy(envState.sunColor);
+      sun.intensity = envState.sunIntensity;
+      hemi.color.copy(envState.hemiSky);
+      hemi.groundColor.copy(envState.hemiGround);
+      hemi.intensity = envState.hemiIntensity;
+      (scene.fog as import('three').Fog).color.copy(envState.fog);
+      renderer.toneMappingExposure = envState.exposure;
+      starMat.opacity = nightFactor * 0.9;
+      for (const m of nightGlowMats) m.emissive.setScalar(nightFactor * 0.92);
+      const headOn = nightFactor > 0.25;
+      headlights.forEach((h2) => (h2.intensity = nightFactor * 55));
+      lightSprites.forEach((sp2, i2) => {
+        (sp2.material as import('three').SpriteMaterial).opacity = headOn ? (i2 < 2 ? 0.85 : 0.7) * nightFactor : 0;
+      });
+    }
 
     // wind
     for (const s of swayers) {
