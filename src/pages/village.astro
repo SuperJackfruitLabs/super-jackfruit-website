@@ -21,6 +21,20 @@ import '@fontsource-variable/inconsolata';
         <button data-season="summer" data-active="true">summer</button>
         <button data-season="autumn">autumn</button>
       </div>
+      <div class="env__row" id="audio-row">
+        <button data-audio="music" data-active="true">♪ music</button>
+        <button data-audio="engine" data-active="true">engine</button>
+      </div>
+    </div>
+
+    <p class="visited" id="visited-chip" hidden>projects visited: <span id="visited-count">0/15</span></p>
+
+    <div class="welcome" id="welcome" data-open="true">
+      <div class="welcome__card">
+        <h1>Super Jackfruit Labs</h1>
+        <p class="welcome__sub">an open-source lab you can drive through</p>
+        <p class="welcome__hint">press any key or tap to enter</p>
+      </div>
     </div>
 
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
@@ -202,6 +216,65 @@ import '@fontsource-variable/inconsolata';
     outline: none;
   }
 
+  .visited {
+    position: absolute;
+    left: 1.4rem;
+    top: 1.4rem;
+    margin: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.04em;
+    color: rgba(40, 50, 60, 0.7);
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+    padding: 0.35rem 0.95rem;
+    pointer-events: none;
+  }
+
+  .visited.done { background: rgba(63, 158, 63, 0.85); color: #f6f0e2; }
+
+  .welcome {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(158, 212, 245, 0.92);
+    transition: opacity 0.6s ease;
+    z-index: 10;
+  }
+
+  .welcome[data-open='false'] { opacity: 0; pointer-events: none; }
+
+  .welcome__card {
+    text-align: center;
+    background: #f6f0e2;
+    border: 3px solid #d98a1f;
+    border-radius: 14px;
+    padding: 3rem 4rem;
+    box-shadow: 0 14px 40px rgba(40, 50, 60, 0.25);
+  }
+
+  .welcome__card h1 {
+    margin: 0 0 0.4rem;
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #2c2a26;
+  }
+
+  .welcome__sub { margin: 0 0 1.6rem; font-size: 1.4rem; color: rgba(44, 42, 38, 0.7); }
+
+  .welcome__hint {
+    margin: 0;
+    font-size: 1.2rem;
+    letter-spacing: 0.06em;
+    color: rgba(44, 42, 38, 0.55);
+    animation: welcome-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes welcome-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) { .welcome__hint { animation: none; } }
+
   @media (max-width: 640px) {
     .card {
       left: 1.2rem;
@@ -241,7 +314,8 @@ import '@fontsource-variable/inconsolata';
   const demoEl = document.getElementById('card-demo') as HTMLAnchorElement;
 
   interface StationDetail {
-    project: {
+    kind: 'project' | 'info';
+    project?: {
       name: string;
       tagline: string;
       description: string;
@@ -250,6 +324,7 @@ import '@fontsource-variable/inconsolata';
       github: string;
       demo?: string;
     };
+    info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
     accent: string;
   }
 
@@ -269,21 +344,73 @@ import '@fontsource-variable/inconsolata';
       card.dataset.open = 'false';
       return;
     }
-    const { project, accent } = e.detail;
+    const { accent } = e.detail;
+    card.style.setProperty('--accent', accent);
+    if (e.detail.kind === 'info' && e.detail.info) {
+      const info = e.detail.info;
+      nameEl.textContent = info.title;
+      taglineEl.textContent = info.tagline;
+      statusEl.textContent = '';
+      statusEl.setAttribute('hidden', '');
+      descEl.textContent = info.lines.join(' ');
+      tagsEl.textContent = '';
+      githubEl.textContent = info.links[0]?.label ?? '';
+      githubEl.href = info.links[0]?.url ?? '#';
+      if (info.links[1]) {
+        demoEl.textContent = info.links[1].label;
+        demoEl.href = info.links[1].url;
+        demoEl.hidden = false;
+      } else {
+        demoEl.hidden = true;
+      }
+      card.dataset.open = 'true';
+      return;
+    }
+    const project = e.detail.project!;
     nameEl.textContent = project.name;
     taglineEl.textContent = project.tagline;
+    statusEl.removeAttribute('hidden');
     statusEl.textContent = STATUS_COPY[project.status] ?? project.status;
     descEl.textContent = project.description;
     tagsEl.textContent = project.tags.map((t) => `[${t}]`).join('  ');
+    githubEl.textContent = 'view source →';
     githubEl.href = project.github;
     if (project.demo) {
+      demoEl.textContent = 'live demo →';
       demoEl.href = project.demo;
       demoEl.hidden = false;
     } else {
       demoEl.hidden = true;
     }
-    card.style.setProperty('--accent', accent);
     card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
     card.dataset.open = 'true';
   }) as EventListener);
+
+  // visited counter
+  const visitedChip = document.getElementById('visited-chip')!;
+  const visitedCount = document.getElementById('visited-count')!;
+  window.addEventListener('village:visited', ((e: CustomEvent<{ count: number; total: number }>) => {
+    visitedChip.hidden = false;
+    visitedCount.textContent = `${e.detail.count}/${e.detail.total}`;
+    if (e.detail.count === e.detail.total) visitedChip.classList.add('done');
+  }) as EventListener);
+
+  // welcome overlay: any input enters (and doubles as the audio unlock gesture)
+  const welcome = document.getElementById('welcome')!;
+  function enterVillage() {
+    welcome.dataset.open = 'false';
+    window.removeEventListener('keydown', enterVillage);
+    welcome.removeEventListener('pointerdown', enterVillage);
+  }
+  window.addEventListener('keydown', enterVillage);
+  welcome.addEventListener('pointerdown', enterVillage);
+
+  // separate audio toggles
+  document.getElementById('audio-row')!.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button');
+    if (!btn) return;
+    const on = btn.dataset.active !== 'true';
+    btn.dataset.active = String(on);
+    window.dispatchEvent(new CustomEvent('village:audio', { detail: { channel: btn.dataset.audio, on } }));
+  });
 </script>

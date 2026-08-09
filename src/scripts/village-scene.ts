@@ -169,9 +169,21 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return seed / 2147483647;
   };
 
-  // ---------- street geometry ----------
+  // ---------- winding country road ----------
   const Z_START = 14;
   const Z_END = -252;
+  const roadCurve = new THREE.CatmullRomCurve3(
+    [
+      [0, 12], [3, -12], [-9, -42], [5, -74], [-12, -108],
+      [-2, -140], [11, -172], [-5, -206], [0, -244],
+    ].map(([x, z]) => new THREE.Vector3(x, 0, z))
+  );
+  const ROAD_LEN = roadCurve.getLength();
+  const roadPerp = (t: number) => {
+    const tan = roadCurve.getTangentAt(t);
+    return new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+  };
+
   const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 400), groundMat);
   ground.rotation.x = -Math.PI / 2;
@@ -179,34 +191,66 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const road = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.4, Z_START - Z_END + 30),
-    new THREE.MeshLambertMaterial({ color: 0xb5b8bf })
-  );
-  road.rotation.x = -Math.PI / 2;
-  road.position.set(0, 0.02, (Z_START + Z_END) / 2);
-  road.receiveShadow = true;
-  scene.add(road);
-
-  for (let z = Z_END - 6; z < Z_START + 8; z += 6) {
-    const dash = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.24, 2.2),
-      new THREE.MeshLambertMaterial({ color: 0xf2efe6 })
-    );
-    dash.rotation.x = -Math.PI / 2;
-    dash.position.set(0, 0.03, z);
-    scene.add(dash);
+  // ribbon builder: a strip of constant width following the curve
+  function buildRibbon(width: number, color: number, y: number, offset = 0): import('three').Mesh {
+    const SEG = 260;
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= SEG; i++) {
+      const t = i / SEG;
+      const c = roadCurve.getPointAt(t);
+      const n = roadPerp(t);
+      const cx = c.x + n.x * offset;
+      const cz = c.z + n.z * offset;
+      pos.push(cx + n.x * (width / 2), y, cz + n.z * (width / 2));
+      pos.push(cx - n.x * (width / 2), y, cz - n.z * (width / 2));
+      if (i < SEG) {
+        const a = i * 2;
+        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return mesh;
   }
 
-  for (const side of [-1, 1]) {
-    const walk = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.7, Z_START - Z_END + 30),
-      new THREE.MeshLambertMaterial({ color: 0xd8d2c4 })
-    );
-    walk.rotation.x = -Math.PI / 2;
-    walk.position.set(side * 4.1, 0.025, (Z_START + Z_END) / 2);
-    walk.receiveShadow = true;
-    scene.add(walk);
+  buildRibbon(6.4, 0xb5b8bf, 0.02);            // asphalt
+  buildRibbon(1.7, 0xd8d2c4, 0.025, 4.1);      // sidewalks
+  buildRibbon(1.7, 0xd8d2c4, 0.025, -4.1);
+
+  // center dashes follow the curve
+  {
+    const dashMat = new THREE.MeshLambertMaterial({ color: 0xf2efe6 });
+    const step = 6 / ROAD_LEN;
+    for (let t = step; t < 1; t += step) {
+      const c = roadCurve.getPointAt(t);
+      const tan = roadCurve.getTangentAt(t);
+      const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 2.2), dashMat);
+      dash.rotation.x = -Math.PI / 2;
+      dash.rotation.z = -Math.atan2(tan.x, tan.z);
+      dash.position.set(c.x, 0.03, c.z);
+      scene.add(dash);
+    }
+  }
+
+  // distance from a point to the road (sampled) — used to keep nature off it
+  const roadSamples: Array<[number, number]> = [];
+  for (let i = 0; i <= 120; i++) {
+    const c = roadCurve.getPointAt(i / 120);
+    roadSamples.push([c.x, c.z]);
+  }
+  function distToRoad(x: number, z: number): number {
+    let best = Infinity;
+    for (const [rx, rz] of roadSamples) {
+      const d = (x - rx) * (x - rx) + (z - rz) * (z - rz);
+      if (d < best) best = d;
+    }
+    return Math.sqrt(best);
   }
 
   // ---------- asset loading ----------
@@ -392,7 +436,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     colliders.push({ minX: x - 0.5, maxX: x + 0.5, minZ: z - 0.25, maxZ: z + 0.25 });
   }
 
-  function makeDistrictBoard(d: District, z: number): void {
+  function makeDistrictBoard(d: District, gx: number, gz: number, facing: number): void {
     const drawGate = (night: boolean) => (ctx: CanvasRenderingContext2D, w: number, h: number) => {
       ctx.fillStyle = night ? '#131828' : d.accent;
       ctx.fillRect(0, 0, w, h);
@@ -429,80 +473,207 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       group.add(post);
     }
     group.add(panel, panelBack);
-    group.position.set(0, 0, z);
+    group.position.set(gx, 0, gz);
+    group.rotation.y = facing;
     scene.add(group);
   }
 
-  // ---------- project stations ----------
+  function makeInfoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number): void {
+    const draw = (night: boolean) => (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      ctx.fillStyle = night ? '#131828' : cream;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 14;
+      if (night) { ctx.shadowColor = accent; ctx.shadowBlur = 18; }
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'center';
+      ctx.font = '700 58px "Inconsolata Variable", monospace';
+      if (night) { ctx.shadowColor = accent; ctx.shadowBlur = 14; ctx.fillStyle = '#ffffff'; }
+      else ctx.fillStyle = inkText;
+      ctx.fillText(title, w / 2, 150, w - 70);
+      ctx.shadowBlur = 0;
+      ctx.font = '36px "Inconsolata Variable", monospace';
+      ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(44,42,38,0.75)';
+      ctx.fillText(sub, w / 2, 225, w - 70);
+    };
+    const dayTex = makeBoardTexture(draw(false));
+    const nightTex = makeBoardTexture(draw(true));
+    const mat = new THREE.MeshLambertMaterial({ map: dayTex, emissiveMap: nightTex, emissive: 0x000000 });
+    themedBoards.push({ mat, dayTex, nightTex });
+    const group = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35), mat);
+    panel.position.y = 1.7;
+    panel.castShadow = true;
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.45, 0.06), boardWood);
+    backing.position.set(0, 1.7, -0.045);
+    backing.castShadow = true;
+    for (const px of [-1.0, 1.0]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.8, 0.1), boardWood);
+      post.position.set(px, 0.85, -0.125);
+      post.castShadow = true;
+      group.add(post);
+    }
+    group.add(panel, backing);
+    group.position.set(x, 0, z);
+    group.rotation.y = facing;
+    scene.add(group);
+    colliders.push({ minX: x - 0.6, maxX: x + 0.6, minZ: z - 0.3, maxZ: z + 0.3 });
+  }
+
+  // ---------- project stations along the winding road ----------
   interface Station {
-    project: Project;
+    kind: 'project' | 'info';
+    project?: Project;
     accent: string;
     x: number;
     z: number;
+    info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
   }
   const stations: Station[] = [];
   {
-    let z = -10;
+    const totalStations = projects.length;
+    let idx = 0;
     let side = -1;
     for (const d of districts) {
-      makeDistrictBoard(d, z);
-      z -= 8;
-      for (const project of byDistrict(d.id)) {
-        const x = side * (10 + rand() * 1.5);
-        const rotY = side === 1 ? -Math.PI / 2 : Math.PI / 2;
+      const items = byDistrict(d.id);
+      // district gate beside the road at the section start
+      const tGate = 0.05 + (idx / totalStations) * 0.86;
+      {
+        const c = roadCurve.getPointAt(tGate);
+        const n = roadPerp(tGate);
+        const gx = c.x + n.x * 6.5;
+        const gz = c.z + n.z * 6.5;
+        makeDistrictBoard(d, gx, gz, Math.atan2(-n.x, -n.z));
+      }
+      for (const project of items) {
+        const t = 0.08 + (idx / totalStations) * 0.86;
+        const c = roadCurve.getPointAt(t);
+        const tan = roadCurve.getTangentAt(t);
+        const n = roadPerp(t).multiplyScalar(side);
+        const faceRoad = Math.atan2(-n.x, -n.z);
+
+        const hx = c.x + n.x * 10.5;
+        const hz = c.z + n.z * 10.5;
         const house = houses[Math.floor(rand() * houses.length)];
-        place(house, 7.5 + rand() * 1.8, x, z, rotY, 'box');
-        place(driveway, 3.2, side * 6.4, z + 1.2, rotY);
-        // face the road, tilted toward walkers arriving from the entrance
-        makeProjectBoard(project, d.accent, side * 5.7, z + 3.4, side === 1 ? -Math.PI / 2 + 0.35 : Math.PI / 2 - 0.35);
-        stations.push({ project, accent: d.accent, x: side * 5.7, z: z + 3.4 });
+        place(house, 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
+        place(driveway, 3.2, c.x + n.x * 6.4, c.z + n.z * 6.4, faceRoad);
+        const bx = c.x + n.x * 5.7 + tan.x * 1.6;
+        const bz = c.z + n.z * 5.7 + tan.z * 1.6;
+        makeProjectBoard(project, d.accent, bx, bz, faceRoad);
+        stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
 
-        // yard dressing
+        // yard + across-the-road garden
         const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
-        place(treeKind, 2.2 + rand() * 1.6, x + (rand() - 0.5) * 5, z - (4.8 + rand() * 2), rand() * 6.28, 'trunk', 0.012);
-        if (rand() < 0.7) place(fence, 3.4, side * 6.2, z - (5 + rand() * 1.5), 0, 'box');
-        if (rand() < 0.6) place(planter, 1.1, side * 5.2, z - 2.6, rotY, 'box');
+        place(treeKind, 2.2 + rand() * 1.6, hx + tan.x * (4 + rand() * 2), hz + tan.z * (4 + rand() * 2), rand() * 6.28, 'trunk', 0.012);
+        if (rand() < 0.6) place(planter, 1.1, c.x + n.x * 5.2 - tan.x * 2.2, c.z + n.z * 5.2 - tan.z * 2.2, faceRoad, 'box');
+        placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 2, c.x - n.x * (9 + rand() * 3), c.z - n.z * (9 + rand() * 3), rand() * 6.28);
+        place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, c.x - n.x * (7 + rand() * 2), c.z - n.z * (7 + rand() * 2), rand() * 6.28, false, 0.02);
 
-        // garden cluster across the street — every house on the street is a
-        // project house, so the opposite side gets greenery instead
-        const gx = -side * (8.5 + rand() * 3);
-        placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 2, gx, z - rand() * 4, rand() * 6.28);
-        place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, gx + (rand() - 0.5) * 4, z + 1 + rand() * 3, rand() * 6.28, false, 0.02);
-        if (rand() < 0.7) {
-          place(flowers[Math.floor(rand() * flowers.length)], 0.6, -side * (6 + rand() * 2), z + rand() * 4, rand() * 6.28, false, 0.05);
-        }
-
-        z -= 14 + rand() * 3;
+        idx++;
         side *= -1;
       }
-      z -= 6;
     }
   }
 
-  // flowers + bushes along the sidewalks
-  for (let z = Z_END + 6; z < Z_START; z += 3.5 + rand() * 3) {
-    for (const side of [-1, 1]) {
-      if (rand() < 0.55) {
+  // ---------- the village square: HQ, about, contact kiosk ----------
+  const T_PLAZA = 0.485;
+  const plazaCenter = (() => {
+    const c = roadCurve.getPointAt(T_PLAZA);
+    const n = roadPerp(T_PLAZA);
+    return { x: c.x + n.x * 15, z: c.z + n.z * 15, n, c };
+  })();
+  {
+    const plaza = new THREE.Mesh(
+      new THREE.CircleGeometry(12, 40),
+      new THREE.MeshLambertMaterial({ color: 0xcfc8b8 })
+    );
+    plaza.rotation.x = -Math.PI / 2;
+    plaza.position.set(plazaCenter.x, 0.02, plazaCenter.z);
+    plaza.receiveShadow = true;
+    scene.add(plaza);
+
+    // path from road to plaza
+    const px = plazaCenter.c.x + plazaCenter.n.x * 7;
+    const pz = plazaCenter.c.z + plazaCenter.n.z * 7;
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 10), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
+    path.rotation.x = -Math.PI / 2;
+    path.rotation.z = -Math.atan2(plazaCenter.n.x, plazaCenter.n.z);
+    path.position.set(px, 0.02, pz);
+    path.receiveShadow = true;
+    scene.add(path);
+
+    // HQ: the biggest house in the kit, scaled up, facing the plaza
+    const faceP = Math.atan2(plazaCenter.c.x - plazaCenter.x, plazaCenter.c.z - plazaCenter.z);
+    place(houses[7], 13, plazaCenter.x + plazaCenter.n.x * 10, plazaCenter.z + plazaCenter.n.z * 10, faceP, 'box');
+
+    // HQ board + kiosk board as info stations
+    const hqx = plazaCenter.x + plazaCenter.n.x * 4.5;
+    const hqz = plazaCenter.z + plazaCenter.n.z * 4.5;
+    makeInfoBoard('SUPER JACKFRUIT LABS', 'an open-source lab you can drive through', '#d98a1f', hqx, hqz, faceP);
+    stations.push({
+      kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
+      info: {
+        title: 'Super Jackfruit Labs',
+        tagline: 'an open-source lab you can drive through',
+        lines: [
+          "Hi — I'm Rakesh. This village is my lab: every house on the road is a real open-source project, most of them work-in-progress, all of them free to fork.",
+          'By night this lab is a neon street — same projects, different weather.',
+        ],
+        links: [
+          { label: 'the neon street (night site) →', url: 'https://superjackfruit.com/' },
+        ],
+      },
+    });
+
+    const kx = plazaCenter.x - plazaCenter.n.z * 8;
+    const kz = plazaCenter.z + plazaCenter.n.x * 8;
+    const faceK = Math.atan2(plazaCenter.x - kx, plazaCenter.z - kz);
+    makeInfoBoard('say hi', 'the lab is always open', '#3f9e3f', kx, kz, faceK);
+    stations.push({
+      kind: 'info', accent: '#3f9e3f', x: kx, z: kz,
+      info: {
+        title: 'say hi',
+        tagline: 'the lab is always open',
+        lines: ['Everything here is open source. Come look under the hood, open an issue, or just wave.'],
+        links: [
+          { label: 'github.com/rakeshgangwar →', url: 'https://github.com/rakeshgangwar' },
+          { label: 'github.com/SuperJackfruitLabs →', url: 'https://github.com/SuperJackfruitLabs' },
+        ],
+      },
+    });
+
+    // benches → planters around the square
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.5;
+      place(planter, 1.2, plazaCenter.x + Math.cos(a) * 10, plazaCenter.z + Math.sin(a) * 10, a + Math.PI / 2, 'box');
+    }
+  }
+
+  // flowers + bushes along the road edges
+  for (let t = 0.02; t < 0.98; t += (3.5 + rand() * 3) / ROAD_LEN) {
+    const c = roadCurve.getPointAt(t);
+    for (const sd of [-1, 1]) {
+      const n = roadPerp(t).multiplyScalar(sd);
+      if (rand() < 0.5) {
         const f = flowers[Math.floor(rand() * flowers.length)];
-        place(f, 0.55 + rand() * 0.3, side * (5.3 + rand() * 0.6), z + rand() * 2, rand() * 6.28, false, 0.05);
-      }
-      if (rand() < 0.2) {
-        place(bushes[Math.floor(rand() * bushes.length)], 1.1 + rand() * 0.7, side * (5.9 + rand()), z + rand() * 2, rand() * 6.28, false, 0.02);
+        place(f, 0.55 + rand() * 0.3, c.x + n.x * (5.3 + rand() * 0.6), c.z + n.z * (5.3 + rand() * 0.6), rand() * 6.28, false, 0.05);
       }
     }
   }
 
-  // background nature
+  // background nature keeps clear of road and plaza
   for (let i = 0; i < 150; i++) {
     const x = (rand() - 0.5) * 300;
     const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
-    if (Math.abs(x) < 19) continue;
+    if (distToRoad(x, z) < 13) continue;
+    if (Math.hypot(x - plazaCenter.x, z - plazaCenter.z) < 16) continue;
     placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 3.5, x, z, rand() * 6.28);
   }
   for (let i = 0; i < 50; i++) {
     const x = (rand() - 0.5) * 280;
     const z = Z_END - 10 + rand() * (Z_START - Z_END + 40);
-    if (Math.abs(x) < 18) continue;
+    if (distToRoad(x, z) < 12) continue;
     place(rocks[Math.floor(rand() * rocks.length)], 0.5 + rand() * 0.8, x, z, rand() * 6.28);
   }
 
@@ -736,6 +907,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     ensureMusic();
   });
 
+  let engineEnabled = true;
+  window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
+    if (e.detail.channel === 'music') {
+      if (music) music.muted = !e.detail.on;
+      else if (e.detail.on) ensureMusic();
+    } else if (e.detail.channel === 'engine') {
+      engineEnabled = e.detail.on;
+    }
+  }) as EventListener);
+
   // ---------- input ----------
   const keys = new Set<string>();
   window.addEventListener('keydown', (e) => {
@@ -767,6 +948,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const DRAG = 3.2;
   const STEER_RATE = 1.9;
   const CAM_AZIMUTH = 0;
+  const triggerAxes = new Set<number>();
   let heading = Math.PI; // car noses toward the street (-z … model faces +z)
   let speed = 0; // signed: + forward, − reverse
 
@@ -779,6 +961,58 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
+
+  // visited tracking + completion fireworks over the square
+  const visited = new Set<string>();
+  try {
+    for (const sl of JSON.parse(localStorage.getItem('sjl-visited') ?? '[]')) visited.add(sl);
+  } catch {}
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: projects.length } }));
+  }, 500);
+
+  interface Firework {
+    points: import('three').Points;
+    vel: Float32Array;
+    life: number;
+  }
+  const fireworks: Firework[] = [];
+  function launchFireworks(): void {
+    const colors = [0x09e6f2, 0xf2a707, 0xa12cf9, 0xfc5553, 0xbfee21];
+    for (let b = 0; b < 7; b++) {
+      setTimeout(() => {
+        const cx = plazaCenter.x + (Math.random() - 0.5) * 14;
+        const cy = 14 + Math.random() * 8;
+        const cz = plazaCenter.z + (Math.random() - 0.5) * 14;
+        const N = 70;
+        const pos = new Float32Array(N * 3);
+        const vel = new Float32Array(N * 3);
+        for (let i = 0; i < N; i++) {
+          pos[i * 3] = cx;
+          pos[i * 3 + 1] = cy;
+          pos[i * 3 + 2] = cz;
+          const th = Math.random() * Math.PI * 2;
+          const ph = Math.acos(Math.random() * 2 - 1);
+          const sp = 4 + Math.random() * 5;
+          vel[i * 3] = Math.sin(ph) * Math.cos(th) * sp;
+          vel[i * 3 + 1] = Math.cos(ph) * sp + 2;
+          vel[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * sp;
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({
+          color: colors[b % colors.length],
+          size: 0.28,
+          transparent: true,
+          opacity: 1,
+          depthWrite: false,
+        });
+        const pts = new THREE.Points(geo, mat);
+        scene.add(pts);
+        fireworks.push({ points: pts, vel, life: 1.6 });
+      }, b * 420);
+    }
+  }
 
   // ---------- proximity stations → DOM card ----------
   let activeStation: Station | null = null;
@@ -799,17 +1033,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       iz += Math.max(-1, Math.min(1, joy.dy));
     }
     // arcade car: throttle on the screen-vertical axis, steering on horizontal
-    // gamepad: left stick steers, RT throttle, LT brake/reverse, A = nitro
+    // gamepad: left stick steers, RT throttle, LT brake/reverse, A = nitro.
+    // Triggers live on buttons 6/7 in the standard mapping, but many pads
+    // report them as axes resting at -1 — detect that signature per axis.
     let padNitro = false;
     const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
     for (const pad of pads) {
       if (!pad || !pad.connected) continue;
       const dz = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
       ix += dz(pad.axes[0] ?? 0);
-      const rt = pad.buttons[7]?.value ?? 0;
-      const lt = pad.buttons[6]?.value ?? 0;
+      let rt = pad.buttons[7]?.value ?? 0;
+      let lt = pad.buttons[6]?.value ?? 0;
+      for (let ai = 2; ai < pad.axes.length; ai++) {
+        if ((pad.axes[ai] ?? 0) < -0.9) triggerAxes.add(ai); // seen at rest → it's a trigger
+      }
+      if (rt < 0.02 && lt < 0.02 && triggerAxes.size > 0) {
+        const axisVals = [...triggerAxes].map((ai) => (pad.axes[ai] ?? -1) * 0.5 + 0.5).sort((a, b) => b - a);
+        // convention: the more-pressed detected trigger accelerates, second brakes
+        rt = axisVals[0] ?? 0;
+        lt = axisVals[1] ?? 0;
+      }
       const trigger = rt - lt;
-      iz += trigger !== 0 ? -trigger : dz(pad.axes[1] ?? 0);
+      if (Math.abs(trigger) > 0.03) iz = -trigger; // triggers take priority over stick-Y
+      else iz += dz(pad.axes[1] ?? 0);
       if (pad.buttons[0]?.pressed) padNitro = true;
       break;
     }
@@ -862,7 +1108,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
 
     // engine follows the wheels — gear-stepped RPM bends the sample's pitch
-    if (engineAudio && !muted) {
+    if (engineAudio && !muted && engineEnabled) {
       const sp = Math.abs(speed);
       const GEAR_SPAN = 6.5;
       const inGear = sp < 0.15 ? 0 : (sp % GEAR_SPAN) / GEAR_SPAN;
@@ -871,6 +1117,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       engineAudio.src.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
       const vol = sp < 0.15 ? 0 : Math.min(0.12, 0.05 + (sp / NITRO_MAX) * 0.06) + (nitro ? 0.02 : 0);
       engineAudio.gain.gain.setTargetAtTime(vol, now, 0.1);
+    } else if (engineAudio && !engineEnabled) {
+      engineAudio.gain.gain.setTargetAtTime(0, engineAudio.ctx.currentTime, 0.08);
     }
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
     playerRoot.position.z = Math.max(Z_END + 4, Math.min(Z_START - 2, playerRoot.position.z));
@@ -978,18 +1226,59 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       activeStation = nearest;
       window.dispatchEvent(
         new CustomEvent('village:station', {
-          detail: nearest ? { project: nearest.project, accent: nearest.accent } : null,
+          detail: nearest
+            ? nearest.kind === 'project'
+              ? { kind: 'project', project: nearest.project, accent: nearest.accent }
+              : { kind: 'info', info: nearest.info, accent: nearest.accent }
+            : null,
         })
       );
+      if (nearest && nearest.kind === 'project' && nearest.project && !visited.has(nearest.project.slug)) {
+        visited.add(nearest.project.slug);
+        try {
+          localStorage.setItem('sjl-visited', JSON.stringify([...visited]));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: projects.length } }));
+        if (visited.size === projects.length) launchFireworks();
+      }
     }
 
-    // fixed-azimuth follow camera
+    // fireworks update
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+      const fw = fireworks[i];
+      fw.life -= dt;
+      const posAttr = fw.points.geometry.getAttribute('position') as import('three').BufferAttribute;
+      for (let j = 0; j < fw.vel.length / 3; j++) {
+        fw.vel[j * 3 + 1] -= 9 * dt;
+        posAttr.setXYZ(
+          j,
+          posAttr.getX(j) + fw.vel[j * 3] * dt,
+          posAttr.getY(j) + fw.vel[j * 3 + 1] * dt,
+          posAttr.getZ(j) + fw.vel[j * 3 + 2] * dt
+        );
+      }
+      posAttr.needsUpdate = true;
+      (fw.points.material as import('three').PointsMaterial).opacity = Math.max(0, fw.life / 1.6);
+      if (fw.life <= 0) {
+        scene.remove(fw.points);
+        fw.points.geometry.dispose();
+        fireworks.splice(i, 1);
+      }
+    }
+
+    // smooth chase camera: sits behind the car's heading, lags softly into
+    // corners, and looks ahead of the car rather than at it
+    const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
     const desiredCam = playerRoot.position
       .clone()
-      .add(new THREE.Vector3(Math.sin(CAM_AZIMUTH) * 7.2, 4.0, Math.cos(CAM_AZIMUTH) * 7.2));
-    camPos.lerp(desiredCam, Math.min(1, dt * 3.5));
+      .addScaledVector(fwd, -8.4)
+      .add(new THREE.Vector3(0, 4.1, 0));
+    camPos.lerp(desiredCam, Math.min(1, dt * 2.6));
     camera.position.copy(camPos);
-    camTarget.lerp(playerRoot.position.clone().add(new THREE.Vector3(0, 1.6, 0)), Math.min(1, dt * 6));
+    camTarget.lerp(
+      playerRoot.position.clone().addScaledVector(fwd, 4.5).add(new THREE.Vector3(0, 1.3, 0)),
+      Math.min(1, dt * 4.5)
+    );
     camera.lookAt(camTarget);
     skyDome.position.copy(camera.position);
 
@@ -1006,7 +1295,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       z: +playerRoot.position.z.toFixed(2),
       speed: +speed.toFixed(2),
     }),
-    stations: () => stations.map((s) => ({ slug: s.project.slug, x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
+    stations: () => stations.map((s) => ({ slug: s.project?.slug ?? s.info?.title ?? '?', x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => colliders.length,
     keys: () => [...keys],
   };
