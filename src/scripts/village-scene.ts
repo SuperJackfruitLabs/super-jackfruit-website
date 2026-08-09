@@ -172,7 +172,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   // ---------- winding country road ----------
   const Z_START = 14;
-  const Z_END = -252;
+  const Z_END = -292;
   const roadCurve = new THREE.CatmullRomCurve3(
     [
       [0, 12], [3, -12], [-9, -42], [5, -74], [-12, -108],
@@ -615,11 +615,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   // ---------- the village square: HQ, about, contact kiosk ----------
-  const T_PLAZA = 0.485;
+  // the square sits at the END of the road — the drive's destination
   const plazaCenter = (() => {
-    const c = roadCurve.getPointAt(T_PLAZA);
-    const n = roadPerp(T_PLAZA);
-    return { x: c.x + n.x * 17.5, z: c.z + n.z * 17.5, n, c };
+    const c = roadCurve.getPointAt(1);
+    const dir = roadCurve.getTangentAt(1).normalize(); // direction of travel
+    return { x: c.x + dir.x * 17, z: c.z + dir.z * 17, n: dir, c };
   })();
   {
     const plaza = new THREE.Mesh(
@@ -632,9 +632,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     scene.add(plaza);
 
     // path from road to plaza
-    const px = plazaCenter.c.x + plazaCenter.n.x * 8.5;
-    const pz = plazaCenter.c.z + plazaCenter.n.z * 8.5;
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 8), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
+    const px = plazaCenter.c.x + plazaCenter.n.x * 4.5;
+    const pz = plazaCenter.c.z + plazaCenter.n.z * 4.5;
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 9), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
     path.rotation.x = -Math.PI / 2;
     path.rotation.z = -Math.atan2(plazaCenter.n.x, plazaCenter.n.z);
     path.position.set(px, 0.035, pz);
@@ -1499,6 +1499,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }),
     stations: () => stations.map((s) => ({ slug: s.project?.slug ?? s.info?.title ?? '?', x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => colliders.length,
+    teleport: (x: number, z: number, h = Math.PI) => { playerRoot.position.set(x, 0, z); heading = h; speed = 0; },
     keys: () => [...keys],
   };
 
