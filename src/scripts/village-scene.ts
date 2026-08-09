@@ -684,7 +684,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (music || muted) return;
     music = new Audio('/assets/village/music.m4a');
     music.loop = true;
-    music.volume = 0.32;
+    music.volume = 0.55;
     music.play().catch(() => {});
   }
 
@@ -840,7 +840,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const rpm = Math.min(1, 0.18 + inGear * 0.82 + (nitro ? 0.12 : 0));
       const now = engineAudio.ctx.currentTime;
       engineAudio.src.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
-      const vol = sp < 0.15 ? 0 : Math.min(0.4, 0.16 + (sp / NITRO_MAX) * 0.22) + (nitro ? 0.06 : 0);
+      const vol = sp < 0.15 ? 0 : Math.min(0.2, 0.08 + (sp / NITRO_MAX) * 0.11) + (nitro ? 0.03 : 0);
       engineAudio.gain.gain.setTargetAtTime(vol, now, 0.1);
     }
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
