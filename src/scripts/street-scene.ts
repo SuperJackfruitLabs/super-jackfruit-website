@@ -52,7 +52,6 @@ export async function initStreetScene(
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 220);
   camera.position.set(0, CAM_Y, CAM_START_Z);
 
-  const texLoader = new THREE.TextureLoader();
 
   // ---------- canvas texture helpers ----------
 
@@ -368,7 +367,8 @@ export async function initStreetScene(
       float along = clamp((uZNear - vWorld.z) / uLen, 0.0, 1.0);
       vec3 hue = texture2D(uHue, vec2(along, 0.5)).rgb;
 
-      vec2 p = vec2((uZNear - vWorld.z) * 0.09, (vWorld.y + vWorld.x) * 0.15);
+      // the x-term keeps the pattern 2D on the end wall, where z is constant
+      vec2 p = vec2((uZNear - vWorld.z) * 0.09 + vWorld.x * 0.11, (vWorld.y + vWorld.x) * 0.15);
       float t = uTime * 0.045;
       vec2 q = vec2(
         fbm(p + vec2(t * 0.7, t * 0.25)),
@@ -430,15 +430,61 @@ export async function initStreetScene(
   ground.position.set(0, 0, endZ / 2 + CAM_START_Z / 2);
   scene.add(ground);
 
-  // end wall with graffiti + link signs
-  const graffitiTex = texLoader.load('/graffiti-wall.jpg');
-  graffitiTex.colorSpace = THREE.SRGBColorSpace;
-  const endWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(WALL_X * 2, 16),
-    new THREE.MeshBasicMaterial({ map: graffitiTex, color: 0xcfcfcf })
-  );
+  // end wall: same ember aurora smoke as the rest of the corridor
+  const endWall = new THREE.Mesh(new THREE.PlaneGeometry(WALL_X * 2, 16), auroraMaterial);
   endWall.position.set(0, 8, endZ - 6);
   scene.add(endWall);
+
+  // scanline sun — the street ends at a synthwave horizon
+  function makeSunTexture(): import('three').CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1024;
+    const ctx = c.getContext('2d')!;
+    const cx = 512;
+    const cy = 470;
+    const r = 340;
+
+    // soft halo behind the disc
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 1.5);
+    halo.addColorStop(0, 'rgba(252, 85, 83, 0.30)');
+    halo.addColorStop(1, 'rgba(252, 85, 83, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, 1024, 1024);
+
+    // ember → amber disc
+    const grad = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+    grad.addColorStop(0, '#fc5553');
+    grad.addColorStop(0.55, '#f2822e');
+    grad.addColorStop(1, '#f2a707');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // scanline gaps widening toward the horizon
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = '#000';
+    let y = cy + r * 0.05;
+    let gap = 7;
+    while (y < cy + r) {
+      ctx.fillRect(0, y, 1024, gap);
+      y += gap + Math.max(14, 44 - gap * 2.2);
+      gap += 7;
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    return tex;
+  }
+
+  const sun = new THREE.Mesh(
+    new THREE.PlaneGeometry(8.2, 8.2),
+    new THREE.MeshBasicMaterial({ map: makeSunTexture(), transparent: true, fog: false })
+  );
+  sun.position.set(0, 9.6, endZ - 5.95);
+  scene.add(sun);
 
   const endTitle = new THREE.Mesh(
     new THREE.PlaneGeometry(13, 2.1),
@@ -448,15 +494,15 @@ export async function initStreetScene(
       fog: false,
     })
   );
-  endTitle.position.set(0, 6.6, endZ - 5.8);
+  endTitle.position.set(0, 5.3, endZ - 5.8);
   scene.add(endTitle);
 
-  // text meshes that stay hidden until the visitor walks past the marquee
-  const endTexts: import('three').Mesh[] = [endTitle];
+  // meshes that stay hidden until the visitor walks past the marquee
+  const endTexts: import('three').Mesh[] = [endTitle, sun];
 
   const links: Array<{ text: string; url: string; color: string; y: number }> = [
-    { text: 'github.com/rakeshgangwar', url: 'https://github.com/rakeshgangwar', color: '#bfee21', y: 4.4 },
-    { text: 'github.com/SuperJackfruitLabs', url: 'https://github.com/SuperJackfruitLabs', color: '#09e6f2', y: 2.9 },
+    { text: 'github.com/rakeshgangwar', url: 'https://github.com/rakeshgangwar', color: '#bfee21', y: 3.6 },
+    { text: 'github.com/SuperJackfruitLabs', url: 'https://github.com/SuperJackfruitLabs', color: '#09e6f2', y: 2.4 },
   ];
   for (const link of links) {
     const mesh = new THREE.Mesh(
