@@ -106,32 +106,32 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     horizon: number[]; mid: number[]; zenith: number[]; glow: number[];
     sunDir: number[]; sunColor: number; sunIntensity: number;
     hemiSky: number; hemiGround: number; hemiIntensity: number;
-    fog: number; exposure: number; night: number;
+    fog: number; exposure: number; night: number; roadTint: number;
   }
   const TIME_PRESETS: Record<string, EnvPreset> = {
     dawn: {
       horizon: [1.0, 0.78, 0.75], mid: [0.95, 0.85, 0.8], zenith: [0.5, 0.62, 0.82],
       glow: [0.4, 0.2, 0.12], sunDir: [0.8, 0.18, 0.3],
       sunColor: 0xffd4ae, sunIntensity: 2.2, hemiSky: 0xe8e0ff, hemiGround: 0xbfae90, hemiIntensity: 1.05,
-      fog: 0xefe2e2, exposure: 1.05, night: 0,
+      fog: 0xefe2e2, exposure: 1.05, night: 0, roadTint: 0xf3e9e2,
     },
     day: {
       horizon: [0.87, 0.94, 1.0], mid: [0.62, 0.82, 0.96], zenith: [0.29, 0.56, 0.85],
       glow: [0.22, 0.2, 0.12], sunDir: [0.35, 0.75, 0.25],
       sunColor: 0xfff6e0, sunIntensity: 3.4, hemiSky: 0xcfe8ff, hemiGround: 0xcfc0a0, hemiIntensity: 1.4,
-      fog: 0xdfeaf2, exposure: 1.15, night: 0,
+      fog: 0xdfeaf2, exposure: 1.15, night: 0, roadTint: 0xffffff,
     },
     dusk: {
       horizon: [1.0, 0.85, 0.66], mid: [0.66, 0.85, 0.96], zenith: [0.38, 0.66, 0.9],
       glow: [0.35, 0.2, 0.05], sunDir: [0.5, 0.35, 0.4],
       sunColor: 0xffe2b0, sunIntensity: 3.2, hemiSky: 0xbfe0ff, hemiGround: 0xd8c090, hemiIntensity: 1.25,
-      fog: 0xdfe9ef, exposure: 1.18, night: 0,
+      fog: 0xdfe9ef, exposure: 1.18, night: 0, roadTint: 0xf7ece0,
     },
     night: {
       horizon: [0.1, 0.13, 0.24], mid: [0.05, 0.08, 0.18], zenith: [0.02, 0.03, 0.09],
       glow: [0.1, 0.12, 0.2], sunDir: [-0.4, 0.5, -0.3],
       sunColor: 0xa9c0e8, sunIntensity: 0.75, hemiSky: 0x2a3a58, hemiGround: 0x1a2030, hemiIntensity: 0.55,
-      fog: 0x0e1424, exposure: 1.0, night: 1,
+      fog: 0x0e1424, exposure: 1.0, night: 1, roadTint: 0x39435c,
     },
   };
   let envTarget = TIME_PRESETS.dusk;
@@ -148,6 +148,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     hemiGround: new THREE.Color(TIME_PRESETS.dusk.hemiGround),
     hemiIntensity: 1.25,
     fog: new THREE.Color(TIME_PRESETS.dusk.fog),
+    roadTint: new THREE.Color(TIME_PRESETS.dusk.roadTint),
     exposure: 1.18,
   };
   interface ThemedBoard {
@@ -219,6 +220,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return tex;
   }
 
+  let roadMat: import('three').MeshBasicMaterial;
   {
     const SEG = 300;
     const WIDTH = 11.2;
@@ -245,10 +247,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norm), 3));
     geo.setIndex(idx);
-    const road = new THREE.Mesh(
-      geo,
-      new THREE.MeshBasicMaterial({ map: makeRoadTexture(), side: THREE.DoubleSide })
-    );
+    roadMat = new THREE.MeshBasicMaterial({ map: makeRoadTexture(), side: THREE.DoubleSide });
+    const road = new THREE.Mesh(geo, roadMat);
     road.receiveShadow = true;
     scene.add(road);
   }
@@ -684,6 +684,111 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const a = (i / 5) * Math.PI * 2 + 0.5;
       place(planter, 1.2, plazaCenter.x + Math.cos(a) * 10, plazaCenter.z + Math.sin(a) * 10, a + Math.PI / 2, 'box');
     }
+  }
+
+  // ---------- street lamps (user-supplied kit) — lit at night ----------
+  const lampHeads: Array<{ x: number; y: number; z: number }> = [];
+  const lampGlows: import('three').Sprite[] = [];
+  {
+    const kit = await loader.loadAsync('/assets/village/street-lamp.glb');
+    // the kit is a showroom of lamp variants: descend past wrappers, anchor
+    // on the tallest slim node, and gather the parts standing at its spot
+    let root: import('three').Object3D = kit.scene;
+    while (root.children.length === 1) root = root.children[0];
+    interface ChildInfo {
+      obj: import('three').Object3D;
+      size: import('three').Vector3;
+      center: import('three').Vector3;
+      minY: number;
+    }
+    const infos: ChildInfo[] = root.children.map((ch) => {
+      const b = new THREE.Box3().setFromObject(ch);
+      return { obj: ch, size: b.getSize(new THREE.Vector3()), center: b.getCenter(new THREE.Vector3()), minY: b.min.y };
+    });
+    const slim = infos.filter((i) => i.size.y > Math.max(i.size.x, i.size.z) * 1.5);
+    const anchorInfo = (slim.length ? slim : infos).sort((a, b) => b.size.y - a.size.y)[0];
+    const members = infos.filter(
+      (i) => Math.hypot(i.center.x - anchorInfo.center.x, i.center.z - anchorInfo.center.z) < 1.6
+    );
+    // re-pivot the chosen lamp to the origin so clones rotate around their base
+    const proto = new THREE.Group();
+    const inner = new THREE.Group();
+    for (const m of members) inner.add(m.obj.clone(true));
+    const groupBox = new THREE.Box3().setFromObject(inner);
+    const gc = groupBox.getCenter(new THREE.Vector3());
+    inner.position.set(-gc.x, -groupBox.min.y, -gc.z);
+    proto.add(inner);
+    proto.traverse((o) => {
+      const mesh = o as import('three').Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          const std = m as import('three').MeshStandardMaterial;
+          if ('metalness' in std) {
+            std.metalness = 0;
+            std.roughness = Math.max(0.8, std.roughness ?? 1);
+          }
+        }
+      }
+    });
+
+    const glowTexCanvas = document.createElement('canvas');
+    glowTexCanvas.width = glowTexCanvas.height = 128;
+    {
+      const g = glowTexCanvas.getContext('2d')!;
+      const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(255,225,160,1)');
+      grad.addColorStop(1, 'rgba(255,225,160,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+    }
+    const glowTex = new THREE.CanvasTexture(glowTexCanvas);
+
+    const LAMP_H = 4.2;
+    const protoBox = new THREE.Box3().setFromObject(proto);
+    const protoDims = protoBox.getSize(new THREE.Vector3());
+    const lampScale = LAMP_H / (protoDims.y || 1);
+    const step = 22 / ROAD_LEN;
+    let li = 0;
+    for (let t = 0.03; t < 0.985; t += step) {
+      const c = roadCurve.getPointAt(t);
+      const n = roadPerp(t).multiplyScalar(li % 2 === 0 ? 1 : -1);
+      const lx = c.x + n.x * 6.9;
+      const lz = c.z + n.z * 6.9;
+      const inst = proto.clone(true);
+      inst.scale.setScalar(lampScale);
+      inst.position.set(lx, 0, lz);
+      inst.rotation.y = Math.atan2(-n.x, -n.z);
+      scene.add(inst);
+      addOrientedCollider(lx, lz, 0.35, 0.35, 0);
+      const headY = LAMP_H * 0.9;
+      lampHeads.push({ x: lx, y: headY, z: lz });
+      const glow = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: glowTex, color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      glow.scale.setScalar(1.7);
+      glow.position.set(lx, headY, lz);
+      scene.add(glow);
+      lampGlows.push(glow);
+      // pool of light on the ground
+      const poolMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.5, 5.5),
+        new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffca7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      poolMesh.rotation.x = -Math.PI / 2;
+      poolMesh.position.set(lx, 0.05, lz);
+      scene.add(poolMesh);
+      lampGlows.push(poolMesh as unknown as import('three').Sprite);
+      li++;
+    }
+  }
+  // five real lights that follow the car to the nearest lamps at night
+  const lampLightPool: import('three').PointLight[] = [];
+  for (let i = 0; i < 5; i++) {
+    const pl = new THREE.PointLight(0xffd9a0, 0, 15, 1.6);
+    scene.add(pl);
+    lampLightPool.push(pl);
   }
 
   // flowers + bushes along the road edges
@@ -1201,6 +1306,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       envState.hemiGround.lerp(new THREE.Color(envTarget.hemiGround), k);
       envState.hemiIntensity += (envTarget.hemiIntensity - envState.hemiIntensity) * k;
       envState.fog.lerp(new THREE.Color(envTarget.fog), k);
+      envState.roadTint.lerp(new THREE.Color(envTarget.roadTint), k);
       envState.exposure += (envTarget.exposure - envState.exposure) * k;
       nightFactor += (envTarget.night - nightFactor) * k;
 
@@ -1216,6 +1322,28 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       hemi.groundColor.copy(envState.hemiGround);
       hemi.intensity = envState.hemiIntensity;
       (scene.fog as import('three').Fog).color.copy(envState.fog);
+      roadMat.color.copy(envState.roadTint);
+      for (const g of lampGlows) {
+        (g.material as import('three').SpriteMaterial).opacity = nightFactor * 0.8;
+      }
+      if (nightFactor > 0.05 && lampHeads.length > 0) {
+        const px2 = playerRoot.position.x;
+        const pz2 = playerRoot.position.z;
+        const nearest = [...lampHeads]
+          .sort((a, b) => (Math.hypot(a.x - px2, a.z - pz2) - Math.hypot(b.x - px2, b.z - pz2)))
+          .slice(0, lampLightPool.length);
+        lampLightPool.forEach((pl, i2) => {
+          const lh = nearest[i2];
+          if (lh) {
+            pl.position.set(lh.x, lh.y, lh.z);
+            pl.intensity = nightFactor * 26;
+          } else {
+            pl.intensity = 0;
+          }
+        });
+      } else {
+        for (const pl of lampLightPool) pl.intensity = 0;
+      }
       renderer.toneMappingExposure = envState.exposure;
       starMat.opacity = nightFactor * 0.9;
       const wantNight = boardsNightMode ? nightFactor > 0.45 : nightFactor > 0.55;
