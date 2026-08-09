@@ -299,13 +299,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   // ---------- colliders + sway ----------
+  // oriented boxes: axis-aligned AABBs bloat diagonally on rotated houses,
+  // creating invisible walls — store the rotation and resolve in local space
   interface ColliderBox {
-    minX: number;
-    maxX: number;
-    minZ: number;
-    maxZ: number;
+    cx: number;
+    cz: number;
+    hx: number;
+    hz: number;
+    cos: number;
+    sin: number;
   }
   const colliders: ColliderBox[] = [];
+  function addOrientedCollider(x: number, z: number, hx: number, hz: number, rotY: number, localCx = 0, localCz = 0): void {
+    const c = Math.cos(rotY);
+    const sn = Math.sin(rotY);
+    colliders.push({
+      cx: x + localCx * c + localCz * sn,
+      cz: z - localCx * sn + localCz * c,
+      hx,
+      hz,
+      cos: c,
+      sin: sn,
+    });
+  }
   const swayers: Array<{ obj: import('three').Object3D; phase: number; amp: number; rate: number }> = [];
 
   function place(
@@ -327,10 +343,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     inst.rotation.y = rotY;
     scene.add(inst);
     if (solid === 'box') {
-      const wb = new THREE.Box3().setFromObject(inst);
-      colliders.push({ minX: wb.min.x, maxX: wb.max.x, minZ: wb.min.z, maxZ: wb.max.z });
+      addOrientedCollider(
+        x, z,
+        (dims.x * s) / 2, (dims.z * s) / 2,
+        rotY,
+        ((box.min.x + box.max.x) / 2) * s,
+        ((box.min.z + box.max.z) / 2) * s
+      );
     } else if (solid === 'trunk') {
-      colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: z - 0.45, maxZ: z + 0.45 });
+      addOrientedCollider(x, z, 0.45, 0.45, 0);
     }
     if (sway > 0) {
       swayers.push({ obj: inst, phase: rand() * 6.28, amp: sway, rate: 0.7 + rand() * 0.7 });
@@ -448,7 +469,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     group.position.set(x, 0, z);
     group.rotation.y = facing;
     scene.add(group);
-    colliders.push({ minX: x - 0.5, maxX: x + 0.5, minZ: z - 0.25, maxZ: z + 0.25 });
+    addOrientedCollider(x, z, 1.0, 0.3, facing);
   }
 
   function makeDistrictBoard(d: District, gx: number, gz: number, facing: number): void {
@@ -533,7 +554,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     group.position.set(x, 0, z);
     group.rotation.y = facing;
     scene.add(group);
-    colliders.push({ minX: x - 0.6, maxX: x + 0.6, minZ: z - 0.3, maxZ: z + 0.3 });
+    addOrientedCollider(x, z, 1.25, 0.32, facing);
   }
 
   // ---------- project stations along the winding road ----------
@@ -573,15 +594,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const house = houses[Math.floor(rand() * houses.length)];
         place(house, 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
         place(driveway, 3.2, c.x + n.x * 7.3, c.z + n.z * 7.3, faceRoad);
-        const bx = c.x + n.x * 5.7 + tan.x * 1.6;
-        const bz = c.z + n.z * 5.7 + tan.z * 1.6;
+        const bx = c.x + n.x * 6.4 + tan.x * 1.6;
+        const bz = c.z + n.z * 6.4 + tan.z * 1.6;
         makeProjectBoard(project, d.accent, bx, bz, faceRoad);
         stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
 
         // yard + across-the-road garden
         const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
         place(treeKind, 2.2 + rand() * 1.6, hx + tan.x * (4 + rand() * 2), hz + tan.z * (4 + rand() * 2), rand() * 6.28, 'trunk', 0.012);
-        if (rand() < 0.6) place(planter, 1.1, c.x + n.x * 5.2 - tan.x * 2.2, c.z + n.z * 5.2 - tan.z * 2.2, faceRoad, 'box');
+        if (rand() < 0.6) place(planter, 1.1, c.x + n.x * 6.8 - tan.x * 2.2, c.z + n.z * 6.8 - tan.z * 2.2, faceRoad, 'box');
         placeSeasonalTree(Math.floor(rand() * 100), 3 + rand() * 2, c.x - n.x * (9 + rand() * 3), c.z - n.z * (9 + rand() * 3), rand() * 6.28);
         place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, c.x - n.x * (7 + rand() * 2), c.z - n.z * (7 + rand() * 2), rand() * 6.28, false, 0.02);
 
@@ -1123,33 +1144,44 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
     playerRoot.position.z = Math.max(Z_END + 4, Math.min(Z_START - 2, playerRoot.position.z));
 
-    // circle-vs-AABB collision: push the player out of anything solid
+    // circle-vs-oriented-box collision: push the player out of anything solid
     const R = 1.05;
     for (let pass = 0; pass < 2; pass++) {
       const px = playerRoot.position.x;
       const pz = playerRoot.position.z;
       for (const c of colliders) {
-        if (px < c.minX - 4 || px > c.maxX + 4 || pz < c.minZ - 4 || pz > c.maxZ + 4) continue;
-        const cx = Math.max(c.minX, Math.min(c.maxX, px));
-        const cz = Math.max(c.minZ, Math.min(c.maxZ, pz));
-        const dx = px - cx;
-        const dz = pz - cz;
-        const d2 = dx * dx + dz * dz;
+        const wx = px - c.cx;
+        const wz = pz - c.cz;
+        const reach = c.hx + c.hz + 4;
+        if (wx > reach || wx < -reach || wz > reach || wz < -reach) continue;
+        // world → box-local
+        const lx = wx * c.cos - wz * c.sin;
+        const lz = wx * c.sin + wz * c.cos;
+        const clx = Math.max(-c.hx, Math.min(c.hx, lx));
+        const clz = Math.max(-c.hz, Math.min(c.hz, lz));
+        let dxl = lx - clx;
+        let dzl = lz - clz;
+        const d2 = dxl * dxl + dzl * dzl;
         if (d2 < R * R) {
           if (d2 > 1e-6) {
             const d = Math.sqrt(d2);
-            playerRoot.position.x += (dx / d) * (R - d);
-            playerRoot.position.z += (dz / d) * (R - d);
+            const push = (R - d) / d;
+            dxl *= push;
+            dzl *= push;
           } else {
+            // center inside: exit through the nearest local face
             const exits = [
-              { d: px - c.minX + R, x: -(px - c.minX + R), z: 0 },
-              { d: c.maxX - px + R, x: c.maxX - px + R, z: 0 },
-              { d: pz - c.minZ + R, x: 0, z: -(pz - c.minZ + R) },
-              { d: c.maxZ - pz + R, x: 0, z: c.maxZ - pz + R },
+              { d: lx + c.hx, x: -(lx + c.hx + R), z: 0 },
+              { d: c.hx - lx, x: c.hx - lx + R, z: 0 },
+              { d: lz + c.hz, x: 0, z: -(lz + c.hz + R) },
+              { d: c.hz - lz, x: 0, z: c.hz - lz + R },
             ].sort((a, b) => a.d - b.d)[0];
-            playerRoot.position.x += exits.x;
-            playerRoot.position.z += exits.z;
+            dxl = exits.x;
+            dzl = exits.z;
           }
+          // local → world
+          playerRoot.position.x += dxl * c.cos + dzl * c.sin;
+          playerRoot.position.z += -dxl * c.sin + dzl * c.cos;
         }
       }
     }
