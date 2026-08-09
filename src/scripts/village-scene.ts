@@ -691,6 +691,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // ---------- street lamps (user-supplied kit) — lit at night ----------
   const lampHeads: Array<{ x: number; y: number; z: number }> = [];
   const lampGlows: import('three').Sprite[] = [];
+  const lampLantern = { arm: 0.9, height: 3.8 };
   {
     const kit = await loader.loadAsync('/assets/village/street-lamp.glb');
     // the kit is a showroom of lamp variants: descend past wrappers, anchor
@@ -749,6 +750,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const c2 = Math.cos(rot);
       const s2 = Math.sin(rot);
       inner.position.set(-(bx * c2 + bz * s2), -groupBox.min.y, -(-bx * s2 + bz * c2));
+
+      // find the LANTERN: the farthest-overhanging top vertex (relative to the pole)
+      let lanternDist = 0;
+      let lanternY = groupBox.max.y;
+      inner.traverse((o) => {
+        const mesh = o as import('three').Mesh;
+        if (!mesh.isMesh) return;
+        const posAttr = mesh.geometry.getAttribute('position');
+        if (!posAttr) return;
+        const stride = Math.max(1, Math.floor(posAttr.count / 600));
+        for (let i = 0; i < posAttr.count; i += stride) {
+          v.fromBufferAttribute(posAttr, i).applyMatrix4(mesh.matrixWorld);
+          if (v.y > topY) {
+            const d = Math.hypot(v.x - bx, v.z - bz);
+            if (d > lanternDist) {
+              lanternDist = d;
+              lanternY = v.y;
+            }
+          }
+        }
+      });
+      lampLantern.arm = lanternDist * 0.8;
+      lampLantern.height = lanternY - groupBox.min.y;
     }
     proto.traverse((o) => {
       const mesh = o as import('three').Mesh;
@@ -805,22 +829,26 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       inst.rotation.y = Math.atan2(-n.x, -n.z);
       scene.add(inst);
       addOrientedCollider(lx, lz, 0.35, 0.35, 0);
-      const headY = LAMP_H * 0.9;
-      lampHeads.push({ x: lx, y: headY, z: lz });
+      // the lantern hangs at the crook's end, toward the road
+      const armW = lampLantern.arm * lampScale;
+      const headY = lampLantern.height * lampScale;
+      const hx2 = lx - n.x * armW;
+      const hz2 = lz - n.z * armW;
+      lampHeads.push({ x: hx2, y: headY, z: hz2 });
       const glow = new THREE.Sprite(
         new THREE.SpriteMaterial({ map: glowTex, color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
       );
-      glow.scale.setScalar(1.7);
-      glow.position.set(lx, headY, lz);
+      glow.scale.setScalar(1.5);
+      glow.position.set(hx2, headY, hz2);
       scene.add(glow);
       lampGlows.push(glow);
-      // pool of light on the ground
+      // pool of light on the ground beneath the lantern
       const poolMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(5.5, 5.5),
         new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffca7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
       );
       poolMesh.rotation.x = -Math.PI / 2;
-      poolMesh.position.set(lx, 0.05, lz);
+      poolMesh.position.set(hx2, 0.055, hz2);
       scene.add(poolMesh);
       lampGlows.push(poolMesh as unknown as import('three').Sprite);
       li++;
@@ -936,6 +964,33 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.03;
     playerRoot.add(blob);
+  }
+  // headlight throw painted on the ground — the unlit road ignores real lights
+  let headGlowMat: import('three').MeshBasicMaterial;
+  {
+    const hc = document.createElement('canvas');
+    hc.width = 128;
+    hc.height = 256;
+    const hctx = hc.getContext('2d')!;
+    const grad = hctx.createRadialGradient(64, 10, 6, 64, 120, 190);
+    grad.addColorStop(0, 'rgba(255,240,200,0.85)');
+    grad.addColorStop(0.45, 'rgba(255,225,160,0.35)');
+    grad.addColorStop(1, 'rgba(255,225,160,0)');
+    hctx.fillStyle = grad;
+    hctx.fillRect(0, 0, 128, 256);
+    const tex = new THREE.CanvasTexture(hc);
+    headGlowMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const throwPlane = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 12), headGlowMat);
+    throwPlane.rotation.x = -Math.PI / 2;
+    throwPlane.rotation.z = Math.PI; // narrow end at the bumper
+    throwPlane.position.set(0, 0.06, 7.2);
+    playerRoot.add(throwPlane);
   }
   playerRoot.position.set(0, 0, 8);
   scene.add(playerRoot);
@@ -1366,6 +1421,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       hemi.intensity = envState.hemiIntensity;
       (scene.fog as import('three').Fog).color.copy(envState.fog);
       roadMat.color.copy(envState.roadTint);
+      headGlowMat.opacity = nightFactor * 0.5;
       for (const g of lampGlows) {
         (g.material as import('three').SpriteMaterial).opacity = nightFactor * 0.8;
       }
