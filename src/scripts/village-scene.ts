@@ -262,7 +262,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     backing.castShadow = true;
     for (const px of [-0.8, 0.8]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.5, 0.09), boardWood);
-      post.position.set(px, 0.72, -0.045);
+      // fully behind the backing board — a coplanar post face z-fights the facia
+      post.position.set(px, 0.72, -0.125);
       post.castShadow = true;
       group.add(post);
     }
@@ -290,10 +291,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       new THREE.PlaneGeometry(2.9, 1.15),
       new THREE.MeshLambertMaterial({ map: tex })
     );
-    panel.position.y = 2.0;
+    panel.position.set(0, 2.0, 0.06);
     panel.castShadow = true;
     const panelBack = panel.clone();
     panelBack.rotation.y = Math.PI;
+    panelBack.position.z = -0.06;
     for (const px of [-1.3, 1.3]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.11, 2.6, 0.11), boardWood);
       post.position.set(px, 1.3, 0);
@@ -394,10 +396,55 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     clouds.push(cloud);
   }
 
-  // ---------- character ----------
+  // ---------- the car (you) + a greeter at the gate ----------
+  const carGltf = await loader.loadAsync('/assets/village/car/sedan-sports.glb');
+  const car = carGltf.scene;
+  const wheels: { front: import('three').Object3D[]; all: import('three').Object3D[] } = { front: [], all: [] };
+  car.traverse((o) => {
+    const mesh = o as import('three').Mesh;
+    if (mesh.isMesh) {
+      mesh.castShadow = true;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const std = m as import('three').MeshStandardMaterial;
+        if ('metalness' in std) {
+          std.metalness = 0;
+          std.roughness = Math.max(0.85, std.roughness ?? 1);
+        }
+      }
+    }
+    if (/^wheel/.test(o.name)) {
+      wheels.all.push(o);
+      if (/front/.test(o.name)) wheels.front.push(o);
+    }
+  });
+  // steering must live on its own pivot: yaw + accumulated roll on one Euler
+  // cross axes and visually deform the wheel
+  const frontPivots: import('three').Object3D[] = [];
+  for (const w of wheels.front) {
+    const pivot = new THREE.Group();
+    w.parent!.add(pivot);
+    pivot.position.copy(w.position);
+    w.position.set(0, 0, 0);
+    pivot.add(w);
+    frontPivots.push(pivot);
+  }
+  {
+    const box = new THREE.Box3().setFromObject(car);
+    const len = box.getSize(new THREE.Vector3()).z || 1;
+    const s2 = 2.9 / len; // a friendly toy-car length
+    car.scale.setScalar(s2);
+    car.position.y = -box.min.y * s2;
+  }
+  const playerRoot = new THREE.Group();
+  playerRoot.add(car);
+  playerRoot.position.set(0, 0, 8);
+  scene.add(playerRoot);
+
+  // the villager stays on as a greeter beside the first gate
   const gltf = await loader.loadAsync('/assets/village/rogue.glb');
-  const player = gltf.scene;
-  player.traverse((o) => {
+  const greeter = gltf.scene;
+  greeter.traverse((o) => {
     const mesh = o as import('three').Mesh;
     if (mesh.isMesh) {
       mesh.castShadow = true;
@@ -415,38 +462,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   });
   {
-    const box = new THREE.Box3().setFromObject(player);
+    const box = new THREE.Box3().setFromObject(greeter);
     const h = box.getSize(new THREE.Vector3()).y || 1;
-    const s = 1.75 / h;
-    player.scale.setScalar(s);
-    player.position.y = -box.min.y * s;
+    const sg = 1.75 / h;
+    greeter.scale.setScalar(sg);
+    greeter.position.set(3.2, -box.min.y * sg, -9);
+    greeter.rotation.y = Math.PI * 0.85; // angled toward arrivals
   }
-  const playerRoot = new THREE.Group();
-  playerRoot.add(player);
-  playerRoot.position.set(0, 0, 8);
-  scene.add(playerRoot);
-
-  const mixer = new THREE.AnimationMixer(player);
-  const clips = gltf.animations;
-  const pick = (want: string[]) => {
-    for (const w of want) {
-      const c = THREE.AnimationClip.findByName(clips, w);
-      if (c) return c;
-    }
-    return null;
-  };
-  const actions = {
-    idle: pick(['Idle', 'Idle_A']) ? mixer.clipAction(pick(['Idle', 'Idle_A'])!) : null,
-    walk: pick(['Walking_A', 'Walking_B', 'Walk']) ? mixer.clipAction(pick(['Walking_A', 'Walking_B', 'Walk'])!) : null,
-    run: pick(['Running_A', 'Running_B', 'Run']) ? mixer.clipAction(pick(['Running_A', 'Running_B', 'Run'])!) : null,
-  };
-  for (const a of Object.values(actions)) {
-    if (a) {
-      a.play();
-      a.setEffectiveWeight(0);
-    }
+  scene.add(greeter);
+  const mixer = new THREE.AnimationMixer(greeter);
+  {
+    const clips = gltf.animations;
+    const idle = THREE.AnimationClip.findByName(clips, 'Idle') ?? clips[0];
+    if (idle) mixer.clipAction(idle).play();
   }
-  actions.idle?.setEffectiveWeight(1);
 
   // ---------- input ----------
   const keys = new Set<string>();
@@ -469,14 +498,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   });
   window.addEventListener('pointerup', () => (joy = null));
 
-  // ---------- movement + camera ----------
-  const WALK_SPEED = 2.4;
-  const RUN_SPEED = 6.4;
-  const TURN_RATE = 11;
+  // ---------- driving + camera ----------
+  const MAX_SPEED = 11;
+  const MAX_REVERSE = 4;
+  const ACCEL = 9;
+  const BRAKE = 16;
+  const DRAG = 3.2;
+  const STEER_RATE = 1.9;
   const CAM_AZIMUTH = 0;
-  let heading = Math.PI;
-  let speed = 0;
-  const moveDir = new THREE.Vector3(0, 0, -1);
+  let heading = Math.PI; // car noses toward the street (-z … model faces +z)
+  let speed = 0; // signed: + forward, − reverse
 
   const camTarget = new THREE.Vector3(0, 1.6, 8);
   const camPos = new THREE.Vector3(0, 4.5, 16);
@@ -506,34 +537,38 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       ix += Math.max(-1, Math.min(1, joy.dx));
       iz += Math.max(-1, Math.min(1, joy.dy));
     }
-    const mag = Math.hypot(ix, iz);
-    const running = keys.has('shift') || mag > 1.4;
-    const targetSpeed = mag > 0.05 ? (running ? RUN_SPEED : WALK_SPEED) : 0;
-    speed += (targetSpeed - speed) * Math.min(1, dt * 6);
-
-    if (mag > 0.05) {
-      const fx = -Math.sin(CAM_AZIMUTH);
-      const fz = -Math.cos(CAM_AZIMUTH);
-      const rx = Math.cos(CAM_AZIMUTH);
-      const rz = -Math.sin(CAM_AZIMUTH);
-      const wx = fx * -iz + rx * ix;
-      const wz = fz * -iz + rz * ix;
-      moveDir.set(wx, 0, wz).normalize();
-      const desired = Math.atan2(moveDir.x, moveDir.z);
-      let diff = desired - heading;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      heading += diff * Math.min(1, dt * TURN_RATE);
+    // arcade car: throttle on the screen-vertical axis, steering on horizontal
+    const throttle = -iz; // up = forward
+    const steer = -ix; // right key steers right (heading decreases visually)
+    if (throttle > 0.05) {
+      speed += ACCEL * throttle * dt;
+    } else if (throttle < -0.05) {
+      speed += (speed > 0 ? -BRAKE : ACCEL * throttle) * dt;
+    } else {
+      speed -= Math.sign(speed) * Math.min(Math.abs(speed), DRAG * dt);
     }
+    speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, speed));
 
+    // steering authority grows with speed, flips in reverse
+    const steerAuthority = Math.max(-1, Math.min(1, speed / 4));
+    heading += steer * STEER_RATE * steerAuthority * dt;
+
+    // the model noses +z at heading 0, so forward is +sin/+cos of heading
+    const fwdX = Math.sin(heading);
+    const fwdZ = Math.cos(heading);
     playerRoot.rotation.y = heading;
-    playerRoot.position.x += moveDir.x * speed * dt;
-    playerRoot.position.z += moveDir.z * speed * dt;
+    playerRoot.position.x += fwdX * speed * dt;
+    playerRoot.position.z += fwdZ * speed * dt;
+
+    // wheels: roll with speed, front pair steers
+    const roll = (speed * dt) / 0.35;
+    for (const w of wheels.all) w.rotation.x += roll;
+    for (const pv of frontPivots) pv.rotation.y = steer * 0.45 * Math.max(0, steerAuthority);
     playerRoot.position.x = Math.max(-100, Math.min(100, playerRoot.position.x));
     playerRoot.position.z = Math.max(Z_END + 4, Math.min(Z_START - 2, playerRoot.position.z));
 
     // circle-vs-AABB collision: push the player out of anything solid
-    const R = 0.5;
+    const R = 1.05;
     for (let pass = 0; pass < 2; pass++) {
       const px = playerRoot.position.x;
       const pz = playerRoot.position.z;
@@ -563,12 +598,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }
     }
 
-    const runW = Math.max(0, Math.min(1, (speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)));
-    const moveW = Math.max(0, Math.min(1, speed / WALK_SPEED));
-    actions.idle?.setEffectiveWeight(1 - moveW);
-    actions.walk?.setEffectiveWeight(moveW * (1 - runW));
-    actions.run?.setEffectiveWeight(moveW * runW);
-    mixer.update(dt);
+    mixer.update(dt); // greeter idle
 
     // wind
     for (const s of swayers) {
@@ -581,7 +611,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     // nearest station within reach → raise the card
     let nearest: Station | null = null;
-    let bestD = 3.4;
+    let bestD = 4.4;
     for (const st of stations) {
       const d = Math.hypot(st.x - playerRoot.position.x, st.z - playerRoot.position.z);
       if (d < bestD) {
