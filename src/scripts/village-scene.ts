@@ -911,9 +911,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   // ---------- the car (you) + a greeter at the gate ----------
-  const carGltf = await loader.loadAsync('/assets/village/car/sedan-sports.glb');
-  const car = carGltf.scene;
-  const wheels: { front: import('three').Object3D[]; all: import('three').Object3D[] } = { front: [], all: [] };
+  // "Low poly Japan Offroad Car" by Han66st (sketchfab, CC-BY-4.0). The file
+  // is a three-paint showroom of complete cars stacked at the origin, plus a
+  // baked ground decal per car — pick one body, leave the rest behind.
+  const carGltf = await loader.loadAsync('/assets/village/offroad-car.glb');
+  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  let variant: import('three').Object3D | undefined;
+  carGltf.scene.traverse((o) => {
+    if (!variant && norm(o.name) === 'cube00421') variant = o; // the blue paint
+  });
+  if (!variant) throw new Error('offroad-car: paint variant not found');
+  variant.position.x = 0;
+  variant.position.z = 0;
+  const car = new THREE.Group();
+  car.add(variant);
   car.traverse((o) => {
     const mesh = o as import('three').Mesh;
     if (mesh.isMesh) {
@@ -927,21 +938,24 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         }
       }
     }
-    if (/^wheel/.test(o.name)) {
-      wheels.all.push(o);
-      if (/front/.test(o.name)) wheels.front.push(o);
-    }
   });
-  // steering must live on its own pivot: yaw + accumulated roll on one Euler
-  // cross axes and visually deform the wheel
+  // wheels are the low cylinder groups; the spare on the tailgate rides high
+  // and stays fixed. The nodes carry baked rotations, so steering yaw and
+  // axle roll each get their own clean pivot instead of touching the node's
+  // Euler directly.
+  const wheels: { front: import('three').Object3D[]; all: import('three').Object3D[] } = { front: [], all: [] };
   const frontPivots: import('three').Object3D[] = [];
-  for (const w of wheels.front) {
+  for (const child of [...variant.children]) {
+    if (!/^Cylinder/.test(child.name) || child.position.y > -0.5) continue;
     const pivot = new THREE.Group();
-    w.parent!.add(pivot);
-    pivot.position.copy(w.position);
-    w.position.set(0, 0, 0);
-    pivot.add(w);
-    frontPivots.push(pivot);
+    pivot.position.copy(child.position);
+    const rollG = new THREE.Group();
+    pivot.add(rollG);
+    child.position.set(0, 0, 0);
+    rollG.add(child);
+    variant.add(pivot);
+    wheels.all.push(rollG);
+    if (pivot.position.z > 0) frontPivots.push(pivot); // nose is +z
   }
   {
     const box = new THREE.Box3().setFromObject(car);
@@ -1274,7 +1288,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     playerRoot.position.z += fwdZ * speed * dt;
 
     // wheels: roll with speed, front pair steers
-    const roll = (speed * dt) / 0.35;
+    const roll = (speed * dt) / 0.3; // offroad wheel radius after scaling
     for (const w of wheels.all) w.rotation.x += roll;
     for (const pv of frontPivots) pv.rotation.y = steer * 0.45 * Math.max(0, steerAuthority);
 
