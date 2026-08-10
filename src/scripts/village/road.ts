@@ -20,6 +20,17 @@ const MAIN_WIDTH = 11.2;
 const SIDEWALK_FRACTION = 0.15;
 const MAIN_Y = 0.02;
 const BRANCH_Y = 0.015;
+/**
+ * How far into a branch the kerbs and pavement fade in, in metres. The
+ * cross-section is painted into the texture, so at a junction the branch's own
+ * pavement stripe ran straight across the main road's asphalt — a footpath
+ * down the middle of the road. Near the mouth we sample a slice of plain
+ * asphalt across the full width instead, so the branch reads as tarmac merging
+ * into tarmac, and the pavement starts once it is clear of the junction.
+ */
+const APRON_LENGTH = 13;
+/** a u inside the asphalt band: no kerb, no centre dash */
+const APRON_U = 0.32;
 
 /** the spine: unchanged, because the drive along it already feels right */
 const MAIN_POINTS: Array<[number, number]> = [
@@ -61,6 +72,13 @@ export interface RoadNetwork {
   distTo(x: number, z: number): number;
   /** true when the point is on asphalt (or a turning circle) anywhere */
   isPaved(x: number, z: number, margin?: number): boolean;
+  /**
+   * True when the point sits on the visible ribbon of ANY street — pavement
+   * included, not just the asphalt. Placement guards use this: a lamp or a
+   * signboard put "beside this lane" can easily land in the middle of the next
+   * one where two streets meet.
+   */
+  onRibbon(x: number, z: number, clearance?: number): boolean;
   mesh: T.Mesh;
 }
 
@@ -149,7 +167,11 @@ export function createRoads(
       pos.push(c.x + n.x * (seg.width / 2), y, c.z + n.z * (seg.width / 2));
       pos.push(c.x - n.x * (seg.width / 2), y, c.z - n.z * (seg.width / 2));
       const v = (t * seg.length) / 6; // dash cadence
-      uv.push(0, v, 1, v);
+      // taper the cross-section in from the junction
+      const apron = seg.id === 'main' ? 1 : Math.min(1, (t * seg.length) / APRON_LENGTH);
+      const u0 = APRON_U + (0 - APRON_U) * apron;
+      const u1 = APRON_U + (1 - APRON_U) * apron;
+      uv.push(u0, v, u1, v);
       norm.push(0, 1, 0, 0, 1, 0);
       if (i < steps) {
         const a = base + i * 2;
@@ -182,12 +204,12 @@ export function createRoads(
   }
 
   // ---------- sampled distance field ----------
-  const samples: Array<{ x: number; z: number; half: number }> = [];
+  const samples: Array<{ x: number; z: number; half: number; ribbon: number }> = [];
   for (const seg of all) {
-    const n = Math.max(40, Math.round(seg.length / 2));
+    const n = Math.max(60, Math.round(seg.length / 1.5));
     for (let i = 0; i <= n; i++) {
       const c = seg.curve.getPointAt(i / n);
-      samples.push({ x: c.x, z: c.z, half: seg.halfAsphalt });
+      samples.push({ x: c.x, z: c.z, half: seg.halfAsphalt, ribbon: seg.width / 2 });
     }
   }
   const circles = branches
@@ -221,6 +243,22 @@ export function createRoads(
         const dx = x - c.x;
         const dz = z - c.z;
         if (dx * dx + dz * dz <= c.r * c.r) return true;
+      }
+      return false;
+    },
+
+    onRibbon(x: number, z: number, clearance = 0): boolean {
+      for (const s of samples) {
+        const reach = s.ribbon + clearance;
+        const dx = x - s.x;
+        const dz = z - s.z;
+        if (dx * dx + dz * dz <= reach * reach) return true;
+      }
+      for (const c of circles) {
+        const reach = c.r + clearance;
+        const dx = x - c.x;
+        const dz = z - c.z;
+        if (dx * dx + dz * dz <= reach * reach) return true;
       }
       return false;
     },

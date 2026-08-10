@@ -146,7 +146,8 @@ export async function createNpcs(
     const v = spawn(true, i);
     // spread them over the network, main road first so the spine feels used
     v.seg = segments[i % segments.length];
-    v.t = 0.06 + ((i / Math.max(1, counts.walkers)) * 0.86 + rand() * 0.1) % 0.86;
+    const tMin = v.seg.id === 'main' ? 0.06 : Math.min(0.42, 18 / v.seg.length);
+    v.t = tMin + (((i / Math.max(1, counts.walkers)) * 0.8 + rand() * 0.1) % (0.95 - tMin));
     v.dir = rand() < 0.5 ? 1 : -1;
     v.side = i % 2 === 0 ? 1 : -1;
     villagers.push(v);
@@ -191,11 +192,14 @@ export async function createNpcs(
           }
           if (!v.yielding) {
             v.t += (v.dir * v.speed * dt) / v.seg.length;
+            // a side street has no pavement across its junction apron, so turn
+            // walkers round before they end up strolling down the tarmac
+            const tMin = v.seg.id === 'main' ? 0.03 : Math.min(0.4, 16 / v.seg.length);
             if (v.t > 0.97) {
               v.t = 0.97;
               v.dir = -1;
-            } else if (v.t < 0.03) {
-              v.t = 0.03;
+            } else if (v.t < tMin) {
+              v.t = tMin;
               v.dir = 1;
             }
           }

@@ -18,6 +18,8 @@ export interface Blocker {
 export interface Lamps {
   /** lights the lanterns and walks the light pool to whichever are nearest */
   update(nightFactor: number, px: number, pz: number): void;
+  /** pole positions, for the placement audit */
+  poles(): Array<{ x: number; z: number }>;
 }
 
 export async function createLamps(
@@ -27,7 +29,9 @@ export async function createLamps(
   segments: RoadSegment[],
   blockers: Blocker[],
   addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void,
-  lightCount: number
+  lightCount: number,
+  /** rejects a spot that sits on any street's ribbon, not just this one */
+  onRibbon: (x: number, z: number, clearance?: number) => boolean
 ): Promise<Lamps> {
   // The file holds exactly one lamp: scripts/extract-lamp.mjs lifts it out of
   // the 6.5MB showroom kit the model shipped as, so the browser downloads 57KB
@@ -121,6 +125,7 @@ export async function createLamps(
   })();
 
   const heads: Array<{ x: number; y: number; z: number }> = [];
+  const poles: Array<{ x: number; z: number }> = [];
   const glows: T.Object3D[] = [];
 
   const protoDims = new THREE.Box3().setFromObject(proto).getSize(new THREE.Vector3());
@@ -136,7 +141,7 @@ export async function createLamps(
       const n = seg.perp(t).multiplyScalar(li % 2 === 0 ? 1 : -1);
       const lx = c.x + n.x * kerb;
       const lz = c.z + n.z * kerb;
-      if (blockers.some((b) => Math.hypot(b.x - lx, b.z - lz) < b.r)) {
+      if (blockers.some((b) => Math.hypot(b.x - lx, b.z - lz) < b.r) || onRibbon(lx, lz, 0.7)) {
         li++;
         continue;
       }
@@ -145,6 +150,7 @@ export async function createLamps(
       inst.position.set(lx, 0, lz);
       inst.rotation.y = Math.atan2(-n.x, -n.z);
       scene.add(inst);
+      poles.push({ x: lx, z: lz });
       addCollider(lx, lz, 0.35, 0.35, 0);
 
       // the lantern hangs at the crook's end, out over the road
@@ -186,6 +192,8 @@ export async function createLamps(
   const nearest: Array<{ head: { x: number; y: number; z: number }; d: number }> = [];
 
   return {
+    poles: () => poles,
+
     update(nightFactor: number, px: number, pz: number): void {
       for (const g of glows) {
         (g as T.Sprite).material.opacity = nightFactor * 0.8;

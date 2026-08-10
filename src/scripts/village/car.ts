@@ -87,6 +87,9 @@ export async function createCar(
 
   const car = new THREE.Group();
   car.add(variant);
+  // the paint, kept with its daylight colour, so it can be lifted after dark
+  // without the car turning into a silhouette parked under its own headlights
+  const paint: Array<{ mat: T.MeshStandardMaterial; base: T.Color }> = [];
   car.traverse((o) => {
     const mesh = o as T.Mesh;
     if (!mesh.isMesh) return;
@@ -97,6 +100,9 @@ export async function createCar(
       if ('metalness' in std) {
         std.metalness = 0;
         std.roughness = Math.max(0.85, std.roughness ?? 1);
+      }
+      if ('emissive' in std && !paint.some((p) => p.mat === std)) {
+        paint.push({ mat: std, base: std.color.clone() });
       }
     }
   });
@@ -308,6 +314,9 @@ export async function createCar(
 
     applyNight(nightFactor: number): void {
       const on = nightFactor > 0.25;
+      // a touch of its own colour back into the paint, so the car stays legible
+      // against a dark road without looking lit from nowhere
+      for (const p of paint) p.mat.emissive.copy(p.base).multiplyScalar(0.26 * nightFactor);
       for (const h of headlights) h.intensity = nightFactor * 120;
       lightSprites.forEach((sp, i) => {
         sp.material.opacity = on ? (i < 2 ? 0.85 : 0.7) * nightFactor : 0;

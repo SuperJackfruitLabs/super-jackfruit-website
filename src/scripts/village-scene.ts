@@ -97,11 +97,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // crooked dead end. Offsets are [outward, along] from the junction.
   const DISTRICT_STREETS: BranchSpec[] = [
     { id: 'agent-works', t: 0.15, side: -1, width: 8.6, culDeSac: 7,
-      shape: [[2, 0], [16, 6], [31, 7], [45, -1], [55, -13]] },
+      shape: [[2, 0], [17, 2], [32, 7], [46, -1], [56, -13]] },
     { id: 'mcp-alley', t: 0.46, side: 1, width: 7.4, culDeSac: 6,
-      shape: [[2, 0], [18, -7], [35, -9], [52, -4], [68, 5], [79, 17]] },
+      shape: [[2, 0], [19, -2], [36, -9], [53, -4], [69, 5], [80, 17]] },
     { id: 'odd-shop', t: 0.74, side: -1, width: 7.8, culDeSac: 6.5,
-      shape: [[2, 0], [15, 8], [27, 14], [37, 24]] },
+      shape: [[2, 0], [16, 3], [28, 14], [38, 24]] },
   ];
   const road = createRoads(THREE, scene, maxAniso, DISTRICT_STREETS);
 
@@ -161,6 +161,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const houseCenters: Array<{ x: number; z: number }> = [];
   const idleSpots: IdleSpot[] = [];
   const chimneys: Chimney[] = [];
+  const gates: Array<{ x: number; z: number }> = [];
 
   const clearOfHouses = (x: number, z: number, gap: number): boolean =>
     !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap);
@@ -186,16 +187,24 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const items = byDistrict(d.id);
     const half = street.width / 2;
 
-    // gate at the mouth of the street, angled at traffic coming off the spine
+    // Gate just past the mouth, angled at traffic coming off the spine. It has
+    // to clear the main road: right at the junction, "beside this lane" is the
+    // middle of the spine, which is exactly where these used to end up.
     {
-      const m = street.curve.getPointAt(0.07);
-      const n = street.perp(0.07);
-      boards.districtBoard(
-        d,
-        m.x + n.x * (half + 2.6),
-        m.z + n.z * (half + 2.6),
-        Math.atan2(-n.x, -n.z)
-      );
+      let placed = false;
+      for (const gt of [0.1, 0.14, 0.18, 0.24]) {
+        for (const gs of [1, -1]) {
+          if (placed) continue;
+          const m = street.curve.getPointAt(gt);
+          const n = street.perp(gt).multiplyScalar(gs);
+          const gx = m.x + n.x * (half + 2.8);
+          const gz = m.z + n.z * (half + 2.8);
+          if (road.onRibbon(gx, gz, 1.6)) continue;
+          boards.districtBoard(d, gx, gz, Math.atan2(-n.x, -n.z));
+          gates.push({ x: gx, z: gz });
+          placed = true;
+        }
+      }
     }
 
     let side = 1;
@@ -203,29 +212,55 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const t = 0.22 + ((i + 0.5) / items.length) * 0.64;
       const c = street.curve.getPointAt(t);
       const tan = street.curve.getTangentAt(t);
-      const n = street.perp(t).multiplyScalar(side);
+
+      // Where two streets meet, "beside this lane" can be "in the middle of
+      // that one". Try the intended side, then the other, then further back
+      // from the kerb, and take the first that puts neither the board nor the
+      // house on anybody's road.
+      const tryside = (s: number, push: number) => {
+        const n = street.perp(t).multiplyScalar(s);
+        const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
+        const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
+        const hx = c.x + n.x * (half + 7.4 + push);
+        const hz = c.z + n.z * (half + 7.4 + push);
+        if (road.onRibbon(bx, bz, 1.2) || road.onRibbon(hx, hz, 2.5)) return null;
+        return { n, push };
+      };
+      const spot =
+        tryside(side, 0) ?? tryside(-side, 0) ?? tryside(side, 7) ?? tryside(-side, 7) ??
+        { n: street.perp(t).multiplyScalar(side), push: 0 };
+      const { n, push } = spot;
       const faceRoad = Math.atan2(-n.x, -n.z);
 
-      const hx = c.x + n.x * (half + 7.4);
-      const hz = c.z + n.z * (half + 7.4);
+      const hx = c.x + n.x * (half + 7.4 + push);
+      const hz = c.z + n.z * (half + 7.4 + push);
       putHouse(hx, hz, faceRoad, 7.2 + rand() * 1.4);
-      props.place(driveway, 3.0, c.x + n.x * (half + 2.6), c.z + n.z * (half + 2.6), faceRoad);
 
-      const bx = c.x + n.x * (half + 1.5) + tan.x * 1.5;
-      const bz = c.z + n.z * (half + 1.5) + tan.z * 1.5;
+      const dx = c.x + n.x * (half + 2.6 + push);
+      const dz = c.z + n.z * (half + 2.6 + push);
+      if (!road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.0, dx, dz, faceRoad);
+
+      const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
+      const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
       boards.projectBoard(project, d.accent, bx, bz, faceRoad);
       stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
 
-      idleSpots.push({
-        x: c.x + n.x * (half + 4.4) - tan.x * 2.2,
-        z: c.z + n.z * (half + 4.4) - tan.z * 2.2,
-        facing: faceRoad,
-      });
+      const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
+      const iz = c.z + n.z * (half + 4.4 + push) - tan.z * 2.2;
+      if (!road.onRibbon(ix, iz, 1)) idleSpots.push({ x: ix, z: iz, facing: faceRoad });
 
       // a garden across the lane, so the far kerb isn't bare
-      const o = street.perp(t).multiplyScalar(-side);
-      props.place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.7, c.x + o.x * (half + 2.4), c.z + o.z * (half + 2.4), rand() * 6.28, false, 0.02);
-      if (rand() < 0.7) seasonalTree(Math.floor(rand() * 100), 2.6 + rand() * 1.6, c.x + o.x * (half + 6), c.z + o.z * (half + 6), rand() * 6.28);
+      const o = street.perp(t).multiplyScalar(-Math.sign(n.dot(street.perp(t)) || 1));
+      const gx = c.x + o.x * (half + 2.4);
+      const gz = c.z + o.z * (half + 2.4);
+      if (!road.onRibbon(gx, gz, 1.2)) {
+        props.place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.7, gx, gz, rand() * 6.28, false, 0.02);
+      }
+      const tx = c.x + o.x * (half + 6);
+      const tz = c.z + o.z * (half + 6);
+      if (rand() < 0.7 && !road.onRibbon(tx, tz, 2)) {
+        seasonalTree(Math.floor(rand() * 100), 2.6 + rand() * 1.6, tx, tz, rand() * 6.28);
+      }
 
       side = -side;
     });
@@ -237,7 +272,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const c = street.curve.getPointAt(t);
       const hx = c.x + n.x * (half + 7.4);
       const hz = c.z + n.z * (half + 7.4);
-      if (!clearOfHouses(hx, hz, 11)) continue;
+      if (!clearOfHouses(hx, hz, 11) || road.onRibbon(hx, hz, 2.5)) continue;
       putHouse(hx, hz, Math.atan2(-n.x, -n.z), 6.8 + rand() * 1.6);
     }
   }
@@ -256,45 +291,42 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const hz = c.z + n.z * (half + 7.8);
       side = -side;
       if (junctions.some((j) => Math.hypot(j.x - hx, j.z - hz) < 24)) continue;
-      if (road.isPaved(hx, hz, 7)) continue;
+      if (road.onRibbon(hx, hz, 3)) continue;
       if (!clearOfHouses(hx, hz, 13)) continue;
       putHouse(hx, hz, faceRoad, 7.0 + rand() * 2.0);
-      if (rand() < 0.55) {
-        props.place(driveway, 3.1, c.x + n.x * (half + 2.6), c.z + n.z * (half + 2.6), faceRoad);
-      }
-      if (rand() < 0.4) {
-        idleSpots.push({ x: c.x + n.x * (half + 4.6), z: c.z + n.z * (half + 4.6), facing: faceRoad });
-      }
+      const dx = c.x + n.x * (half + 2.6);
+      const dz = c.z + n.z * (half + 2.6);
+      if (rand() < 0.55 && !road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.1, dx, dz, faceRoad);
+      const ix = c.x + n.x * (half + 4.6);
+      const iz = c.z + n.z * (half + 4.6);
+      if (rand() < 0.4 && !road.onRibbon(ix, iz, 1)) idleSpots.push({ x: ix, z: iz, facing: faceRoad });
     }
   }
 
   // ---------- the village square: HQ, about, contact kiosk ----------
   // the square sits at the END of the road — the drive's destination
+  // The square is where the road ENDS, so it has to swallow the road end
+  // rather than float past it — a disc set back by less than its own radius
+  // overlaps the last of the tarmac, and the drive runs straight in.
+  const PLAZA_R = 13;
   const plaza = (() => {
     const c = road.main.curve.getPointAt(1);
     const dir = road.main.curve.getTangentAt(1).normalize(); // direction of travel
-    return { x: c.x + dir.x * 17, z: c.z + dir.z * 17, n: dir, c };
+    return { x: c.x + dir.x * 12, z: c.z + dir.z * 12, n: dir, c };
   })();
   {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(11, 40), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 44), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
     disc.rotation.x = -Math.PI / 2;
     disc.position.set(plaza.x, 0.045, plaza.z);
     disc.receiveShadow = true;
     scene.add(disc);
 
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 9), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
-    path.rotation.x = -Math.PI / 2;
-    path.rotation.z = -Math.atan2(plaza.n.x, plaza.n.z);
-    path.position.set(plaza.c.x + plaza.n.x * 4.5, 0.035, plaza.c.z + plaza.n.z * 4.5);
-    path.receiveShadow = true;
-    scene.add(path);
-
-    // HQ: the biggest house in the kit, scaled up, facing the plaza
+    // HQ stands just past the far kerb of the square, facing back down the road
     const faceP = Math.atan2(plaza.c.x - plaza.x, plaza.c.z - plaza.z);
-    props.place(houses[7], 13, plaza.x + plaza.n.x * 10, plaza.z + plaza.n.z * 10, faceP, 'box');
+    props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP, 'box');
 
-    const hqx = plaza.x + plaza.n.x * 4.5;
-    const hqz = plaza.z + plaza.n.z * 4.5;
+    const hqx = plaza.x + plaza.n.x * 8.5;
+    const hqz = plaza.z + plaza.n.z * 8.5;
     boards.infoBoard('SUPER JACKFRUIT LABS', 'an open-source lab you can drive through', '#d98a1f', hqx, hqz, faceP);
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
@@ -309,8 +341,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       },
     });
 
-    const kx = plaza.x - plaza.n.z * 8;
-    const kz = plaza.z + plaza.n.x * 8;
+    const kx = plaza.x - plaza.n.z * 9.5;
+    const kz = plaza.z + plaza.n.x * 9.5;
     const faceK = Math.atan2(plaza.x - kx, plaza.z - kz);
     boards.infoBoard('say hi', 'the lab is always open', '#3f9e3f', kx, kz, faceK);
     stations.push({
@@ -326,9 +358,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       },
     });
 
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2 + 0.5;
-      props.place(planter, 1.2, plaza.x + Math.cos(a) * 10, plaza.z + Math.sin(a) * 10, a + Math.PI / 2, 'box');
+    // planters round the rim, but never across the mouth where the road comes in
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.4;
+      const px = plaza.x + Math.cos(a) * (PLAZA_R - 1.6);
+      const pz = plaza.z + Math.sin(a) * (PLAZA_R - 1.6);
+      if (road.onRibbon(px, pz, 2)) continue;
+      props.place(planter, 1.2, px, pz, a + Math.PI / 2, 'box');
     }
 
     // a couple of people about the square, facing its middle
@@ -347,7 +383,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       ...stations.map((s) => ({ x: s.x, z: s.z, r: 3 })),
     ],
     props.addOrientedCollider,
-    quality.settings.lampLights
+    quality.settings.lampLights,
+    road.onRibbon
   );
 
   mark('lamps');
@@ -358,8 +395,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const c = seg.curve.getPointAt(t);
       for (const sd of [-1, 1]) {
         const n = seg.perp(t).multiplyScalar(sd);
-        if (rand() < quality.settings.flowerChance) {
-          props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, c.x + n.x * (half + 0.3 + rand() * 0.5), c.z + n.z * (half + 0.3 + rand() * 0.5), rand() * 6.28, false, 0.05);
+        const off = half + 0.3 + rand() * 0.5;
+        const fx = c.x + n.x * off;
+        const fz = c.z + n.z * off;
+        if (rand() < quality.settings.flowerChance && !road.onRibbon(fx, fz, 0.15)) {
+          props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, fx, fz, rand() * 6.28, false, 0.05);
         }
       }
     }
@@ -370,7 +410,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const x = (rand() - 0.5) * 300;
     const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
     if (road.distTo(x, z) < 15) continue;
-    if (Math.hypot(x - plaza.x, z - plaza.z) < 16) continue;
+    if (Math.hypot(x - plaza.x, z - plaza.z) < 19) continue;
     if (!clearOfHouses(x, z, 10)) continue;
     seasonalTree(Math.floor(rand() * 100), 3 + rand() * 3.5, x, z, rand() * 6.28);
   }
@@ -465,7 +505,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // the asphalt and the paved square are smooth; everything else is dirt
   const PAVED_MARGIN = 0.6;
   const offRoad = (x: number, z: number): boolean =>
-    !road.isPaved(x, z, PAVED_MARGIN) && Math.hypot(x - plaza.x, z - plaza.z) > 11;
+    !road.isPaved(x, z, PAVED_MARGIN) && Math.hypot(x - plaza.x, z - plaza.z) > PLAZA_R;
 
   const carCtx = {
     resolve: props.resolve,
@@ -595,6 +635,34 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     timings: () => timings,
     npcs: () => npcs.list(),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
+    // nothing should be standing in the road; this is how that gets checked
+    audit: () => {
+      const onRoad = (list: Array<{ x: number; z: number }>, clearance: number) =>
+        list.filter((o) => road.onRibbon(o.x, o.z, clearance)).length;
+      return {
+        boardsOnRoad: onRoad(stations, 0),
+        gatesOnRoad: onRoad(gates, 0),
+        housesOnRoad: onRoad(houseCenters, 1.5),
+        lampsOnRoad: onRoad(lamps.poles(), 0),
+        totals: { boards: stations.length, gates: gates.length, houses: houseCenters.length, lamps: lamps.poles().length },
+      };
+    },
+    // sampled centrelines + everything placed, so a top-down map can be drawn
+    plan: () => ({
+      roads: road.all.map((seg) => ({
+        id: seg.id,
+        width: seg.width,
+        pts: Array.from({ length: 61 }, (_, i) => {
+          const c = seg.curve.getPointAt(i / 60);
+          return [+c.x.toFixed(1), +c.z.toFixed(1)];
+        }),
+        circle: seg.end.r > 0 ? [+seg.end.x.toFixed(1), +seg.end.z.toFixed(1), seg.end.r] : null,
+      })),
+      houses: houseCenters.map((h) => [+h.x.toFixed(1), +h.z.toFixed(1)]),
+      boards: stations.map((st) => [+st.x.toFixed(1), +st.z.toFixed(1)]),
+      lamps: lamps.poles().map((l) => [+l.x.toFixed(1), +l.z.toFixed(1)]),
+      plaza: [+plaza.x.toFixed(1), +plaza.z.toFixed(1)],
+    }),
     roads: () =>
       road.all.map((seg) => {
         const a = seg.curve.getPointAt(0);
