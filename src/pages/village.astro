@@ -33,7 +33,31 @@ import '@fontsource-variable/inconsolata';
       <div class="welcome__card">
         <h1>Super Jackfruit Labs</h1>
         <p class="welcome__sub">an open-source lab you can drive through</p>
-        <p class="welcome__hint">press any key or tap to enter</p>
+        <div
+          class="welcome__bar"
+          id="welcome-bar"
+          role="progressbar"
+          aria-label="loading the village"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <span class="welcome__fill" id="welcome-fill"></span>
+        </div>
+        <p class="welcome__hint" id="welcome-hint">loading the village…</p>
+      </div>
+    </div>
+
+    <!-- on-screen driving, for anyone without a keyboard -->
+    <div class="touch" id="touch" hidden>
+      <div class="touch__wheel" id="touch-steer" aria-label="steer">
+        <span class="touch__knob" id="touch-knob"></span>
+        <span class="touch__wheel-label">steer</span>
+      </div>
+      <div class="touch__pedals">
+        <button class="touch__btn touch__btn--nitro" id="touch-nitro" type="button" aria-label="nitro">N</button>
+        <button class="touch__btn touch__btn--brake" id="touch-brake" type="button" aria-label="brake and reverse">▼</button>
+        <button class="touch__btn touch__btn--gas" id="touch-gas" type="button" aria-label="accelerate">▲</button>
       </div>
     </div>
 
@@ -263,17 +287,129 @@ import '@fontsource-variable/inconsolata';
 
   .welcome__sub { margin: 0 0 1.6rem; font-size: 1.4rem; color: rgba(44, 42, 38, 0.7); }
 
+  .welcome__bar {
+    height: 6px;
+    width: min(22rem, 60vw);
+    margin: 0 auto 1rem;
+    border-radius: 999px;
+    background: rgba(44, 42, 38, 0.14);
+    overflow: hidden;
+  }
+
+  .welcome__fill {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: #d98a1f;
+    transition: width 0.3s ease;
+  }
+
   .welcome__hint {
     margin: 0;
     font-size: 1.2rem;
     letter-spacing: 0.06em;
     color: rgba(44, 42, 38, 0.55);
-    animation: welcome-pulse 1.6s ease-in-out infinite;
   }
+
+  .welcome__hint[data-ready='true'] { animation: welcome-pulse 1.6s ease-in-out infinite; }
 
   @keyframes welcome-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
-  @media (prefers-reduced-motion: reduce) { .welcome__hint { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .welcome__hint[data-ready='true'] { animation: none; }
+    .welcome__fill { transition: none; }
+  }
+
+  /* ---------- on-screen driving ---------- */
+  .touch {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 1.1rem calc(1.1rem + env(safe-area-inset-bottom));
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* an author `display` beats the UA rule for [hidden], so say it explicitly */
+  .touch[hidden] { display: none; }
+
+  .touch > * { pointer-events: auto; }
+
+  .touch__wheel {
+    position: relative;
+    width: min(15rem, 42vw);
+    height: 4.6rem;
+    border-radius: 999px;
+    border: 2px solid rgba(40, 50, 60, 0.28);
+    background: rgba(255, 255, 255, 0.42);
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(3px);
+  }
+
+  .touch__knob {
+    position: absolute;
+    width: 3.4rem;
+    height: 3.4rem;
+    border-radius: 50%;
+    background: rgba(40, 50, 60, 0.82);
+    transition: transform 0.08s ease-out;
+  }
+
+  .touch__wheel-label {
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    color: rgba(40, 50, 60, 0.5);
+    transform: translateY(2.9rem);
+  }
+
+  .touch__pedals {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: 'nitro gas' 'brake gas';
+    gap: 0.55rem;
+    align-items: center;
+  }
+
+  .touch__btn {
+    font-family: 'Inconsolata Variable', monospace;
+    font-weight: 700;
+    border-radius: 999px;
+    border: 2px solid rgba(40, 50, 60, 0.28);
+    background: rgba(255, 255, 255, 0.42);
+    color: rgba(40, 50, 60, 0.8);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    backdrop-filter: blur(3px);
+  }
+
+  .touch__btn[data-active='true'] {
+    background: rgba(40, 50, 60, 0.82);
+    color: #f6f0e2;
+    border-color: transparent;
+  }
+
+  .touch__btn--gas { grid-area: gas; width: 5.6rem; height: 5.6rem; font-size: 2rem; }
+  .touch__btn--brake { grid-area: brake; width: 4rem; height: 4rem; font-size: 1.4rem; }
+  .touch__btn--nitro { grid-area: nitro; width: 4rem; height: 4rem; font-size: 1.3rem; }
+
+  /* the keyboard legend is meaningless once the pedals are up */
+  .scene[data-touch='true'] .hint { display: none; }
+  /* tucked under the visited chip — the bottom belongs to the controls now */
+  .scene[data-touch='true'] .credit {
+    bottom: auto;
+    top: 3.9rem;
+    left: 1.4rem;
+    right: auto;
+    font-size: 0.75rem;
+  }
+  .scene[data-touch='true'] .card { bottom: 9.5rem; }
 
   @media (max-width: 640px) {
     .card {
@@ -395,15 +531,96 @@ import '@fontsource-variable/inconsolata';
     if (e.detail.count === e.detail.total) visitedChip.classList.add('done');
   }) as EventListener);
 
-  // welcome overlay: any input enters (and doubles as the audio unlock gesture)
+  // welcome overlay: holds a real progress bar while the village downloads,
+  // then any input enters (which doubles as the audio unlock gesture)
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const welcome = document.getElementById('welcome')!;
+  const welcomeBar = document.getElementById('welcome-bar')!;
+  const welcomeFill = document.getElementById('welcome-fill')!;
+  const welcomeHint = document.getElementById('welcome-hint')!;
+  let ready = false;
+
+  window.addEventListener('village:loading', ((e: CustomEvent<number>) => {
+    const pct = Math.round(e.detail * 100);
+    welcomeFill.style.width = `${pct}%`;
+    welcomeBar.setAttribute('aria-valuenow', String(pct));
+  }) as EventListener);
+
+  window.addEventListener('village:ready', () => {
+    ready = true;
+    welcomeFill.style.width = '100%';
+    welcomeBar.setAttribute('aria-valuenow', '100');
+    welcomeBar.hidden = true;
+    welcomeHint.textContent = isTouch ? 'tap to enter' : 'press any key or tap to enter';
+    welcomeHint.dataset.ready = 'true';
+  });
+
   function enterVillage() {
+    if (!ready) return;
     welcome.dataset.open = 'false';
     window.removeEventListener('keydown', enterVillage);
     welcome.removeEventListener('pointerdown', enterVillage);
   }
   window.addEventListener('keydown', enterVillage);
   welcome.addEventListener('pointerdown', enterVillage);
+
+  // ---------- on-screen driving ----------
+  if (isTouch) {
+    document.querySelector('.scene')?.setAttribute('data-touch', 'true');
+    const panel = document.getElementById('touch')!;
+    panel.hidden = false;
+
+    const touchState = { steer: 0, throttle: 0, nitro: false };
+    const push = () => window.dispatchEvent(new CustomEvent('village:touch', { detail: { ...touchState } }));
+
+    const wheel = document.getElementById('touch-steer')!;
+    const knob = document.getElementById('touch-knob')!;
+    let steerPointer: number | null = null;
+    // 2.4 rather than 2.0 so full lock arrives before the thumb runs out of pad
+    const readSteer = (e: PointerEvent) => {
+      const r = wheel.getBoundingClientRect();
+      touchState.steer = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2.4));
+      knob.style.transform = `translateX(${touchState.steer * 145}%)`;
+      push();
+    };
+    wheel.addEventListener('pointerdown', (e) => {
+      steerPointer = e.pointerId;
+      wheel.setPointerCapture(e.pointerId);
+      readSteer(e);
+    });
+    wheel.addEventListener('pointermove', (e) => {
+      if (e.pointerId === steerPointer) readSteer(e);
+    });
+    for (const type of ['pointerup', 'pointercancel'] as const) {
+      wheel.addEventListener(type, (e) => {
+        if (e.pointerId !== steerPointer) return;
+        steerPointer = null;
+        touchState.steer = 0;
+        knob.style.transform = 'translateX(0%)';
+        push();
+      });
+    }
+
+    const hold = (el: HTMLElement, on: () => void, off: () => void) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        el.dataset.active = 'true';
+        on();
+        push();
+      });
+      for (const type of ['pointerup', 'pointercancel'] as const) {
+        el.addEventListener(type, () => {
+          el.dataset.active = 'false';
+          off();
+          push();
+        });
+      }
+    };
+    hold(document.getElementById('touch-gas')!, () => (touchState.throttle = 1), () => (touchState.throttle = 0));
+    hold(document.getElementById('touch-brake')!, () => (touchState.throttle = -1), () => (touchState.throttle = 0));
+    hold(document.getElementById('touch-nitro')!, () => (touchState.nitro = true), () => (touchState.nitro = false));
+  }
 
   // separate audio toggles
   document.getElementById('audio-row')!.addEventListener('click', (e) => {

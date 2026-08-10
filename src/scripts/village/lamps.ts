@@ -26,27 +26,17 @@ export async function createLamps(
   loader: GltfLoaderLike,
   road: Road,
   blockers: Blocker[],
-  addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void
+  addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void,
+  lightCount: number
 ): Promise<Lamps> {
+  // The file holds exactly one lamp: scripts/extract-lamp.mjs lifts it out of
+  // the 6.5MB showroom kit the model shipped as, so the browser downloads 57KB
+  // instead of a hundred variants it will never stand up.
   const kit = await loader.loadAsync('/assets/village/street-lamp.glb');
-
-  // descend past wrappers, anchor on the tallest slim node, and gather the
-  // parts standing at its spot
-  let root: T.Object3D = kit.scene;
-  while (root.children.length === 1) root = root.children[0];
-  const infos = root.children.map((ch) => {
-    const b = new THREE.Box3().setFromObject(ch);
-    return { obj: ch, size: b.getSize(new THREE.Vector3()), center: b.getCenter(new THREE.Vector3()), minY: b.min.y };
-  });
-  const slim = infos.filter((i) => i.size.y > Math.max(i.size.x, i.size.z) * 1.5);
-  const anchorInfo = (slim.length ? slim : infos).sort((a, b) => b.size.y - a.size.y)[0];
-  const members = infos.filter(
-    (i) => Math.hypot(i.center.x - anchorInfo.center.x, i.center.z - anchorInfo.center.z) < 1.6
-  );
 
   const proto = new THREE.Group();
   const inner = new THREE.Group();
-  for (const m of members) inner.add(m.obj.clone(true));
+  inner.add(kit.scene);
   const groupBox = new THREE.Box3().setFromObject(inner);
   proto.add(inner);
   proto.updateMatrixWorld(true);
@@ -179,9 +169,9 @@ export async function createLamps(
     li++;
   }
 
-  // five real lights, walked to whichever lanterns are nearest the car
+  // a handful of real lights, walked to whichever lanterns are nearest the car
   const lightPool: T.PointLight[] = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < lightCount; i++) {
     const pl = new THREE.PointLight(0xffd9a0, 0, 15, 1.6);
     scene.add(pl);
     lightPool.push(pl);

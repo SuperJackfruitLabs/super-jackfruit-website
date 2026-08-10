@@ -15,6 +15,10 @@ import { createCar } from './village/car';
 import { createAudio } from './village/audio';
 import { createInput } from './village/input';
 import { createFx } from './village/fx';
+import { createQuality, type QualitySettings } from './village/quality';
+
+/** GLBs the village pulls in — used to keep the loading bar honest early on */
+const EXPECTED_ASSETS = 28;
 
 interface Station {
   kind: 'project' | 'info';
@@ -31,16 +35,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   const THREE = await import('three');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  // models ship meshopt-compressed (scripts/compress-assets.mjs); the decoder
+  // is a few KB and rides along inside three's addons
+  const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
 
   await Promise.all([
     document.fonts.load('700 90px "Inconsolata Variable"'),
     document.fonts.load('44px "Inconsolata Variable"'),
   ]).catch(() => {});
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const quality = createQuality();
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.settings.tier !== 'low' });
+  renderer.setPixelRatio(quality.settings.pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = quality.settings.shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
@@ -56,9 +64,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return seed / 2147483647;
   };
 
-  const env = createEnv(THREE, scene, renderer);
+  const env = createEnv(THREE, scene, renderer, quality.settings.shadowMapSize);
   const road = createRoad(THREE, scene, maxAniso);
-  const loader = new GLTFLoader();
+
+  // the page shows a real bar while the village downloads; `total` climbs as
+  // later batches are queued, so hold the fraction against a known floor and
+  // never let it run backwards
+  let progress = 0;
+  const manager = new THREE.LoadingManager();
+  manager.onProgress = (_url, loaded, total) => {
+    progress = Math.max(progress, Math.min(0.98, loaded / Math.max(total, EXPECTED_ASSETS)));
+    window.dispatchEvent(new CustomEvent('village:loading', { detail: progress }));
+  };
+  const loader = new GLTFLoader(manager);
+  loader.setMeshoptDecoder(MeshoptDecoder);
   const props = createProps(THREE, scene, loader, rand);
 
   const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
@@ -205,7 +224,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       ...houseCenters.map((h) => ({ x: h.x, z: h.z, r: 8.5 })),
       ...stations.map((s) => ({ x: s.x, z: s.z, r: 3 })),
     ],
-    props.addOrientedCollider
+    props.addOrientedCollider,
+    quality.settings.lampLights
   );
 
   // flowers along the road edges
@@ -213,26 +233,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const c = road.curve.getPointAt(t);
     for (const sd of [-1, 1]) {
       const n = road.perp(t).multiplyScalar(sd);
-      if (rand() < 0.5) {
+      if (rand() < quality.settings.flowerChance) {
         props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, c.x + n.x * (5.3 + rand() * 0.6), c.z + n.z * (5.3 + rand() * 0.6), rand() * 6.28, false, 0.05);
       }
     }
   }
 
   // background nature keeps clear of the road and the plaza
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < quality.settings.bgTrees; i++) {
     const x = (rand() - 0.5) * 300;
     const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
     if (road.distTo(x, z) < 13) continue;
     if (Math.hypot(x - plaza.x, z - plaza.z) < 16) continue;
     seasonalTree(Math.floor(rand() * 100), 3 + rand() * 3.5, x, z, rand() * 6.28);
   }
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < quality.settings.bgRocks; i++) {
     const x = (rand() - 0.5) * 280;
     const z = Z_END - 10 + rand() * (Z_START - Z_END + 40);
     if (road.distTo(x, z) < 12) continue;
     props.place(rocks[Math.floor(rand() * rocks.length)], 0.5 + rand() * 0.8, x, z, rand() * 6.28);
   }
+
+  // everything scattered so far becomes a handful of instanced meshes
+  props.commit();
 
   // drifting cartoon clouds
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
@@ -275,6 +298,21 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  // a downgrade can only touch what's cheap to change mid-flight; scenery
+  // counts were spent at build time
+  function applyQuality(s: QualitySettings): void {
+    renderer.setPixelRatio(s.pixelRatio);
+    if (renderer.shadowMap.enabled !== s.shadows) {
+      renderer.shadowMap.enabled = s.shadows;
+      // shadows are compiled into the shaders — every material needs a rebuild
+      scene.traverse((o) => {
+        const mat = (o as import('three').Mesh).material;
+        if (!mat) return;
+        for (const m of Array.isArray(mat) ? mat : [mat]) m.needsUpdate = true;
+      });
+    }
+  }
+
   // visited tracking + completion fireworks over the square
   const visited = new Set<string>();
   try {
@@ -309,6 +347,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
     const t = clock.elapsedTime;
+
+    quality.monitor(dt, applyQuality);
 
     const state = input.read();
     car.update(dt, t, state, carCtx, audio);
@@ -390,7 +430,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     renderer.render(scene, camera);
   });
 
+  window.dispatchEvent(new CustomEvent('village:ready'));
+
   (window as any).__village = {
+    tier: () => quality.settings.tier,
+    drawCalls: () => ({ instanced: props.drawCallCount(), frame: renderer.info.render.calls }),
     pos: () => ({
       x: +car.root.position.x.toFixed(2),
       z: +car.root.position.z.toFixed(2),

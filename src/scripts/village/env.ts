@@ -46,7 +46,7 @@ export interface Env {
   follow(camPos: T.Vector3, target: T.Vector3): void;
 }
 
-export function createEnv(THREE: Three, scene: T.Scene, renderer: T.WebGLRenderer): Env {
+export function createEnv(THREE: Three, scene: T.Scene, renderer: T.WebGLRenderer, shadowMapSize: number): Env {
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
@@ -106,7 +106,7 @@ export function createEnv(THREE: Three, scene: T.Scene, renderer: T.WebGLRendere
   const sun = new THREE.DirectionalLight(0xffe2b0, 3.4);
   sun.position.set(18, 26, 14);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.camera.left = -35;
   sun.shadow.camera.right = 35;
   sun.shadow.camera.top = 35;
