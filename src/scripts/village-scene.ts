@@ -593,8 +593,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const n = roadPerp(t).multiplyScalar(side);
         const faceRoad = Math.atan2(-n.x, -n.z);
 
-        const hx = c.x + n.x * 10.5;
-        const hz = c.z + n.z * 10.5;
+        // deep house models reach ~4.7 toward the road — keep every
+        // facade behind the signboards at 6.4
+        const hx = c.x + n.x * 12.4;
+        const hz = c.z + n.z * 12.4;
         const house = houses[Math.floor(rand() * houses.length)];
         place(house, 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
         houseCenters.push({ x: hx, z: hz });
