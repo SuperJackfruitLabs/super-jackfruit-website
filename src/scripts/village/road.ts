@@ -38,6 +38,12 @@ const APRON_U = 0.32;
  * branch leaves, which is what opens the turning.
  */
 const MOUTH_LENGTH = 9;
+/** how far back along each road a kerb return starts */
+const RETURN_BACK = 7;
+/** width of the pavement carried around a corner */
+const KERB_W = 1.5;
+const JUNCTION_Y = 0.0206;
+const KERB_Y = 0.0209;
 
 /** the spine: unchanged, because the drive along it already feels right */
 const MAIN_POINTS: Array<[number, number]> = [
@@ -215,6 +221,93 @@ export function createRoads(
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   scene.add(mesh);
+
+  // ---------- junction corners ----------
+  // A swept ribbon can't express a junction: it only knows how to be a strip,
+  // which is why fading its painted kerb left the corner a ragged V with the
+  // pavement stopping in mid-air. A junction is a shape — the two kerb lines
+  // curving into one another — so each corner gets built: a tarmac fillet
+  // where the roadways meet, and the pavement carried round the outside of it.
+  {
+    const line = (px: number, pz: number, dx: number, dz: number, qx: number, qz: number, ex: number, ez: number) => {
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-4) return null;
+      const t = ((qx - px) * ez - (qz - pz) * ex) / den;
+      return { x: px + dx * t, z: pz + dz * t };
+    };
+
+    const fillPos: number[] = [];
+    const kerbPos: number[] = [];
+
+    branchSpecs.forEach((spec, bi) => {
+      const branch = branches[bi];
+      const j = main.curve.getPointAt(spec.t);
+      const sTan = main.curve.getTangentAt(spec.t);
+      const sPerp = main.perp(spec.t);
+      const bTan = branch.curve.getTangentAt(0);
+      const bPerp = branch.perp(0);
+      const rS = main.width / 2;
+      const rB = branch.width / 2;
+
+      for (const c of [1, -1]) {
+        // the spine's edge on the branch's side, a little either way of the mouth
+        const eSx = j.x + sTan.x * RETURN_BACK * c + sPerp.x * spec.side * rS;
+        const eSz = j.z + sTan.z * RETURN_BACK * c + sPerp.z * spec.side * rS;
+        // ...and the branch edge that leans the same way
+        const lean = bPerp.x * sTan.x + bPerp.z * sTan.z;
+        const eSign = lean * c >= 0 ? 1 : -1;
+        const bp = branch.curve.getPointAt(Math.min(1, RETURN_BACK / branch.length));
+        const eBx = bp.x + bPerp.x * eSign * rB;
+        const eBz = bp.z + bPerp.z * eSign * rB;
+
+        // the sharp corner the two edges would make; the kerb rounds it off
+        const corner =
+          line(eSx, eSz, sTan.x, sTan.z, eBx, eBz, bTan.x, bTan.z) ??
+          { x: (eSx + eBx) / 2, z: (eSz + eBz) / 2 };
+
+        const STEPS = 10;
+        const arc: Array<{ x: number; z: number }> = [];
+        for (let i = 0; i <= STEPS; i++) {
+          const u = i / STEPS;
+          const iu = 1 - u;
+          arc.push({
+            x: iu * iu * eSx + 2 * iu * u * corner.x + u * u * eBx,
+            z: iu * iu * eSz + 2 * iu * u * corner.z + u * u * eBz,
+          });
+        }
+
+        // tarmac fillet: a fan from the junction out to the kerb line
+        for (let i = 0; i < STEPS; i++) {
+          const a = arc[i];
+          const b = arc[i + 1];
+          fillPos.push(j.x, JUNCTION_Y, j.z, a.x, JUNCTION_Y, a.z, b.x, JUNCTION_Y, b.z);
+        }
+
+        // pavement carried around the outside of that kerb
+        for (let i = 0; i < STEPS; i++) {
+          const a = arc[i];
+          const b = arc[i + 1];
+          const na = Math.hypot(a.x - j.x, a.z - j.z) || 1;
+          const nb = Math.hypot(b.x - j.x, b.z - j.z) || 1;
+          const ao = { x: a.x + ((a.x - j.x) / na) * KERB_W, z: a.z + ((a.z - j.z) / na) * KERB_W };
+          const bo = { x: b.x + ((b.x - j.x) / nb) * KERB_W, z: b.z + ((b.z - j.z) / nb) * KERB_W };
+          kerbPos.push(a.x, KERB_Y, a.z, ao.x, KERB_Y, ao.z, b.x, KERB_Y, b.z);
+          kerbPos.push(b.x, KERB_Y, b.z, ao.x, KERB_Y, ao.z, bo.x, KERB_Y, bo.z);
+        }
+      }
+    });
+
+    const patch = (verts: number[], colour: number, y: number) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+      g.computeVertexNormals();
+      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: colour, side: THREE.DoubleSide }));
+      m.receiveShadow = true;
+      scene.add(m);
+    };
+    if (fillPos.length) patch(fillPos, 0xcdd4e2, JUNCTION_Y);
+    if (kerbPos.length) patch(kerbPos, 0xefe8da, KERB_Y);
+  }
 
   // turning circles at the far end of each branch
   const asphalt = new THREE.MeshLambertMaterial({ color: 0xcdd4e2 });
