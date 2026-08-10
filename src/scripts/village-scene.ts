@@ -106,32 +106,32 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     horizon: number[]; mid: number[]; zenith: number[]; glow: number[];
     sunDir: number[]; sunColor: number; sunIntensity: number;
     hemiSky: number; hemiGround: number; hemiIntensity: number;
-    fog: number; exposure: number; night: number; roadTint: number;
+    fog: number; exposure: number; night: number;
   }
   const TIME_PRESETS: Record<string, EnvPreset> = {
     dawn: {
       horizon: [1.0, 0.78, 0.75], mid: [0.95, 0.85, 0.8], zenith: [0.5, 0.62, 0.82],
       glow: [0.4, 0.2, 0.12], sunDir: [0.8, 0.18, 0.3],
       sunColor: 0xffd4ae, sunIntensity: 2.2, hemiSky: 0xe8e0ff, hemiGround: 0xbfae90, hemiIntensity: 1.05,
-      fog: 0xefe2e2, exposure: 1.05, night: 0, roadTint: 0xf3e9e2,
+      fog: 0xefe2e2, exposure: 1.05, night: 0,
     },
     day: {
       horizon: [0.87, 0.94, 1.0], mid: [0.62, 0.82, 0.96], zenith: [0.29, 0.56, 0.85],
       glow: [0.22, 0.2, 0.12], sunDir: [0.35, 0.75, 0.25],
       sunColor: 0xfff6e0, sunIntensity: 3.4, hemiSky: 0xcfe8ff, hemiGround: 0xcfc0a0, hemiIntensity: 1.4,
-      fog: 0xdfeaf2, exposure: 1.15, night: 0, roadTint: 0xffffff,
+      fog: 0xdfeaf2, exposure: 1.15, night: 0,
     },
     dusk: {
       horizon: [1.0, 0.85, 0.66], mid: [0.66, 0.85, 0.96], zenith: [0.38, 0.66, 0.9],
       glow: [0.35, 0.2, 0.05], sunDir: [0.5, 0.35, 0.4],
       sunColor: 0xffe2b0, sunIntensity: 3.2, hemiSky: 0xbfe0ff, hemiGround: 0xd8c090, hemiIntensity: 1.25,
-      fog: 0xdfe9ef, exposure: 1.18, night: 0, roadTint: 0xf7ece0,
+      fog: 0xdfe9ef, exposure: 1.18, night: 0,
     },
     night: {
       horizon: [0.1, 0.13, 0.24], mid: [0.05, 0.08, 0.18], zenith: [0.02, 0.03, 0.09],
       glow: [0.1, 0.12, 0.2], sunDir: [-0.4, 0.5, -0.3],
       sunColor: 0xa9c0e8, sunIntensity: 0.75, hemiSky: 0x2a3a58, hemiGround: 0x1a2030, hemiIntensity: 0.55,
-      fog: 0x0e1424, exposure: 1.0, night: 1, roadTint: 0x39435c,
+      fog: 0x0e1424, exposure: 1.0, night: 1,
     },
   };
   let envTarget = TIME_PRESETS.dusk;
@@ -148,7 +148,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     hemiGround: new THREE.Color(TIME_PRESETS.dusk.hemiGround),
     hemiIntensity: 1.25,
     fog: new THREE.Color(TIME_PRESETS.dusk.fog),
-    roadTint: new THREE.Color(TIME_PRESETS.dusk.roadTint),
     exposure: 1.18,
   };
   interface ThemedBoard {
@@ -202,11 +201,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const W = 256;
     // cross-section: |sidewalk|curb|asphalt+dash|curb|sidewalk|
     const sw = Math.round(W * 0.15);
-    ctx.fillStyle = '#d8d2c4';
+    ctx.fillStyle = '#efe8da';
     ctx.fillRect(0, 0, W, 128);
-    ctx.fillStyle = '#b7bac1';
+    ctx.fillStyle = '#cdd4e2';
     ctx.fillRect(sw, 0, W - sw * 2, 128);
-    ctx.fillStyle = '#9fa3ab';
+    ctx.fillStyle = '#aeb7c9';
     ctx.fillRect(sw - 3, 0, 3, 128);
     ctx.fillRect(W - sw, 0, 3, 128);
     // center dash: painted along v, 40% duty
@@ -220,7 +219,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     return tex;
   }
 
-  let roadMat: import('three').MeshBasicMaterial;
+  let roadMat: import('three').MeshLambertMaterial;
+  let roadMesh: import('three').Mesh;
   {
     const SEG = 300;
     const WIDTH = 11.2;
@@ -239,7 +239,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       norm.push(0, 1, 0, 0, 1, 0);
       if (i < SEG) {
         const a = i * 2;
-        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        // wound to face UP — face-down winding made DoubleSide flip the
+        // normals, so the road was lit as if facing into the ground
+        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
       }
     }
     const geo = new THREE.BufferGeometry();
@@ -247,8 +249,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norm), 3));
     geo.setIndex(idx);
-    roadMat = new THREE.MeshBasicMaterial({ map: makeRoadTexture(), side: THREE.DoubleSide });
-    const road = new THREE.Mesh(geo, roadMat);
+    roadMat = new THREE.MeshLambertMaterial({ map: makeRoadTexture(), side: THREE.DoubleSide });
+    roadMesh = new THREE.Mesh(geo, roadMat);
+    const road = roadMesh;
     road.receiveShadow = true;
     scene.add(road);
   }
@@ -947,51 +950,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
   const playerRoot = new THREE.Group();
   playerRoot.add(car);
-  {
-    const bc = document.createElement('canvas');
-    bc.width = bc.height = 128;
-    const bctx = bc.getContext('2d')!;
-    const bg = bctx.createRadialGradient(64, 64, 8, 64, 64, 64);
-    bg.addColorStop(0, 'rgba(20,25,35,0.42)');
-    bg.addColorStop(1, 'rgba(20,25,35,0)');
-    bctx.fillStyle = bg;
-    bctx.fillRect(0, 0, 128, 128);
-    const blobTex = new THREE.CanvasTexture(bc);
-    const blob = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.4, 4.2),
-      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
-    );
-    blob.rotation.x = -Math.PI / 2;
-    blob.position.y = 0.03;
-    playerRoot.add(blob);
-  }
-  // headlight throw painted on the ground — the unlit road ignores real lights
-  let headGlowMat: import('three').MeshBasicMaterial;
-  {
-    const hc = document.createElement('canvas');
-    hc.width = 128;
-    hc.height = 256;
-    const hctx = hc.getContext('2d')!;
-    const grad = hctx.createRadialGradient(64, 10, 6, 64, 120, 190);
-    grad.addColorStop(0, 'rgba(255,240,200,0.85)');
-    grad.addColorStop(0.45, 'rgba(255,225,160,0.35)');
-    grad.addColorStop(1, 'rgba(255,225,160,0)');
-    hctx.fillStyle = grad;
-    hctx.fillRect(0, 0, 128, 256);
-    const tex = new THREE.CanvasTexture(hc);
-    headGlowMat = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const throwPlane = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 12), headGlowMat);
-    throwPlane.rotation.x = -Math.PI / 2;
-    throwPlane.rotation.z = Math.PI; // narrow end at the bumper
-    throwPlane.position.set(0, 0.06, 7.2);
-    playerRoot.add(throwPlane);
-  }
   playerRoot.position.set(0, 0, 8);
   scene.add(playerRoot);
 
@@ -1035,10 +993,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     hg.fillRect(0, 0, 64, 64);
     const headTex = new THREE.CanvasTexture(headTexCanvas);
     for (const hx of [-0.42, 0.42]) {
-      const spot = new THREE.SpotLight(0xfff2cc, 0, 26, 0.42, 0.5, 1.2);
-      spot.position.set(hx, 0.55, 1.35);
+      const spot = new THREE.SpotLight(0xfff2cc, 0, 24, 0.52, 0.4, 1.0);
+      spot.position.set(hx, 1.0, 1.35);
       const tgt = new THREE.Object3D();
-      tgt.position.set(hx * 0.6, 0.2, 12);
+      tgt.position.set(hx * 0.6, -0.8, 8.5);
       playerRoot.add(tgt);
       spot.target = tgt;
       playerRoot.add(spot);
@@ -1404,7 +1362,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       envState.hemiGround.lerp(new THREE.Color(envTarget.hemiGround), k);
       envState.hemiIntensity += (envTarget.hemiIntensity - envState.hemiIntensity) * k;
       envState.fog.lerp(new THREE.Color(envTarget.fog), k);
-      envState.roadTint.lerp(new THREE.Color(envTarget.roadTint), k);
       envState.exposure += (envTarget.exposure - envState.exposure) * k;
       nightFactor += (envTarget.night - nightFactor) * k;
 
@@ -1420,8 +1377,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       hemi.groundColor.copy(envState.hemiGround);
       hemi.intensity = envState.hemiIntensity;
       (scene.fog as import('three').Fog).color.copy(envState.fog);
-      roadMat.color.copy(envState.roadTint);
-      headGlowMat.opacity = nightFactor * 0.5;
       for (const g of lampGlows) {
         (g.material as import('three').SpriteMaterial).opacity = nightFactor * 0.8;
       }
@@ -1455,7 +1410,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }
       for (const tb of themedBoards) tb.mat.emissive.setScalar(boardsNightMode ? Math.min(1, nightFactor * 1.1) : 0);
       const headOn = nightFactor > 0.25;
-      headlights.forEach((h2) => (h2.intensity = nightFactor * 55));
+      headlights.forEach((h2) => (h2.intensity = nightFactor * 120));
       lightSprites.forEach((sp2, i2) => {
         (sp2.material as import('three').SpriteMaterial).opacity = headOn ? (i2 < 2 ? 0.85 : 0.7) * nightFactor : 0;
       });
@@ -1555,6 +1510,31 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }),
     stations: () => stations.map((s) => ({ slug: s.project?.slug ?? s.info?.title ?? '?', x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => colliders.length,
+    roadInfo: () => {
+      const g2 = roadMesh.geometry;
+      const n2 = g2.getAttribute('normal');
+      return {
+        type: roadMat.type,
+        hasMap: !!roadMat.map,
+        color: roadMat.color.getHexString(),
+        normal0: n2 ? [n2.getX(0), n2.getY(0), n2.getZ(0)] : null,
+        normalCount: n2 ? n2.count : 0,
+        posCount: g2.getAttribute('position').count,
+        index: g2.index ? g2.index.count : 0,
+        frustumCulled: roadMesh.frustumCulled,
+        matrixWorld: roadMesh.matrixWorld.elements.slice(12, 15),
+      };
+    },
+    roadRed: () => {
+      roadMesh.material = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+      return 'red lambert';
+    },
+    testLight: () => {
+      const tl = new THREE.PointLight(0xffffff, 300, 40, 1.2);
+      tl.position.set(playerRoot.position.x, 6, playerRoot.position.z - 4);
+      scene.add(tl);
+      return 'added';
+    },
     teleport: (x: number, z: number, h = Math.PI) => { playerRoot.position.set(x, 0, z); heading = h; speed = 0; },
     keys: () => [...keys],
   };
