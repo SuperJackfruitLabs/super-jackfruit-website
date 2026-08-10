@@ -6,5 +6,5 @@ export type Three = typeof import('three');
 
 /** just enough of GLTFLoader for the modules that pull assets in */
 export interface GltfLoaderLike {
-  loadAsync(url: string): Promise<{ scene: T.Group }>;
+  loadAsync(url: string): Promise<{ scene: T.Group; animations: T.AnimationClip[] }>;
 }

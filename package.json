@@ -7,7 +7,7 @@
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "assets": "node scripts/extract-lamp.mjs && node scripts/extract-car.mjs && node scripts/compress-assets.mjs",
+    "assets": "node scripts/extract-lamp.mjs && node scripts/extract-car.mjs && node scripts/extract-npcs.mjs && node scripts/compress-assets.mjs",
     "deploy": "astro check && astro build && wrangler pages deploy dist --project-name=extinct-eclipse --branch=master",
     "astro": "astro"
   },

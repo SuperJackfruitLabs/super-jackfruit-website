@@ -7,7 +7,7 @@ import { readdir, mkdir } from 'node:fs/promises';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
-import { EXTMeshoptCompression } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { meshopt, prune, dedup } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
 
@@ -18,7 +18,7 @@ await MeshoptEncoder.ready;
 await mkdir(DST, { recursive: true });
 
 const io = new NodeIO()
-  .registerExtensions([EXTMeshoptCompression])
+  .registerExtensions(ALL_EXTENSIONS)
   .registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
 
 const files = (await readdir(SRC)).filter((f) => f.endsWith('.glb')).sort();

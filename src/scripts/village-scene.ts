@@ -16,9 +16,11 @@ import { createAudio } from './village/audio';
 import { createInput } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
+import { createNpcs, type IdleSpot } from './village/npcs';
+import { createAmbient, type Chimney } from './village/ambient';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
-const EXPECTED_ASSETS = 28;
+const EXPECTED_ASSETS = 34;
 
 interface Station {
   kind: 'project' | 'info';
@@ -109,6 +111,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // ---------- project stations along the winding road ----------
   const stations: Station[] = [];
   const houseCenters: Array<{ x: number; z: number }> = [];
+  const idleSpots: IdleSpot[] = [];
+  const chimneys: Chimney[] = [];
   {
     const totalStations = projects.length;
     let idx = 0;
@@ -133,13 +137,31 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         // behind the signboards at 6.4
         const hx = c.x + n.x * 12.4;
         const hz = c.z + n.z * 12.4;
-        props.place(houses[Math.floor(rand() * houses.length)], 7.5 + rand() * 1.8, hx, hz, faceRoad, 'box');
+        const house = houses[Math.floor(rand() * houses.length)];
+        const houseSize = 7.5 + rand() * 1.8;
+        props.place(house, houseSize, hx, hz, faceRoad, 'box');
         houseCenters.push({ x: hx, z: hz });
+        // smoke leaves from the ridge, back from the road-facing gable
+        if (chimneys.length < quality.settings.chimneys) {
+          const roof = props.scaledSize(house, houseSize);
+          chimneys.push({
+            x: hx + n.x * 1.4 + tan.x * 1.2,
+            y: roof.y * 0.98,
+            z: hz + n.z * 1.4 + tan.z * 1.2,
+          });
+        }
         props.place(driveway, 3.2, c.x + n.x * 7.3, c.z + n.z * 7.3, faceRoad);
         const bx = c.x + n.x * 6.4 + tan.x * 1.6;
         const bz = c.z + n.z * 6.4 + tan.z * 1.6;
         boards.projectBoard(project, d.accent, bx, bz, faceRoad);
         stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
+
+        // someone stands in the front garden, off the driveway, facing the road
+        idleSpots.push({
+          x: c.x + n.x * 8.8 - tan.x * 2.4,
+          z: c.z + n.z * 8.8 - tan.z * 2.4,
+          facing: faceRoad,
+        });
 
         // yard + across-the-road garden
         const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
@@ -216,6 +238,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const a = (i / 5) * Math.PI * 2 + 0.5;
       props.place(planter, 1.2, plaza.x + Math.cos(a) * 10, plaza.z + Math.sin(a) * 10, a + Math.PI / 2, 'box');
     }
+
+    // a couple of people about the square, facing its middle
+    for (const a of [1.9, 4.3]) {
+      const sx = plaza.x + Math.cos(a) * 6.5;
+      const sz = plaza.z + Math.sin(a) * 6.5;
+      idleSpots.push({ x: sx, z: sz, facing: Math.atan2(plaza.x - sx, plaza.z - sz) });
+    }
   }
 
   const lamps = await createLamps(
@@ -272,6 +301,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     scene.add(cloud);
     clouds.push(cloud);
   }
+
+  const npcs = await createNpcs(THREE, scene, loader, road, idleSpots, {
+    walkers: quality.settings.npcWalkers,
+    idlers: quality.settings.npcIdlers,
+  }, rand);
+
+  const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
   const car = await createCar(THREE, loader, scene);
   const audio = createAudio();
@@ -369,6 +405,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     car.applyNight(nightFactor);
 
     props.updateSway(t);
+    npcs.update(dt, car.root.position.x, car.root.position.z);
+    ambient.update(dt, t, nightFactor);
     for (const cloud of clouds) {
       cloud.position.x += dt * 0.6;
       if (cloud.position.x > 150) cloud.position.x = -150;
@@ -442,6 +480,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }),
     stations: () => stations.map((s) => ({ slug: s.project?.slug ?? s.info?.title ?? '?', x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => props.colliderCount(),
+    npcs: () => npcs.list(),
+    ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     teleport: (x: number, z: number, h = Math.PI) => car.teleport(x, z, h),
     fx: () => fx.counts(),
   };

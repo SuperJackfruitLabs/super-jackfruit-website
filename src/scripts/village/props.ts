@@ -38,6 +38,8 @@ export interface Props {
   addOrientedCollider(x: number, z: number, hx: number, hz: number, rotY: number, localCx?: number, localCz?: number): void;
   /** builds the instanced meshes — call once, after everything is placed */
   commit(): void;
+  /** how big a proto ends up once placed at `targetSize` */
+  scaledSize(proto: T.Group, targetSize: number): { x: number; y: number; z: number };
   setSeason(season: Season): void;
   updateSway(t: number): void;
   /** resolves the player circle out of every solid; mutates `pos` */
@@ -283,6 +285,12 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
     placeSeasonalTree(summerProto, autumnProto, size, x, z, rotY): void {
       queue(summerProto, size, x, z, rotY, 'trunk', 0.01, 'summer');
       queue(autumnProto, size, x, z, rotY, false, 0.01, 'autumn');
+    },
+
+    scaledSize(proto, targetSize) {
+      const m = metrics(proto);
+      const s = targetSize / m.maxDim;
+      return { x: m.size.x * s, y: m.size.y * s, z: m.size.z * s };
     },
 
     setSeason(season): void {
