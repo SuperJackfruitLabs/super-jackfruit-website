@@ -31,6 +31,13 @@ const BRANCH_Y = 0.015;
 const APRON_LENGTH = 13;
 /** a u inside the asphalt band: no kerb, no centre dash */
 const APRON_U = 0.32;
+/**
+ * The same problem in the other direction: the SPINE's pavement is a
+ * continuous stripe down each edge, so it ran straight across the mouth of
+ * every side street. Near a junction the spine drops its kerb on the side the
+ * branch leaves, which is what opens the turning.
+ */
+const MOUTH_LENGTH = 9;
 
 /** the spine: unchanged, because the drive along it already feels right */
 const MAIN_POINTS: Array<[number, number]> = [
@@ -150,6 +157,8 @@ export function createRoads(
   });
 
   const all = [main, ...branches];
+  // where each branch leaves the spine, and on which side
+  const junctions = branchSpecs.map((sp) => ({ t: sp.t, side: sp.side }));
 
   // ---------- one merged ribbon for the whole network ----------
   const pos: number[] = [];
@@ -167,10 +176,25 @@ export function createRoads(
       pos.push(c.x + n.x * (seg.width / 2), y, c.z + n.z * (seg.width / 2));
       pos.push(c.x - n.x * (seg.width / 2), y, c.z - n.z * (seg.width / 2));
       const v = (t * seg.length) / 6; // dash cadence
-      // taper the cross-section in from the junction
-      const apron = seg.id === 'main' ? 1 : Math.min(1, (t * seg.length) / APRON_LENGTH);
-      const u0 = APRON_U + (0 - APRON_U) * apron;
-      const u1 = APRON_U + (1 - APRON_U) * apron;
+      // The cross-section is painted into the texture, so wherever two streets
+      // meet, one's kerb and pavement would run across the other's tarmac.
+      // Both sides fade to plain asphalt around a junction instead.
+      // u0 is the +perpendicular edge, u1 the −perpendicular one.
+      let u0 = 0;
+      let u1 = 1;
+      if (seg.id === 'main') {
+        for (const j of junctions) {
+          const dist = Math.abs(t - j.t) * seg.length;
+          if (dist >= MOUTH_LENGTH) continue;
+          const k = dist / MOUTH_LENGTH;
+          if (j.side === 1) u0 = APRON_U + (u0 - APRON_U) * k;
+          else u1 = APRON_U + (u1 - APRON_U) * k;
+        }
+      } else {
+        const apron = Math.min(1, (t * seg.length) / APRON_LENGTH);
+        u0 = APRON_U + (u0 - APRON_U) * apron;
+        u1 = APRON_U + (u1 - APRON_U) * apron;
+      }
       uv.push(u0, v, u1, v);
       norm.push(0, 1, 0, 0, 1, 0);
       if (i < steps) {
