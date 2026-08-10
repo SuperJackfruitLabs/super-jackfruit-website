@@ -2,7 +2,8 @@
 // side, so this picks one, re-pivots it to its pole base, works out where the
 // lantern actually hangs, and clones that along the kerb.
 import type * as T from 'three';
-import type { GltfLoaderLike, Three } from './types';
+import type { Three } from './types';
+import type { LoadedGltf } from './props';
 import type { Road } from './road';
 
 const LAMP_HEIGHT = 4.2;
@@ -23,7 +24,7 @@ export interface Lamps {
 export async function createLamps(
   THREE: Three,
   scene: T.Scene,
-  loader: GltfLoaderLike,
+  load: (name: string) => Promise<LoadedGltf>,
   road: Road,
   blockers: Blocker[],
   addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void,
@@ -32,7 +33,7 @@ export async function createLamps(
   // The file holds exactly one lamp: scripts/extract-lamp.mjs lifts it out of
   // the 6.5MB showroom kit the model shipped as, so the browser downloads 57KB
   // instead of a hundred variants it will never stand up.
-  const kit = await loader.loadAsync('/assets/village/street-lamp.glb');
+  const kit = await load('street-lamp');
 
   const proto = new THREE.Group();
   const inner = new THREE.Group();

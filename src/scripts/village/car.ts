@@ -11,10 +11,10 @@
 // Lights and exhaust ride on `body`, so braking really does throw the
 // headlights down at the road.
 import type * as T from 'three';
-import type { GltfLoaderLike, Three } from './types';
+import type { Three } from './types';
+import type { Impact, LoadedGltf } from './props';
 import type { InputState } from './input';
 import type { AudioBus } from './audio';
-import type { Impact } from './props';
 
 const MAX_SPEED = 11;
 const NITRO_MAX = 18;
@@ -72,10 +72,10 @@ function softBlob(size: number, inner: string, outer: string): HTMLCanvasElement
 
 export async function createCar(
   THREE: Three,
-  loader: GltfLoaderLike,
+  load: (name: string) => Promise<LoadedGltf>,
   scene: T.Scene
 ): Promise<Car> {
-  const gltf = await loader.loadAsync('/assets/village/offroad-car.glb');
+  const gltf = await load('offroad-car');
   const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
   let variant: T.Object3D | undefined;
   gltf.scene.traverse((o: T.Object3D) => {

@@ -16,7 +16,7 @@ import { createAudio } from './village/audio';
 import { createInput } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
-import { createNpcs, type IdleSpot } from './village/npcs';
+import { createNpcs, NPC_MODELS, type IdleSpot } from './village/npcs';
 import { createAmbient, type Chimney } from './village/ambient';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
@@ -35,15 +35,30 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const probe = document.createElement('canvas');
   if (!probe.getContext('webgl2') && !probe.getContext('webgl')) return false;
 
+  // build-up timings, readable from the console via __village.timings()
+  const timings: Array<{ phase: string; ms: number }> = [];
+  let lastMark = performance.now();
+  const mark = (phase: string) => {
+    const now = performance.now();
+    timings.push({ phase, ms: Math.round(now - lastMark) });
+    lastMark = now;
+  };
+  (window as any).__villageTimings = timings;
+
   const THREE = await import('three');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
   // models ship meshopt-compressed (scripts/compress-assets.mjs); the decoder
   // is a few KB and rides along inside three's addons
   const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
 
-  await Promise.all([
-    document.fonts.load('700 90px "Inconsolata Variable"'),
-    document.fonts.load('44px "Inconsolata Variable"'),
+  // boards are drawn into canvases, so the face has to be ready first — but a
+  // slow font must never hold the village hostage
+  await Promise.race([
+    Promise.all([
+      document.fonts.load('700 90px "Inconsolata Variable"'),
+      document.fonts.load('44px "Inconsolata Variable"'),
+    ]),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
   ]).catch(() => {});
 
   const quality = createQuality();
@@ -81,6 +96,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const loader = new GLTFLoader(manager);
   loader.setMeshoptDecoder(MeshoptDecoder);
   const props = createProps(THREE, scene, loader, rand);
+  mark('setup');
 
   const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 400), groundMat);
@@ -89,9 +105,18 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   ground.receiveShadow = true;
   scene.add(ground);
 
+  // Ask for every model up front. The lamp, the villagers and the car used to
+  // wait for this batch to finish before they were even requested, which cost
+  // half a second of dead air on the wire for nothing.
+  const HOUSE_MODELS = ['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'];
+  const SCENERY_MODELS = ['driveway-short', 'planter', 'tree-large', 'tree-small', 'flower_purpleA', 'flower_redA', 'flower_yellowA', 'plant_bush', 'plant_bushLarge', 'rock_smallA', 'rock_smallC', 'tree_default', 'tree_detailed', 'tree_oak', 'tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'];
+  for (const name of [...HOUSE_MODELS, ...SCENERY_MODELS, 'street-lamp', 'offroad-car', ...NPC_MODELS]) {
+    void props.loadGltf(name);
+  }
+
   const [houses, driveway, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees] =
     await Promise.all([
-      Promise.all(['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'].map(props.loadAsset)),
+      Promise.all(HOUSE_MODELS.map(props.loadAsset)),
       props.loadAsset('driveway-short'),
       props.loadAsset('planter'),
       props.loadAsset('tree-large'),
@@ -103,6 +128,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       Promise.all(['tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'].map(props.loadAsset)),
     ]);
 
+  mark('load-assets');
   const seasonalTree = (i: number, size: number, x: number, z: number, rotY: number) =>
     props.placeSeasonalTree(nTrees[i % nTrees.length], fallTrees[i % fallTrees.length], size, x, z, rotY);
 
@@ -176,6 +202,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  mark('stations+boards');
   // ---------- the village square: HQ, about, contact kiosk ----------
   // the square sits at the END of the road — the drive's destination
   const plaza = (() => {
@@ -247,8 +274,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  mark('plaza');
   const lamps = await createLamps(
-    THREE, scene, loader, road,
+    THREE, scene, props.loadGltf, road,
     [
       ...houseCenters.map((h) => ({ x: h.x, z: h.z, r: 8.5 })),
       ...stations.map((s) => ({ x: s.x, z: s.z, r: 3 })),
@@ -257,6 +285,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     quality.settings.lampLights
   );
 
+  mark('lamps');
   // flowers along the road edges
   for (let t = 0.02; t < 0.98; t += (3.5 + rand() * 3) / road.length) {
     const c = road.curve.getPointAt(t);
@@ -283,8 +312,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     props.place(rocks[Math.floor(rand() * rocks.length)], 0.5 + rand() * 0.8, x, z, rand() * 6.28);
   }
 
+  mark('scatter');
   // everything scattered so far becomes a handful of instanced meshes
   props.commit();
+  mark('commit-instances');
 
   // drifting cartoon clouds
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
@@ -302,14 +333,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     clouds.push(cloud);
   }
 
-  const npcs = await createNpcs(THREE, scene, loader, road, idleSpots, {
+  const npcs = await createNpcs(THREE, scene, props.loadGltf, road, idleSpots, {
     walkers: quality.settings.npcWalkers,
     idlers: quality.settings.npcIdlers,
   }, rand);
 
+  mark('npcs');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
-  const car = await createCar(THREE, loader, scene);
+  const car = await createCar(THREE, props.loadGltf, scene);
+  mark('car');
   const audio = createAudio();
   const input = createInput(canvas, audio.ensure);
   const fx = createFx(THREE, scene);
@@ -380,7 +413,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   camera.position.copy(camPos);
 
   const clock = new THREE.Clock();
+  let framesTimed = 0;
   renderer.setAnimationLoop(() => {
+    const frameStart = performance.now();
     const dt = Math.min(0.05, clock.getDelta());
     const t = clock.elapsedTime;
 
@@ -466,8 +501,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     env.follow(camera.position, car.root.position);
 
     renderer.render(scene, camera);
+
+    if (framesTimed < 6) {
+      timings.push({ phase: `frame-${framesTimed}`, ms: Math.round(performance.now() - frameStart) });
+      framesTimed++;
+    }
   });
 
+  mark('wiring');
+  timings.push({ phase: 'ready@', ms: Math.round(performance.now()) });
   window.dispatchEvent(new CustomEvent('village:ready'));
 
   (window as any).__village = {
@@ -480,6 +522,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }),
     stations: () => stations.map((s) => ({ slug: s.project?.slug ?? s.info?.title ?? '?', x: +s.x.toFixed(1), z: +s.z.toFixed(1) })),
     colliders: () => props.colliderCount(),
+    timings: () => timings,
     npcs: () => npcs.list(),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     teleport: (x: number, z: number, h = Math.PI) => car.teleport(x, z, h),

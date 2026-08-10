@@ -30,7 +30,15 @@ export interface Impact {
 export type Solid = 'box' | 'trunk' | false;
 export type Season = 'summer' | 'autumn';
 
+export interface LoadedGltf {
+  scene: T.Group;
+  animations: T.AnimationClip[];
+}
+
 export interface Props {
+  /** cached, de-duplicated model load — every module goes through this so the
+   *  whole village can be requested in one wave */
+  loadGltf(name: string): Promise<LoadedGltf>;
   loadAsset(name: string): Promise<T.Group>;
   /** queues a placement; nothing renders until `commit` */
   place(proto: T.Group, targetSize: number, x: number, z: number, rotY: number, solid?: Solid, sway?: number): void;
@@ -68,7 +76,8 @@ interface Metrics {
 }
 
 export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike, rand: () => number): Props {
-  const cache = new Map<string, T.Group>();
+  const cache = new Map<string, LoadedGltf>();
+  const pending = new Map<string, Promise<LoadedGltf>>();
   const protoNames = new Map<T.Group, string>();
   const metricsCache = new Map<T.Group, Metrics>();
   const queues = new Map<string, Queue>();
@@ -78,8 +87,13 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
   const swayTime = { value: 0 };
   let drawCalls = 0;
 
-  async function loadAsset(name: string): Promise<T.Group> {
-    if (!cache.has(name)) {
+  function loadGltf(name: string): Promise<LoadedGltf> {
+    const hit = cache.get(name);
+    if (hit) return Promise.resolve(hit);
+    const inFlight = pending.get(name);
+    if (inFlight) return inFlight;
+
+    const p = (async () => {
       const gltf = await loader.loadAsync(`/assets/village/${name}.glb`);
       const g = gltf.scene;
       g.traverse((o) => {
@@ -99,10 +113,19 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
           }
         }
       });
-      cache.set(name, g);
+      const loaded: LoadedGltf = { scene: g, animations: gltf.animations ?? [] };
+      cache.set(name, loaded);
       protoNames.set(g, name);
-    }
-    return cache.get(name)!;
+      pending.delete(name);
+      return loaded;
+    })();
+
+    pending.set(name, p);
+    return p;
+  }
+
+  async function loadAsset(name: string): Promise<T.Group> {
+    return (await loadGltf(name)).scene;
   }
 
   function metrics(proto: T.Group): Metrics {
@@ -273,6 +296,7 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
   }
 
   return {
+    loadGltf,
     loadAsset,
     addOrientedCollider,
     commit,

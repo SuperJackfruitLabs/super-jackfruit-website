@@ -8,7 +8,8 @@
 // comes past; idlers wait in their front gardens. Mixers only tick for the
 // villagers near enough to see moving.
 import type * as T from 'three';
-import type { GltfLoaderLike, Three } from './types';
+import type { Three } from './types';
+import type { LoadedGltf } from './props';
 import type { Road } from './road';
 
 /** villager height in village units — a shade under half the car's length */
@@ -58,7 +59,7 @@ interface Villager {
 export async function createNpcs(
   THREE: Three,
   scene: T.Scene,
-  loader: GltfLoaderLike,
+  load: (name: string) => Promise<LoadedGltf>,
   road: Road,
   idleSpots: IdleSpot[],
   counts: NpcCounts,
@@ -69,7 +70,7 @@ export async function createNpcs(
 
   const loaded = await Promise.all(
     NPC_MODELS.map(async (name) => {
-      const gltf = await loader.loadAsync(`/assets/village/${name}.glb`);
+      const gltf = await load(name);
       const group = gltf.scene;
       group.traverse((o) => {
         const mesh = o as T.Mesh;
