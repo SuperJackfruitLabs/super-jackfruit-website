@@ -51,9 +51,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // is a few KB and rides along inside three's addons
   const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
 
-  // boards are drawn into canvases, so the face has to be ready first — but a
-  // slow font must never hold the village hostage
-  await Promise.race([
+  // The signboards are drawn into canvases, so the face has to be ready before
+  // THEY are built — but nothing else depends on it. Start it here and await it
+  // later, so the models aren't queued behind a webfont. Capped, because a font
+  // that never arrives must not cost us the village.
+  const fontsReady = Promise.race([
     Promise.all([
       document.fonts.load('700 90px "Inconsolata Variable"'),
       document.fonts.load('44px "Inconsolata Variable"'),
@@ -129,6 +131,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     ]);
 
   mark('load-assets');
+  await fontsReady;
+  mark('fonts');
   const seasonalTree = (i: number, size: number, x: number, z: number, rotY: number) =>
     props.placeSeasonalTree(nTrees[i % nTrees.length], fallTrees[i % fallTrees.length], size, x, z, rotY);
 
