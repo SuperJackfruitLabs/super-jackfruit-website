@@ -22,6 +22,38 @@ const { title } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     <slot name="head" />
+    <script is:inline>
+      // Every deploy gives the assets new hashed names and drops the old ones.
+      // A tab still holding the previous HTML then asks for files that are gone
+      // and gets the 404 page back — "MIME type text/html" — and the page is
+      // dead until someone reloads it. Recover once, automatically.
+      (function () {
+        var KEY = 'sjl-asset-reload';
+        var failed = false;
+        window.addEventListener(
+          'error',
+          function (e) {
+            var el = e.target;
+            if (!el || (el.tagName !== 'SCRIPT' && el.tagName !== 'LINK')) return;
+            failed = true;
+            try {
+              if (sessionStorage.getItem(KEY)) return;
+              sessionStorage.setItem(KEY, '1');
+            } catch (err) {
+              return;
+            }
+            location.reload();
+          },
+          true
+        );
+        window.addEventListener('load', function () {
+          if (failed) return;
+          try {
+            sessionStorage.removeItem(KEY);
+          } catch (err) {}
+        });
+      })();
+    </script>
   </head>
   <body>
     <slot />

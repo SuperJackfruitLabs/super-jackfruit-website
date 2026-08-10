@@ -9,6 +9,11 @@
 # so they get a week, with revalidation after that as a backstop in case the
 # stamp is ever forgotten.
 
+# HTML must never be cached: it names the hashed assets, and a stale copy asks
+# for files a later deploy has already removed.
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
 

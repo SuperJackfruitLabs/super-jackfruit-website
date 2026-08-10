@@ -56,12 +56,23 @@ function guessTier(): Tier {
   if (forced === 'low' || forced === 'medium' || forced === 'high') return forced;
 
   const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-  const cores = navigator.hardwareConcurrency ?? 4;
-  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
+  // Both of these are optional: navigator.deviceMemory is Chromium-only, so on
+  // Safari and Firefox it is simply absent. Absence is NOT evidence of a weak
+  // machine — reading it as one is what used to drop every Safari and Firefox
+  // desktop to medium.
+  const cores = navigator.hardwareConcurrency;
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const weak = (v: number | undefined, limit: number) => v !== undefined && v <= limit;
 
-  if (cores <= 2 || mem <= 2 || (coarse && (cores <= 4 || mem <= 3))) return 'low';
-  // a touch device is a phone until it proves otherwise, however many cores it claims
-  if (coarse || cores <= 4 || mem <= 4) return 'medium';
+  // A touch device is phone-class until it proves otherwise: the ceiling there
+  // is thermal, and a phone that claims eight cores still cannot hold them.
+  if (coarse) return weak(cores, 4) || weak(mem, 3) ? 'low' : 'medium';
+
+  // Desktop starts at high and steps down only on hard evidence. Guessing
+  // optimistically is safe because the frame-time monitor is the real check —
+  // if the machine can't hold it, it drops a tier within a few seconds.
+  if (weak(cores, 2) || weak(mem, 2)) return 'low';
+  if (weak(cores, 4) && weak(mem, 4)) return 'medium';
   return 'high';
 }
 
