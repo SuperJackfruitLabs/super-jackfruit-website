@@ -5,6 +5,16 @@
 // Assets: Kenney City Kit Suburban + Nature Kit (CC0), street lamp kit, and
 // Han66st's Japan Offroad Car (CC-BY). This file assembles the village; the
 // pieces live in ./village/*.
+// three is imported statically rather than on demand: this page always mounts
+// the canvas, so a dynamic import bought nothing and cost a round trip — the
+// browser could not discover three until the page script had already run.
+// Static imports let the bundler emit a modulepreload, so it downloads in
+// parallel with everything else.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+// models ship meshopt-compressed (scripts/compress-assets.mjs); the decoder is
+// a few KB and rides along inside three's addons
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { projects, districts, byDistrict, type Project } from '../data/projects';
 import { createRoad, Z_START, Z_END } from './village/road';
 import { createEnv } from './village/env';
@@ -16,7 +26,8 @@ import { createAudio } from './village/audio';
 import { createInput } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
-import { createNpcs, NPC_MODELS, type IdleSpot } from './village/npcs';
+import { createNpcs, type IdleSpot } from './village/npcs';
+import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
@@ -45,11 +56,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   };
   (window as any).__villageTimings = timings;
 
-  const THREE = await import('three');
-  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  // models ship meshopt-compressed (scripts/compress-assets.mjs); the decoder
-  // is a few KB and rides along inside three's addons
-  const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
 
   // The signboards are drawn into canvases, so the face has to be ready before
   // THEY are built — but nothing else depends on it. Start it here and await it
@@ -110,11 +116,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // Ask for every model up front. The lamp, the villagers and the car used to
   // wait for this batch to finish before they were even requested, which cost
   // half a second of dead air on the wire for nothing.
-  const HOUSE_MODELS = ['building-type-a', 'building-type-c', 'building-type-e', 'building-type-g', 'building-type-h', 'building-type-j', 'building-type-m', 'building-type-q'];
-  const SCENERY_MODELS = ['driveway-short', 'planter', 'tree-large', 'tree-small', 'flower_purpleA', 'flower_redA', 'flower_yellowA', 'plant_bush', 'plant_bushLarge', 'rock_smallA', 'rock_smallC', 'tree_default', 'tree_detailed', 'tree_oak', 'tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'];
-  for (const name of [...HOUSE_MODELS, ...SCENERY_MODELS, 'street-lamp', 'offroad-car', ...NPC_MODELS]) {
-    void props.loadGltf(name);
-  }
+  for (const name of ALL_VILLAGE_MODELS) void props.loadGltf(name);
 
   const [houses, driveway, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees] =
     await Promise.all([

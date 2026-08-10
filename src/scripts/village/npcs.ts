@@ -22,7 +22,8 @@ const YIELD_RADIUS = 5.5;
 /** past this, a villager keeps its place but stops animating */
 const ANIMATE_RADIUS = 70;
 
-export const NPC_MODELS = ['npc-a', 'npc-b', 'npc-e', 'npc-i', 'npc-k', 'npc-q'];
+export { NPC_MODELS } from '../../data/village-models';
+import { NPC_MODELS } from '../../data/village-models';
 
 export interface IdleSpot {
   x: number;
