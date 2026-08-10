@@ -16,7 +16,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // a few KB and rides along inside three's addons
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { projects, districts, byDistrict, type Project } from '../data/projects';
-import { createRoad, Z_START, Z_END } from './village/road';
+import { createRoads, Z_START, Z_END, type BranchSpec } from './village/road';
 import { createEnv } from './village/env';
 import { createProps } from './village/props';
 import { createBoards } from './village/boards';
@@ -90,7 +90,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   };
 
   const env = createEnv(THREE, scene, renderer, quality.settings.shadowMapSize);
-  const road = createRoad(THREE, scene, maxAniso);
+  // Three district streets branch off the spine, one per district in the
+  // project data, sized to how many projects each holds: Agent Works has five
+  // and gets a broad residential turn, MCP Alley has seven and becomes the long
+  // narrow lane its name promises, the Odd Shop has three and gets a short
+  // crooked dead end. Offsets are [outward, along] from the junction.
+  const DISTRICT_STREETS: BranchSpec[] = [
+    { id: 'agent-works', t: 0.15, side: -1, width: 8.6, culDeSac: 7,
+      shape: [[2, 0], [16, 6], [31, 7], [45, -1], [55, -13]] },
+    { id: 'mcp-alley', t: 0.46, side: 1, width: 7.4, culDeSac: 6,
+      shape: [[2, 0], [18, -7], [35, -9], [52, -4], [68, 5], [79, 17]] },
+    { id: 'odd-shop', t: 0.74, side: -1, width: 7.8, culDeSac: 6.5,
+      shape: [[2, 0], [15, 8], [27, 14], [37, 24]] },
+  ];
+  const road = createRoads(THREE, scene, maxAniso, DISTRICT_STREETS);
 
   // the page shows a real bar while the village downloads; `total` climbs as
   // later batches are queued, so hold the fraction against a known floor and
@@ -107,7 +120,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   mark('setup');
 
   const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 400), groundMat);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.z = (Z_START + Z_END) / 2;
   ground.receiveShadow = true;
@@ -140,80 +153,126 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   const boards = createBoards(THREE, scene, maxAniso, props.addOrientedCollider);
 
-  // ---------- project stations along the winding road ----------
+  // ---------- the town ----------
+  // Projects live on their district's street, so each district is somewhere you
+  // turn off for rather than a sign you drive past. The main road carries the
+  // neighbours who don't ship software.
   const stations: Station[] = [];
   const houseCenters: Array<{ x: number; z: number }> = [];
   const idleSpots: IdleSpot[] = [];
   const chimneys: Chimney[] = [];
+
+  const clearOfHouses = (x: number, z: number, gap: number): boolean =>
+    !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap);
+
+  function putHouse(x: number, z: number, facing: number, size: number): void {
+    const proto = houses[Math.floor(rand() * houses.length)];
+    props.place(proto, size, x, z, facing, 'box');
+    houseCenters.push({ x, z });
+    if (chimneys.length < quality.settings.chimneys) {
+      const fx = Math.sin(facing);
+      const fz = Math.cos(facing);
+      // back from the road-facing gable, off to one side of the ridge
+      chimneys.push({
+        x: x - fx * 1.1 + fz * 1.3,
+        y: props.scaledSize(proto, size).y * 0.98,
+        z: z - fz * 1.1 - fx * 1.3,
+      });
+    }
+  }
+
+  for (const d of districts) {
+    const street = road.get(d.id);
+    const items = byDistrict(d.id);
+    const half = street.width / 2;
+
+    // gate at the mouth of the street, angled at traffic coming off the spine
+    {
+      const m = street.curve.getPointAt(0.07);
+      const n = street.perp(0.07);
+      boards.districtBoard(
+        d,
+        m.x + n.x * (half + 2.6),
+        m.z + n.z * (half + 2.6),
+        Math.atan2(-n.x, -n.z)
+      );
+    }
+
+    let side = 1;
+    items.forEach((project, i) => {
+      const t = 0.22 + ((i + 0.5) / items.length) * 0.64;
+      const c = street.curve.getPointAt(t);
+      const tan = street.curve.getTangentAt(t);
+      const n = street.perp(t).multiplyScalar(side);
+      const faceRoad = Math.atan2(-n.x, -n.z);
+
+      const hx = c.x + n.x * (half + 7.4);
+      const hz = c.z + n.z * (half + 7.4);
+      putHouse(hx, hz, faceRoad, 7.2 + rand() * 1.4);
+      props.place(driveway, 3.0, c.x + n.x * (half + 2.6), c.z + n.z * (half + 2.6), faceRoad);
+
+      const bx = c.x + n.x * (half + 1.5) + tan.x * 1.5;
+      const bz = c.z + n.z * (half + 1.5) + tan.z * 1.5;
+      boards.projectBoard(project, d.accent, bx, bz, faceRoad);
+      stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
+
+      idleSpots.push({
+        x: c.x + n.x * (half + 4.4) - tan.x * 2.2,
+        z: c.z + n.z * (half + 4.4) - tan.z * 2.2,
+        facing: faceRoad,
+      });
+
+      // a garden across the lane, so the far kerb isn't bare
+      const o = street.perp(t).multiplyScalar(-side);
+      props.place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.7, c.x + o.x * (half + 2.4), c.z + o.z * (half + 2.4), rand() * 6.28, false, 0.02);
+      if (rand() < 0.7) seasonalTree(Math.floor(rand() * 100), 2.6 + rand() * 1.6, c.x + o.x * (half + 6), c.z + o.z * (half + 6), rand() * 6.28);
+
+      side = -side;
+    });
+
+    // neighbours filling the rest of the street
+    for (let k = 0; k < 4; k++) {
+      const t = 0.14 + rand() * 0.78;
+      const n = street.perp(t).multiplyScalar(rand() < 0.5 ? 1 : -1);
+      const c = street.curve.getPointAt(t);
+      const hx = c.x + n.x * (half + 7.4);
+      const hz = c.z + n.z * (half + 7.4);
+      if (!clearOfHouses(hx, hz, 11)) continue;
+      putHouse(hx, hz, Math.atan2(-n.x, -n.z), 6.8 + rand() * 1.6);
+    }
+  }
+
+  // the spine: houses down both sides, kept clear of the junctions so the
+  // turnings stay readable
   {
-    const totalStations = projects.length;
-    let idx = 0;
-    let side = -1;
-    for (const d of districts) {
-      const items = byDistrict(d.id);
-      // district gate beside the road at the section start
-      const tGate = 0.05 + (idx / totalStations) * 0.86;
-      {
-        const c = road.curve.getPointAt(tGate);
-        const n = road.perp(tGate);
-        boards.districtBoard(d, c.x + n.x * 6.5, c.z + n.z * 6.5, Math.atan2(-n.x, -n.z));
+    const junctions = road.branches.map((b) => b.curve.getPointAt(0));
+    const half = road.main.width / 2;
+    let side = 1;
+    for (let t = 0.04; t < 0.96; t += 24 / road.main.length) {
+      const c = road.main.curve.getPointAt(t);
+      const n = road.main.perp(t).multiplyScalar(side);
+      const faceRoad = Math.atan2(-n.x, -n.z);
+      const hx = c.x + n.x * (half + 7.8);
+      const hz = c.z + n.z * (half + 7.8);
+      side = -side;
+      if (junctions.some((j) => Math.hypot(j.x - hx, j.z - hz) < 24)) continue;
+      if (road.isPaved(hx, hz, 7)) continue;
+      if (!clearOfHouses(hx, hz, 13)) continue;
+      putHouse(hx, hz, faceRoad, 7.0 + rand() * 2.0);
+      if (rand() < 0.55) {
+        props.place(driveway, 3.1, c.x + n.x * (half + 2.6), c.z + n.z * (half + 2.6), faceRoad);
       }
-      for (const project of items) {
-        const t = 0.08 + (idx / totalStations) * 0.86;
-        const c = road.curve.getPointAt(t);
-        const tan = road.curve.getTangentAt(t);
-        const n = road.perp(t).multiplyScalar(side);
-        const faceRoad = Math.atan2(-n.x, -n.z);
-
-        // deep house models reach ~4.7 toward the road — keep every facade
-        // behind the signboards at 6.4
-        const hx = c.x + n.x * 12.4;
-        const hz = c.z + n.z * 12.4;
-        const house = houses[Math.floor(rand() * houses.length)];
-        const houseSize = 7.5 + rand() * 1.8;
-        props.place(house, houseSize, hx, hz, faceRoad, 'box');
-        houseCenters.push({ x: hx, z: hz });
-        // smoke leaves from the ridge, back from the road-facing gable
-        if (chimneys.length < quality.settings.chimneys) {
-          const roof = props.scaledSize(house, houseSize);
-          chimneys.push({
-            x: hx + n.x * 1.4 + tan.x * 1.2,
-            y: roof.y * 0.98,
-            z: hz + n.z * 1.4 + tan.z * 1.2,
-          });
-        }
-        props.place(driveway, 3.2, c.x + n.x * 7.3, c.z + n.z * 7.3, faceRoad);
-        const bx = c.x + n.x * 6.4 + tan.x * 1.6;
-        const bz = c.z + n.z * 6.4 + tan.z * 1.6;
-        boards.projectBoard(project, d.accent, bx, bz, faceRoad);
-        stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
-
-        // someone stands in the front garden, off the driveway, facing the road
-        idleSpots.push({
-          x: c.x + n.x * 8.8 - tan.x * 2.4,
-          z: c.z + n.z * 8.8 - tan.z * 2.4,
-          facing: faceRoad,
-        });
-
-        // yard + across-the-road garden
-        const treeKind = rand() < 0.5 ? kTreeLarge : kTreeSmall;
-        props.place(treeKind, 2.2 + rand() * 1.6, hx + tan.x * (4 + rand() * 2), hz + tan.z * (4 + rand() * 2), rand() * 6.28, 'trunk', 0.012);
-        if (rand() < 0.6) props.place(planter, 1.1, c.x + n.x * 6.8 - tan.x * 2.2, c.z + n.z * 6.8 - tan.z * 2.2, faceRoad, 'box');
-        seasonalTree(Math.floor(rand() * 100), 3 + rand() * 2, c.x - n.x * (9 + rand() * 3), c.z - n.z * (9 + rand() * 3), rand() * 6.28);
-        props.place(bushes[Math.floor(rand() * bushes.length)], 1.2 + rand() * 0.8, c.x - n.x * (7 + rand() * 2), c.z - n.z * (7 + rand() * 2), rand() * 6.28, false, 0.02);
-
-        idx++;
-        side *= -1;
+      if (rand() < 0.4) {
+        idleSpots.push({ x: c.x + n.x * (half + 4.6), z: c.z + n.z * (half + 4.6), facing: faceRoad });
       }
     }
   }
 
-  mark('stations+boards');
   // ---------- the village square: HQ, about, contact kiosk ----------
   // the square sits at the END of the road — the drive's destination
   const plaza = (() => {
-    const c = road.curve.getPointAt(1);
-    const dir = road.curve.getTangentAt(1).normalize(); // direction of travel
+    const c = road.main.curve.getPointAt(1);
+    const dir = road.main.curve.getTangentAt(1).normalize(); // direction of travel
     return { x: c.x + dir.x * 17, z: c.z + dir.z * 17, n: dir, c };
   })();
   {
@@ -282,7 +341,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   mark('plaza');
   const lamps = await createLamps(
-    THREE, scene, props.loadGltf, road,
+    THREE, scene, props.loadGltf, road.all,
     [
       ...houseCenters.map((h) => ({ x: h.x, z: h.z, r: 8.5 })),
       ...stations.map((s) => ({ x: s.x, z: s.z, r: 3 })),
@@ -292,13 +351,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   );
 
   mark('lamps');
-  // flowers along the road edges
-  for (let t = 0.02; t < 0.98; t += (3.5 + rand() * 3) / road.length) {
-    const c = road.curve.getPointAt(t);
-    for (const sd of [-1, 1]) {
-      const n = road.perp(t).multiplyScalar(sd);
-      if (rand() < quality.settings.flowerChance) {
-        props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, c.x + n.x * (5.3 + rand() * 0.6), c.z + n.z * (5.3 + rand() * 0.6), rand() * 6.28, false, 0.05);
+  // flowers along every kerb
+  for (const seg of road.all) {
+    const half = seg.width / 2;
+    for (let t = 0.02; t < 0.98; t += (3.5 + rand() * 3) / seg.length) {
+      const c = seg.curve.getPointAt(t);
+      for (const sd of [-1, 1]) {
+        const n = seg.perp(t).multiplyScalar(sd);
+        if (rand() < quality.settings.flowerChance) {
+          props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, c.x + n.x * (half + 0.3 + rand() * 0.5), c.z + n.z * (half + 0.3 + rand() * 0.5), rand() * 6.28, false, 0.05);
+        }
       }
     }
   }
@@ -307,14 +369,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   for (let i = 0; i < quality.settings.bgTrees; i++) {
     const x = (rand() - 0.5) * 300;
     const z = Z_END - 20 + rand() * (Z_START - Z_END + 60);
-    if (road.distTo(x, z) < 13) continue;
+    if (road.distTo(x, z) < 15) continue;
     if (Math.hypot(x - plaza.x, z - plaza.z) < 16) continue;
+    if (!clearOfHouses(x, z, 10)) continue;
     seasonalTree(Math.floor(rand() * 100), 3 + rand() * 3.5, x, z, rand() * 6.28);
   }
   for (let i = 0; i < quality.settings.bgRocks; i++) {
     const x = (rand() - 0.5) * 280;
     const z = Z_END - 10 + rand() * (Z_START - Z_END + 40);
-    if (road.distTo(x, z) < 12) continue;
+    if (road.distTo(x, z) < 14) continue;
+    if (!clearOfHouses(x, z, 9)) continue;
     props.place(rocks[Math.floor(rand() * rocks.length)], 0.5 + rand() * 0.8, x, z, rand() * 6.28);
   }
 
@@ -339,7 +403,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     clouds.push(cloud);
   }
 
-  const npcs = await createNpcs(THREE, scene, props.loadGltf, road, idleSpots, {
+  const npcs = await createNpcs(THREE, scene, props.loadGltf, road.all, idleSpots, {
     walkers: quality.settings.npcWalkers,
     idlers: quality.settings.npcIdlers,
   }, rand);
@@ -401,12 +465,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // the asphalt and the paved square are smooth; everything else is dirt
   const PAVED_MARGIN = 0.6;
   const offRoad = (x: number, z: number): boolean =>
-    road.distTo(x, z) > road.halfAsphalt + PAVED_MARGIN && Math.hypot(x - plaza.x, z - plaza.z) > 11;
+    !road.isPaved(x, z, PAVED_MARGIN) && Math.hypot(x - plaza.x, z - plaza.z) > 11;
 
   const carCtx = {
     resolve: props.resolve,
     offRoad,
-    bounds: { minX: -100, maxX: 100, minZ: Z_END + 4, maxZ: Z_START - 2 },
+    bounds: { minX: -130, maxX: 130, minZ: Z_END + 4, maxZ: Z_START - 2 },
   };
 
   // ---------- loop ----------
@@ -531,6 +595,18 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     timings: () => timings,
     npcs: () => npcs.list(),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
+    roads: () =>
+      road.all.map((seg) => {
+        const a = seg.curve.getPointAt(0);
+        const b = seg.curve.getPointAt(1);
+        return {
+          id: seg.id,
+          length: +seg.length.toFixed(1),
+          width: seg.width,
+          start: { x: +a.x.toFixed(1), z: +a.z.toFixed(1) },
+          end: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) },
+        };
+      }),
     teleport: (x: number, z: number, h = Math.PI) => car.teleport(x, z, h),
     fx: () => fx.counts(),
   };

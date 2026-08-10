@@ -10,12 +10,10 @@
 import type * as T from 'three';
 import type { Three } from './types';
 import type { LoadedGltf } from './props';
-import type { Road } from './road';
+import type { RoadSegment } from './road';
 
 /** villager height in village units — a shade under half the car's length */
 const HEIGHT = 1.4;
-/** the pavement sits just outside the asphalt */
-const PAVEMENT_OFFSET = 4.8;
 const WALK_SPEED = 1.15;
 /** how close the car gets before a walker stops to let it by */
 const YIELD_RADIUS = 5.5;
@@ -49,6 +47,7 @@ interface Villager {
   idle: T.AnimationAction;
   walk: T.AnimationAction | null;
   /** walkers only */
+  seg: RoadSegment;
   t: number;
   dir: 1 | -1;
   side: 1 | -1;
@@ -61,7 +60,7 @@ export async function createNpcs(
   THREE: Three,
   scene: T.Scene,
   load: (name: string) => Promise<LoadedGltf>,
-  road: Road,
+  segments: RoadSegment[],
   idleSpots: IdleSpot[],
   counts: NpcCounts,
   rand: () => number
@@ -133,6 +132,7 @@ export async function createNpcs(
       mixer,
       idle,
       walk,
+      seg: segments[0],
       t: 0,
       dir: 1,
       side: 1,
@@ -144,7 +144,9 @@ export async function createNpcs(
 
   for (let i = 0; i < counts.walkers; i++) {
     const v = spawn(true, i);
-    v.t = 0.06 + (i / Math.max(1, counts.walkers)) * 0.86 + rand() * 0.03;
+    // spread them over the network, main road first so the spine feels used
+    v.seg = segments[i % segments.length];
+    v.t = 0.06 + ((i / Math.max(1, counts.walkers)) * 0.86 + rand() * 0.1) % 0.86;
     v.dir = rand() < 0.5 ? 1 : -1;
     v.side = i % 2 === 0 ? 1 : -1;
     villagers.push(v);
@@ -188,7 +190,7 @@ export async function createNpcs(
             }
           }
           if (!v.yielding) {
-            v.t += (v.dir * v.speed * dt) / road.length;
+            v.t += (v.dir * v.speed * dt) / v.seg.length;
             if (v.t > 0.97) {
               v.t = 0.97;
               v.dir = -1;
@@ -197,14 +199,15 @@ export async function createNpcs(
               v.dir = 1;
             }
           }
-          road.curve.getPointAt(v.t, point);
-          const n = road.perp(v.t);
+          v.seg.curve.getPointAt(v.t, point);
+          const n = v.seg.perp(v.t);
+          const pavement = v.seg.width / 2 - 0.8;
           v.root.position.set(
-            point.x + n.x * PAVEMENT_OFFSET * v.side,
+            point.x + n.x * pavement * v.side,
             0,
-            point.z + n.z * PAVEMENT_OFFSET * v.side
+            point.z + n.z * pavement * v.side
           );
-          road.curve.getTangentAt(v.t, tangent);
+          v.seg.curve.getTangentAt(v.t, tangent);
           v.root.rotation.y = Math.atan2(tangent.x * v.dir, tangent.z * v.dir);
         }
 

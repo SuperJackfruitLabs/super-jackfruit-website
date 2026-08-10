@@ -4,10 +4,9 @@
 import type * as T from 'three';
 import type { Three } from './types';
 import type { LoadedGltf } from './props';
-import type { Road } from './road';
+import type { RoadSegment } from './road';
 
 const LAMP_HEIGHT = 4.2;
-const KERB_OFFSET = 6.9;
 const SPACING = 22;
 
 export interface Blocker {
@@ -25,7 +24,7 @@ export async function createLamps(
   THREE: Three,
   scene: T.Scene,
   load: (name: string) => Promise<LoadedGltf>,
-  road: Road,
+  segments: RoadSegment[],
   blockers: Blocker[],
   addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void,
   lightCount: number
@@ -126,48 +125,53 @@ export async function createLamps(
 
   const protoDims = new THREE.Box3().setFromObject(proto).getSize(new THREE.Vector3());
   const lampScale = LAMP_HEIGHT / (protoDims.y || 1);
-  const step = SPACING / road.length;
   let li = 0;
-  for (let t = 0.03; t < 0.985; t += step) {
-    const c = road.curve.getPointAt(t);
-    const n = road.perp(t).multiplyScalar(li % 2 === 0 ? 1 : -1);
-    const lx = c.x + n.x * KERB_OFFSET;
-    const lz = c.z + n.z * KERB_OFFSET;
-    if (blockers.some((b) => Math.hypot(b.x - lx, b.z - lz) < b.r)) {
+  for (const seg of segments) {
+    // narrow lanes get their lamps closer in, and more often
+    const kerb = seg.width / 2 + 1.3;
+    const spacing = seg.id === 'main' ? SPACING : SPACING * 0.8;
+    const step = spacing / seg.length;
+    for (let t = 0.04; t < 0.97; t += step) {
+      const c = seg.curve.getPointAt(t);
+      const n = seg.perp(t).multiplyScalar(li % 2 === 0 ? 1 : -1);
+      const lx = c.x + n.x * kerb;
+      const lz = c.z + n.z * kerb;
+      if (blockers.some((b) => Math.hypot(b.x - lx, b.z - lz) < b.r)) {
+        li++;
+        continue;
+      }
+      const inst = proto.clone(true);
+      inst.scale.setScalar(lampScale);
+      inst.position.set(lx, 0, lz);
+      inst.rotation.y = Math.atan2(-n.x, -n.z);
+      scene.add(inst);
+      addCollider(lx, lz, 0.35, 0.35, 0);
+
+      // the lantern hangs at the crook's end, out over the road
+      const armW = lantern.arm * lampScale;
+      const headY = lantern.height * lampScale;
+      const hx = lx - n.x * armW;
+      const hz = lz - n.z * armW;
+      heads.push({ x: hx, y: headY, z: hz });
+
+      const glow = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: glowTex, color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      glow.scale.setScalar(1.5);
+      glow.position.set(hx, headY, hz);
+      scene.add(glow);
+      glows.push(glow);
+
+      const pool = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.5, 5.5),
+        new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffca7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(hx, 0.055, hz);
+      scene.add(pool);
+      glows.push(pool);
       li++;
-      continue;
     }
-    const inst = proto.clone(true);
-    inst.scale.setScalar(lampScale);
-    inst.position.set(lx, 0, lz);
-    inst.rotation.y = Math.atan2(-n.x, -n.z);
-    scene.add(inst);
-    addCollider(lx, lz, 0.35, 0.35, 0);
-
-    // the lantern hangs at the crook's end, out over the road
-    const armW = lantern.arm * lampScale;
-    const headY = lantern.height * lampScale;
-    const hx = lx - n.x * armW;
-    const hz = lz - n.z * armW;
-    heads.push({ x: hx, y: headY, z: hz });
-
-    const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: glowTex, color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
-    );
-    glow.scale.setScalar(1.5);
-    glow.position.set(hx, headY, hz);
-    scene.add(glow);
-    glows.push(glow);
-
-    const pool = new THREE.Mesh(
-      new THREE.PlaneGeometry(5.5, 5.5),
-      new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffca7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
-    );
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.set(hx, 0.055, hz);
-    scene.add(pool);
-    glows.push(pool);
-    li++;
   }
 
   // a handful of real lights, walked to whichever lanterns are nearest the car
