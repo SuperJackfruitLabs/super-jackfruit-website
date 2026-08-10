@@ -465,6 +465,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     audio.setChannel(e.detail.channel, e.detail.on);
   }) as EventListener);
   window.addEventListener('village:time', ((e: CustomEvent<string>) => env.setTime(e.detail)) as EventListener);
+  window.addEventListener('village:quality', ((e: CustomEvent<'low' | 'medium' | 'high'>) => {
+    // Pixel ratio and shadows change on the spot; scenery counts were spent at
+    // build time, so the rest of the tier lands on the next visit.
+    applyQuality(quality.setTier(e.detail));
+  }) as EventListener);
   window.addEventListener('village:season', ((e: CustomEvent<string>) => {
     const season = e.detail === 'autumn' ? 'autumn' : 'summer';
     props.setSeason(season);
@@ -481,6 +486,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // counts were spent at build time
   function applyQuality(s: QualitySettings): void {
     renderer.setPixelRatio(s.pixelRatio);
+    env.setShadowMapSize(s.shadowMapSize);
+    window.dispatchEvent(new CustomEvent('village:quality-changed', { detail: s.tier }));
     if (renderer.shadowMap.enabled !== s.shadows) {
       renderer.shadowMap.enabled = s.shadows;
       // shadows are compiled into the shaders — every material needs a rebuild
@@ -620,6 +627,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   mark('wiring');
   timings.push({ phase: 'ready@', ms: Math.round(performance.now()) });
+  window.dispatchEvent(
+    new CustomEvent('village:quality-changed', { detail: quality.settings.tier })
+  );
   window.dispatchEvent(new CustomEvent('village:ready'));
 
   (window as any).__village = {

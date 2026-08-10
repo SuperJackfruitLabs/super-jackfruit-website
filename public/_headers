@@ -4,10 +4,16 @@
 # returning visitor revalidates all 33 village models before the scene can
 # start — 33 round trips to be told nothing changed.
 #
-# Astro hashes its own filenames, so those can be cached forever. The models
-# live at stable paths and carry a ?v= stamp instead (see village-models.ts),
-# so they get a week, with revalidation after that as a backstop in case the
-# stamp is ever forgotten.
+# Astro hashes its own filenames, so those are safe to cache — but NOT with
+# `immutable`, and not for a year. A request that lands during a deploy swap
+# gets Pages' fallback HTML with a 200 status, and these rules are applied by
+# path regardless of status: that response then gets cached under the asset's
+# URL for as long as we allow. `immutable` made that a year, and served HTML in
+# place of a stylesheet until it expired. A day is long enough to be worth
+# caching and short enough to heal itself.
+#
+# The models live at stable paths and carry a ?v= stamp instead (see
+# village-models.ts), so they get a week.
 
 # HTML must never be cached: it names the hashed assets, and a stale copy asks
 # for files a later deploy has already removed.
@@ -15,7 +21,7 @@
   Cache-Control: public, max-age=0, must-revalidate
 
 /_astro/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400
 
 /assets/*
   Cache-Control: public, max-age=604800

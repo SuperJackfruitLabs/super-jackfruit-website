@@ -40,6 +40,8 @@ export const TIME_PRESETS: Record<string, EnvPreset> = {
 
 export interface Env {
   setTime(name: string): void;
+  /** shadow detail follows the quality tier, including when it changes mid-drive */
+  setShadowMapSize(size: number): void;
   /** advances the transition; returns the current night factor (0..1) */
   update(dt: number): number;
   /** keeps the sky centred on the camera and the shadow frustum on the player */
@@ -141,6 +143,14 @@ export function createEnv(THREE: Three, scene: T.Scene, renderer: T.WebGLRendere
   return {
     setTime(name: string): void {
       if (TIME_PRESETS[name]) target = TIME_PRESETS[name];
+    },
+
+    setShadowMapSize(size: number): void {
+      if (sun.shadow.mapSize.width === size) return;
+      sun.shadow.mapSize.set(size, size);
+      // three only allocates the map once; drop it so the new size takes
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
     },
     update(dt: number): number {
       const k = Math.min(1, dt * 1.6);

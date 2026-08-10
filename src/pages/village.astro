@@ -34,6 +34,12 @@ import '@fontsource-variable/inconsolata';
         </button>
       </div>
 
+      <div class="env__group">
+        <button type="button" id="quality-toggle" class="env__quality" data-tier="high" aria-label="Graphics: high. Change" title="Graphics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect class="q1" x="4" y="14" width="4" height="6" rx="1"/><rect class="q2" x="10" y="9.5" width="4" height="10.5" rx="1"/><rect class="q3" x="16" y="5" width="4" height="15" rx="1"/></svg>
+        </button>
+      </div>
+
       <div class="env__group" id="audio-row" role="group" aria-label="Sound">
         <button type="button" data-audio="music" data-active="true" aria-pressed="true" aria-label="Music" title="Music">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V5.2l10-2v12.3"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.5" r="2.4"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
@@ -94,6 +100,7 @@ import '@fontsource-variable/inconsolata';
 
 <style>
   .scene {
+    --build: 3;
     position: fixed;
     inset: 0;
     background: #9ed4f5;
@@ -201,6 +208,13 @@ import '@fontsource-variable/inconsolata';
   .env button.env__leaf[data-season-state='summer'] { background: rgba(58, 132, 68, 0.92); }
   .env button.env__leaf[data-season-state='autumn'] { background: rgba(190, 112, 24, 0.94); }
   .env button.env__leaf:hover { color: #fffaf0; }
+
+  /* graphics: bars for the level, always filled because there is always a level */
+  .env button.env__quality { background: rgba(40, 50, 60, 0.86); color: #f6f0e2; }
+  .env button.env__quality svg rect { fill: currentColor; stroke: none; }
+  .env button.env__quality[data-tier='low'] .q2,
+  .env button.env__quality[data-tier='low'] .q3,
+  .env button.env__quality[data-tier='medium'] .q3 { opacity: 0.3; }
 
   /* a struck-through icon is off; no second state to learn */
   .env button[data-active='true'] .env__slash { display: none; }
@@ -542,6 +556,22 @@ import '@fontsource-variable/inconsolata';
     btn.setAttribute('aria-pressed', 'true');
     window.dispatchEvent(new CustomEvent('village:time', { detail: btn.dataset.time }));
   });
+
+  // graphics: cycles through the tiers, showing the level as filled bars
+  const TIERS = ['low', 'medium', 'high'] as const;
+  const qualityBtn = document.getElementById('quality-toggle')!;
+  const showTier = (tier: string) => {
+    qualityBtn.dataset.tier = tier;
+    qualityBtn.setAttribute('aria-label', `Graphics: ${tier}. Change`);
+  };
+  qualityBtn.addEventListener('click', () => {
+    const i = TIERS.indexOf((qualityBtn.dataset.tier ?? 'high') as (typeof TIERS)[number]);
+    const next = TIERS[(i + 1) % TIERS.length];
+    showTier(next);
+    window.dispatchEvent(new CustomEvent('village:quality', { detail: next }));
+  });
+  // the scene decides the opening tier, and may drop one if the device struggles
+  window.addEventListener('village:quality-changed', ((e: CustomEvent<string>) => showTier(e.detail)) as EventListener);
 
   // season: a single leaf that turns
   const seasonBtn = document.getElementById('season-toggle')!;

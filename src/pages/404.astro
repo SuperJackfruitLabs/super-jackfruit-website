@@ -1,0 +1,78 @@
+---
+// Without this, Pages answers any unknown path with index.html and a 200 —
+// including a missing /_astro/ asset during the seconds a deploy takes to swap
+// over. A 200 is cacheable, so an HTML body could get stored under a
+// stylesheet's URL and served in its place. A real 404 status can't do that.
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Not here — Super Jackfruit Labs">
+  <main class="lost">
+    <p class="lost__code">404</p>
+    <h1>There's no road to this one.</h1>
+    <p class="lost__body">
+      The page you asked for isn't part of the village.
+    </p>
+    <p class="lost__links">
+      <a href="/">the neon street</a>
+      <a href="/village/">the village</a>
+    </p>
+  </main>
+</Layout>
+
+<style>
+  .lost {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 2rem;
+    text-align: center;
+    background: #9ed4f5;
+    color: #2c2a26;
+    font-family: 'Inconsolata Variable', monospace;
+  }
+
+  .lost__code {
+    margin: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.32em;
+    color: rgba(44, 42, 38, 0.55);
+  }
+
+  .lost h1 {
+    margin: 0;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+  }
+
+  .lost__body {
+    margin: 0;
+    font-size: 1.15rem;
+    color: rgba(44, 42, 38, 0.75);
+  }
+
+  .lost__links {
+    display: flex;
+    gap: 1.6rem;
+    margin: 1rem 0 0;
+  }
+
+  .lost__links a {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #2c2a26;
+    text-decoration: none;
+    border-bottom: 2px solid #d98a1f;
+    padding-bottom: 0.15rem;
+  }
+
+  .lost__links a:hover,
+  .lost__links a:focus-visible {
+    color: #d98a1f;
+    outline: none;
+  }
+</style>

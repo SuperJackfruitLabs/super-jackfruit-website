@@ -28,6 +28,12 @@ export interface Quality {
   settings: QualitySettings;
   /** feed it every frame; fires once when the device proves it can't keep up */
   monitor(dt: number, onDowngrade: (s: QualitySettings) => void): void;
+  /**
+   * An explicit choice. Applied at once, remembered for next time, and it
+   * retires the auto-tuner — someone who picked a tier does not want it
+   * quietly overruled.
+   */
+  setTier(tier: Tier): QualitySettings;
 }
 
 const TIERS: Record<Tier, Omit<QualitySettings, 'pixelRatio'>> = {
@@ -50,10 +56,22 @@ function build(tier: Tier): QualitySettings {
   };
 }
 
+const STORE_KEY = 'sjl-tier';
+
+function isTier(v: string | null): v is Tier {
+  return v === 'low' || v === 'medium' || v === 'high';
+}
+
 function guessTier(): Tier {
   // ?tier=low pins a tier, for checking how the village looks on a weaker device
   const forced = new URLSearchParams(window.location.search).get('tier');
-  if (forced === 'low' || forced === 'medium' || forced === 'high') return forced;
+  if (isTier(forced)) return forced;
+
+  // a choice made on a previous visit outranks any guess
+  try {
+    const saved = localStorage.getItem(STORE_KEY);
+    if (isTier(saved)) return saved;
+  } catch {}
 
   const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
   // Both of these are optional: navigator.deviceMemory is Chromium-only, so on
@@ -81,12 +99,32 @@ export function createQuality(): Quality {
   let elapsed = 0;
   let windowTime = 0;
   let frames = 0;
-  let done = settings.tier === 'low';
+  // if the tier was chosen rather than guessed, don't second-guess it
+  let done =
+    settings.tier === 'low' ||
+    new URLSearchParams(window.location.search).has('tier') ||
+    (() => {
+      try {
+        return isTier(localStorage.getItem(STORE_KEY));
+      } catch {
+        return false;
+      }
+    })();
 
   return {
     get settings() {
       return settings;
     },
+
+    setTier(tier: Tier): QualitySettings {
+      settings = build(tier);
+      done = true; // hands off from here; the choice was made deliberately
+      try {
+        localStorage.setItem(STORE_KEY, tier);
+      } catch {}
+      return settings;
+    },
+
     monitor(dt, onDowngrade): void {
       if (done) return;
       elapsed += dt;
