@@ -10,20 +10,37 @@ import '@fontsource-variable/inconsolata';
     <p class="tag">the village — work in progress</p>
     <p class="credit">music: yd · engine: qubodup (CC-BY, opengameart) · car: Han66st (CC-BY, sketchfab)</p>
 
-    <div class="env" aria-label="time and season">
-      <div class="env__row" id="time-row">
-        <button data-time="dawn">dawn</button>
-        <button data-time="day">day</button>
-        <button data-time="dusk" data-active="true">dusk</button>
-        <button data-time="night">night</button>
+    <div class="env">
+      <!-- time reads as one track the day moves along, not four loose buttons -->
+      <div class="env__group env__group--track" id="time-row" role="group" aria-label="Time of day">
+        <button type="button" data-time="dawn" aria-pressed="false" aria-label="Dawn" title="Dawn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18M7.5 18a4.5 4.5 0 0 1 9 0M12 3.5v4M9.5 6 12 3.5 14.5 6M4.8 10.2l1.6 1.6M19.2 10.2l-1.6 1.6"/></svg>
+        </button>
+        <button type="button" data-time="day" aria-pressed="false" aria-label="Day" title="Day">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.4 4.4 6 6M18 18l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.4 19.6 6 18M18 6l1.6-1.6"/></svg>
+        </button>
+        <button type="button" data-time="dusk" data-active="true" aria-pressed="true" aria-label="Dusk" title="Dusk">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18M7.5 18a4.5 4.5 0 0 1 9 0M12 7.5v-4M9.5 5 12 7.5 14.5 5M4.8 10.2l1.6 1.6M19.2 10.2l-1.6 1.6"/></svg>
+        </button>
+        <button type="button" data-time="night" aria-pressed="false" aria-label="Night" title="Night">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1Z"/></svg>
+        </button>
       </div>
-      <div class="env__row" id="season-row">
-        <button data-season="summer" data-active="true">summer</button>
-        <button data-season="autumn">autumn</button>
+
+      <!-- a season is always one or the other, so it's a single leaf that turns -->
+      <div class="env__group">
+        <button type="button" id="season-toggle" class="env__leaf" data-season-state="summer" aria-label="Season: summer. Switch to autumn" title="Season">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c0-7.5 4.8-12.2 15-13 0 10.2-4.8 15-12 15H5Z"/><path d="M9 16c1.8-2.8 4.4-4.8 7.2-5.8"/></svg>
+        </button>
       </div>
-      <div class="env__row" id="audio-row">
-        <button data-audio="music" data-active="true">♪ music</button>
-        <button data-audio="engine" data-active="true">engine</button>
+
+      <div class="env__group" id="audio-row" role="group" aria-label="Sound">
+        <button type="button" data-audio="music" data-active="true" aria-pressed="true" aria-label="Music" title="Music">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V5.2l10-2v12.3"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.5" r="2.4"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
+        </button>
+        <button type="button" data-audio="engine" data-active="true" aria-pressed="true" aria-label="Engine" title="Engine">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.5 5.3 10a2 2 0 0 1 1.9-1.4h9.6A2 2 0 0 1 18.7 10l1.8 5.5v2.6h-2.1M5.6 18.1H3.5v-2.6M3.5 15.5h17"/><circle cx="7.8" cy="18.1" r="1.7"/><circle cx="16.2" cy="18.1" r="1.7"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
+        </button>
       </div>
     </div>
 
@@ -120,32 +137,78 @@ import '@fontsource-variable/inconsolata';
     top: 1.4rem;
     right: 1.4rem;
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-end;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.45rem;
   }
 
-  .env__row { display: flex; gap: 0.4rem; }
+  /* each group is its own pill, so the grouping is the only label needed */
+  .env__group {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.2rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1.5px solid rgba(40, 50, 60, 0.16);
+    backdrop-filter: blur(4px);
+  }
 
   .env button {
-    font-family: 'Inconsolata Variable', monospace;
-    font-size: 1.05rem;
-    letter-spacing: 0.04em;
-    padding: 0.35rem 0.9rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
     border-radius: 999px;
-    border: 1.5px solid rgba(40, 50, 60, 0.3);
-    background: rgba(255, 255, 255, 0.55);
-    color: rgba(40, 50, 60, 0.75);
+    background: transparent;
+    color: rgba(40, 50, 60, 0.62);
     cursor: pointer;
+    transition: background-color 0.16s ease, color 0.16s ease;
   }
+
+  .env button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .env button:hover { color: rgba(40, 50, 60, 0.95); }
 
   .env button[data-active='true'] {
-    background: rgba(40, 50, 60, 0.85);
+    background: rgba(40, 50, 60, 0.86);
     color: #f6f0e2;
-    border-color: transparent;
   }
 
-  .env button:focus-visible { outline: 2px solid rgba(40, 50, 60, 0.6); outline-offset: 2px; }
+  .env button:focus-visible {
+    outline: 2px solid #d98a1f;
+    outline-offset: 2px;
+  }
+
+  /* A season is always one or the other, so the leaf is always filled — same
+     "filled = current" language as the other two groups — and carries the
+     season in its hue rather than inventing a second visual state. */
+  /* qualified with `button` on purpose: scoping turns `.env button` into a
+     higher-specificity selector than a bare class + attribute, so without the
+     type selector here the transparent background wins and the leaf stays grey */
+  .env button.env__leaf { color: #f6f0e2; }
+  .env button.env__leaf[data-season-state='summer'] { background: rgba(58, 132, 68, 0.92); }
+  .env button.env__leaf[data-season-state='autumn'] { background: rgba(190, 112, 24, 0.94); }
+  .env button.env__leaf:hover { color: #fffaf0; }
+
+  /* a struck-through icon is off; no second state to learn */
+  .env button[data-active='true'] .env__slash { display: none; }
+  .env__slash { stroke-width: 1.9; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .env button { transition: none; }
+  }
 
   .credit {
     position: absolute;
@@ -401,6 +464,8 @@ import '@fontsource-variable/inconsolata';
 
   /* the keyboard legend is meaningless once the pedals are up */
   .scene[data-touch='true'] .hint { display: none; }
+  .scene[data-touch='true'] .env button { width: 2.75rem; height: 2.75rem; }
+  .scene[data-touch='true'] .env button svg { width: 1.4rem; height: 1.4rem; }
   /* tucked under the visited chip — the bottom belongs to the controls now */
   .scene[data-touch='true'] .credit {
     bottom: auto;
@@ -464,16 +529,31 @@ import '@fontsource-variable/inconsolata';
     accent: string;
   }
 
-  for (const row of [document.getElementById('time-row')!, document.getElementById('season-row')!]) {
-    row.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('button');
-      if (!btn) return;
-      for (const b of row.querySelectorAll('button')) b.dataset.active = 'false';
-      btn.dataset.active = 'true';
-      if (btn.dataset.time) window.dispatchEvent(new CustomEvent('village:time', { detail: btn.dataset.time }));
-      if (btn.dataset.season) window.dispatchEvent(new CustomEvent('village:season', { detail: btn.dataset.season }));
-    });
-  }
+  // time of day: one active segment at a time
+  const timeRow = document.getElementById('time-row')!;
+  timeRow.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button');
+    if (!btn || !btn.dataset.time) return;
+    for (const b of timeRow.querySelectorAll('button')) {
+      b.dataset.active = 'false';
+      b.setAttribute('aria-pressed', 'false');
+    }
+    btn.dataset.active = 'true';
+    btn.setAttribute('aria-pressed', 'true');
+    window.dispatchEvent(new CustomEvent('village:time', { detail: btn.dataset.time }));
+  });
+
+  // season: a single leaf that turns
+  const seasonBtn = document.getElementById('season-toggle')!;
+  seasonBtn.addEventListener('click', () => {
+    const next = seasonBtn.dataset.seasonState === 'summer' ? 'autumn' : 'summer';
+    seasonBtn.dataset.seasonState = next;
+    seasonBtn.setAttribute(
+      'aria-label',
+      next === 'summer' ? 'Season: summer. Switch to autumn' : 'Season: autumn. Switch to summer'
+    );
+    window.dispatchEvent(new CustomEvent('village:season', { detail: next }));
+  });
 
   window.addEventListener('village:station', ((e: CustomEvent<StationDetail | null>) => {
     if (!e.detail) {
@@ -625,9 +705,10 @@ import '@fontsource-variable/inconsolata';
   // separate audio toggles
   document.getElementById('audio-row')!.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('button');
-    if (!btn) return;
+    if (!btn || !btn.dataset.audio) return;
     const on = btn.dataset.active !== 'true';
     btn.dataset.active = String(on);
+    btn.setAttribute('aria-pressed', String(on));
     window.dispatchEvent(new CustomEvent('village:audio', { detail: { channel: btn.dataset.audio, on } }));
   });
 </script>
