@@ -918,7 +918,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
   let variant: import('three').Object3D | undefined;
   carGltf.scene.traverse((o) => {
-    if (!variant && norm(o.name) === 'cube00421') variant = o; // the blue paint
+    if (!variant && norm(o.name) === 'cube5') variant = o; // the olive-green paint
   });
   if (!variant) throw new Error('offroad-car: paint variant not found');
   variant.position.x = 0;
