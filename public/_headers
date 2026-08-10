@@ -1,0 +1,16 @@
+# Cloudflare Pages caching rules.
+#
+# Without these, Pages serves everything as `max-age=0, must-revalidate`, so a
+# returning visitor revalidates all 33 village models before the scene can
+# start — 33 round trips to be told nothing changed.
+#
+# Astro hashes its own filenames, so those can be cached forever. The models
+# live at stable paths and carry a ?v= stamp instead (see village-models.ts),
+# so they get a week, with revalidation after that as a backstop in case the
+# stamp is ever forgotten.
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=604800

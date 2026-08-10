@@ -8,6 +8,7 @@
 // houses, which is what used to create invisible walls beside the road.
 import type * as T from 'three';
 import type { GltfLoaderLike, Three } from './types';
+import { modelUrl } from '../../data/village-models';
 
 export interface ColliderBox {
   cx: number;
@@ -94,7 +95,7 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
     if (inFlight) return inFlight;
 
     const p = (async () => {
-      const gltf = await loader.loadAsync(`/assets/village/${name}.glb`);
+      const gltf = await loader.loadAsync(modelUrl(name));
       const g = gltf.scene;
       g.traverse((o) => {
         const mesh = o as T.Mesh;

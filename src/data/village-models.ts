@@ -44,4 +44,12 @@ export const ALL_VILLAGE_MODELS = [
   ...NPC_MODELS,
 ];
 
-export const modelUrl = (name: string): string => `/assets/village/${name}.glb`;
+/**
+ * Cache stamp for the models. They live at stable paths so they can be cached
+ * hard (see public/_headers) — bump this whenever `npm run assets` regenerates
+ * them, or returning visitors keep the old ones for a week.
+ */
+export const ASSET_VERSION = '2026-08-10a';
+
+export const modelUrl = (name: string): string =>
+  `/assets/village/${name}.glb?v=${ASSET_VERSION}`;
