@@ -29,6 +29,7 @@ import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
 import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
+import { restoreVisits } from './village/visits.mjs';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
 const EXPECTED_ASSETS = 34;
@@ -500,9 +501,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   // visited tracking + completion fireworks over the square
-  const visited = new Set<string>();
+  let visited = new Set<string>();
   try {
-    for (const sl of JSON.parse(localStorage.getItem('sjl-visited') ?? '[]')) visited.add(sl);
+    visited = restoreVisits(localStorage.getItem('sjl-visited'), projects.map((project) => project.slug));
+    localStorage.setItem('sjl-visited', JSON.stringify([...visited]));
   } catch {}
   setTimeout(() => {
     window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: projects.length } }));

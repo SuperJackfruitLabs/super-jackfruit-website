@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro check && astro build",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@gltf-transform/cli": "^4.4.2",
-    "@types/three": "^0.185.4"
+    "@types/three": "^0.185.4",
+    "wrangler": "4.103.0"
   }
 }
