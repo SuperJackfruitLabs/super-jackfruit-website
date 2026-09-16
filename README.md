@@ -4,7 +4,7 @@ The Astro/Three.js website for Super Jackfruit Labs, including the existing
 interactive driving village at `/village`. Uses TypeScript and Tailwind.
 
 - [Current website and village integration plan](docs/VILLAGE_WEBSITE_PLAN.md)
-- [City/game design and native-client evaluation](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/README.md)
+- [City/game design and native-client evaluation](https://github.com/SuperJackfruitLabs/agentnagar/blob/main/docs/README.md)
 - [Marketing strategy and product evidence](https://github.com/SuperJackfruitLabs/sjl-marketing/blob/main/README.md)
 
 ## Development
