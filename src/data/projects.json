@@ -2,22 +2,22 @@
   {
     "name": "agentpod",
     "slug": "agentpod",
-    "tagline": "portable command center for AI agents",
-    "description": "A mobile app to control OpenCode AI agents from anywhere. Kick off work, watch progress, and steer your agents from your pocket instead of a terminal.",
-    "tags": ["typescript", "mobile", "opencode"],
+    "tagline": "a fleet console for agent runtimes",
+    "description": "An attach-first fleet console for agent runtimes across machines and harnesses. Manage environments, terminals, logs, configuration, and lifecycle from one self-hostable control plane.",
+    "tags": ["typescript", "go", "agents"],
     "status": "wip",
-    "github": "https://github.com/rakeshgangwar/agentpod",
+    "github": "https://github.com/SuperJackfruitLabs/agentpod",
     "district": "agent-works",
     "order": 1
   },
   {
-    "name": "kaambaan",
-    "slug": "kaambaan",
+    "name": "superpipeline",
+    "slug": "superpipeline",
     "tagline": "kanban for a workforce of agents",
     "description": "A multi-tenant Kanban board that orchestrates external AI agents — any harness, anywhere — through pipeline stages with human approval gates. Built on Cloudflare.",
     "tags": ["typescript", "cloudflare", "agents"],
     "status": "wip",
-    "github": "https://github.com/rakeshgangwar/kaambaan",
+    "github": "https://github.com/SuperJackfruitLabs/superpipeline",
     "district": "agent-works",
     "order": 2
   },
@@ -42,17 +42,6 @@
     "github": "https://github.com/rakeshgangwar/30Days30Agents",
     "district": "agent-works",
     "order": 4
-  },
-  {
-    "name": "agent factory",
-    "slug": "agent-factory",
-    "tagline": "agents off the assembly line",
-    "description": "Early scaffolding for stamping out new agents quickly. Very fresh paint — the org's first tenant.",
-    "tags": ["typescript", "agents"],
-    "status": "experiment",
-    "github": "https://github.com/SuperJackfruitLabs/agent-factory",
-    "district": "agent-works",
-    "order": 5
   },
   {
     "name": "erpnext mcp",

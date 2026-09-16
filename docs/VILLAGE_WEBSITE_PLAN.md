@@ -12,7 +12,7 @@ the proposed features or starts marketing.
 Extracted from [marketing at 6556f6b](https://github.com/SuperJackfruitLabs/sjl-marketing/blob/6556f6b1cbc9c26c7d3ddb36a5b9efe43961ecb3/website/village/README.md).
 The older files in `docs/superpowers/` remain historical design records; this
 plan describes the current website responsibilities. The current game decisions
-and city backlog live in [world docs](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/ROADMAP.md).
+and city backlog live in [world docs](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/planning/ROADMAP.md).
 
 ## Existing village and source map
 
@@ -144,7 +144,7 @@ limitations are recorded rather than inferred.
 
 These four IDs retain their identity after migration. All are still open.
 The city roadmap links here for dependencies. Site features U01/U02/U04/U05/U08
-in the [experience catalogue](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/EXPERIENCES.md) inform these pages;
+in the [experience catalogue](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/vision/EXPERIENCES.md) inform these pages;
 gameplay and in-world presentations remain city-owned.
 
 ## Documentation boundary and validation
