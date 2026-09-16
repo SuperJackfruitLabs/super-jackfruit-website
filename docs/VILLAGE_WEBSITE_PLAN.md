@@ -12,7 +12,7 @@ the proposed features or starts marketing.
 Extracted from [marketing at 6556f6b](https://github.com/SuperJackfruitLabs/sjl-marketing/blob/6556f6b1cbc9c26c7d3ddb36a5b9efe43961ecb3/website/village/README.md).
 The older files in `docs/superpowers/` remain historical design records; this
 plan describes the current website responsibilities. The current game decisions
-and city backlog live in [world docs](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/ROADMAP.md).
+and city backlog live in [world docs](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/planning/ROADMAP.md).
 
 ## Existing village and source map
 
@@ -144,7 +144,7 @@ limitations are recorded rather than inferred.
 
 These four IDs retain their identity after migration. All are still open.
 The city roadmap links here for dependencies. Site features U01/U02/U04/U05/U08
-in the [experience catalogue](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/EXPERIENCES.md) inform these pages;
+in the [experience catalogue](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/vision/EXPERIENCES.md) inform these pages;
 gameplay and in-world presentations remain city-owned.
 
 ## Documentation boundary and validation
@@ -153,5 +153,15 @@ Keep this plan in `docs/`, outside `public/` and `src/pages/`. The inspected
 Astro configuration has no custom docs publication path, and no source imports
 or content glob for this directory were found. The migration changes Markdown
 only. It does not change site code, dependencies, assets or deploy commands.
-The website handoff is delivered on `docs/village-city-handoff` for review;
-no production deployment is requested by this documentation migration.
+The website handoff was merged through PR #1. City documentation is now
+grouped by subject; this update follows those links. No deployment command
+is run by the documentation work.
+
+## Payment and economy ownership
+
+Rakesh selected Razorpay for real-money payments. The city owns
+[economic rules](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/gameplay/ECONOMY.md)
+and [Razorpay integration](https://github.com/SuperJackfruitLabs/super-jackfruit-world/blob/main/docs/integrations/payments/RAZORPAY.md).
+A future website checkout/return page consumes the city backend's authenticated
+purchase intent and status; it does not own wallet balances or grant residency
+from a browser success callback. No checkout has been implemented here.
