@@ -1,19 +1,33 @@
 ---
 interface Props {
   title: string;
+  /**
+   * Page-specific meta description. Omitted keeps the lab's own, which is right for the street and
+   * the village and wrong for a post — a feed reader and a search result both show this line.
+   */
+  description?: string;
+  /**
+   * Let the page scroll.
+   *
+   * `html { overflow: hidden }` below exists for the full-screen pages: the neon street and the
+   * village are fixed viewports where a scrollbar would be a bug. Prose is the opposite, and a
+   * blog post that cannot scroll is a blog post nobody can read past the fold. Opt-in rather than
+   * opt-out so every existing page behaves exactly as it did.
+   */
+  scroll?: boolean;
 }
 
-const { title } = Astro.props;
+const SITE_DESCRIPTION =
+  'Super Jackfruit Labs — a neon back-street of open source: AI agents, MCP servers, and odd curiosities. The lab never closes.';
+
+const { title, description = SITE_DESCRIPTION, scroll = false } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="description"
-      content="Super Jackfruit Labs — a neon back-street of open source: AI agents, MCP servers, and odd curiosities. The lab never closes."
-    />
+    <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link
       rel="icon"
@@ -55,7 +69,7 @@ const { title } = Astro.props;
       })();
     </script>
   </head>
-  <body>
+  <body class={scroll ? "is-scrollable" : undefined}>
     <slot />
   </body>
 </html>
@@ -81,6 +95,12 @@ const { title } = Astro.props;
     width: 100%;
     height: 100%;
     overflow: hidden;
+  }
+  /* `scroll` pages only. `:has` keeps the rule with the rest of the shell instead of shipping a
+     second global stylesheet, and every browser this site targets supports it. */
+  html:has(body.is-scrollable) {
+    height: auto;
+    overflow: visible;
   }
   code {
     font-family:

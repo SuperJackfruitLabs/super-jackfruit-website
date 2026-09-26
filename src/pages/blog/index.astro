@@ -1,0 +1,153 @@
+---
+import { getCollection } from 'astro:content';
+import '@fontsource/tilt-neon';
+import '@fontsource-variable/inconsolata';
+
+import Layout from '../../layouts/Layout.astro';
+import { publishedPosts, formatPostDate } from '../../lib/posts.mjs';
+
+const posts = publishedPosts(await getCollection('blog'));
+---
+
+<Layout
+  title="Writing — Super Jackfruit Labs"
+  description="Notes from inside the lab: what we built, what broke, and what the evidence actually said."
+  scroll
+>
+  <main class="writing">
+    <nav class="writing__nav">
+      <a href="/">← the street</a>
+      <a href="/rss.xml">rss</a>
+    </nav>
+
+    <header class="writing__head">
+      <h1>Writing</h1>
+      <p>
+        Notes from inside the lab — what we built, what broke, and what the evidence actually said.
+        Every post carries its sources.
+      </p>
+    </header>
+
+    {
+      posts.length === 0 ? (
+        /*
+          An empty blog is a real state, not an error: the scaffolding lands before the first post
+          does. Saying so plainly beats an empty page that looks broken.
+        */
+        <p class="writing__empty">Nothing published yet. The first post is being written.</p>
+      ) : (
+        <ul class="writing__list">
+          {posts.map((post) => (
+            <li>
+              <a href={`/blog/${post.slug}`}>
+                <time datetime={post.data.date.toISOString()}>{formatPostDate(post.data.date)}</time>
+                <h2>{post.data.title}</h2>
+                <p>{post.data.description}</p>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </main>
+</Layout>
+
+<style>
+  .writing {
+    --ink: #efe9dc;
+    --ink-dim: rgba(239, 233, 220, 0.62);
+    --neon: #09e6f2;
+    box-sizing: border-box;
+    max-width: 38rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 6rem;
+    color: var(--ink);
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+
+  .writing__nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 3.5rem;
+  }
+
+  .writing__nav a {
+    color: var(--neon);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(9, 230, 242, 0.25);
+  }
+  .writing__nav a:hover { border-bottom-color: var(--neon); }
+
+  .writing__head h1 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: lowercase;
+    font-size: clamp(2rem, 7vw, 3rem);
+    color: #fff;
+    margin: 0 0 0.75rem;
+  }
+
+  .writing__head p {
+    color: var(--ink-dim);
+    margin: 0 0 3rem;
+  }
+
+  .writing__empty {
+    font-family: 'Inconsolata Variable', monospace;
+    color: var(--ink-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .writing__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .writing__list li + li {
+    border-top: 1px solid rgba(239, 233, 220, 0.12);
+    margin-top: 2rem;
+    padding-top: 2rem;
+  }
+
+  /* The whole entry is the link — a bigger target than the title alone, which matters most on a
+     phone, where a two-line heading is the only thing worth tapping. */
+  .writing__list a {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .writing__list time {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+  }
+
+  .writing__list h2 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    font-size: 1.45rem;
+    color: #fff;
+    margin: 0.35rem 0 0.5rem;
+  }
+
+  .writing__list a:hover h2 {
+    color: var(--neon);
+    text-shadow: 0 0 0.6em rgba(9, 230, 242, 0.35);
+  }
+
+  .writing__list p {
+    margin: 0;
+    color: var(--ink-dim);
+  }
+</style>

@@ -1,0 +1,2 @@
+Posts live here, one Markdown file per post, named for its URL slug.
+The frontmatter contract is `src/content/config.ts`; how to write one is `docs/writing-a-post.md`.
