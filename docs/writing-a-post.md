@@ -63,4 +63,6 @@ npm test             # the publishing rules
 npm run build        # what CI runs: astro check + build
 ```
 
-A merge to `master` deploys (`.github/workflows/deploy.yml`). There is no separate publish step.
+A merge to `master` deploys: Cloudflare Pages builds it through the Git integration on the
+`extinct-eclipse` project. There is no separate publish step, and no deploy workflow in this
+repository — `.github/workflows/ci.yml` runs the tests and the build, and nothing else.

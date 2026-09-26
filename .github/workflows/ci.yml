@@ -1,0 +1,35 @@
+name: CI
+
+# Tests and a type-checked build. **Deployment is Cloudflare Pages' job**, through the Git
+# integration on the `extinct-eclipse` project — not this workflow.
+#
+# It was this workflow, briefly. The site had no CI at all and deployed only when somebody ran
+# `npm run deploy` from a laptop, which is why superjackfruit.com served a 10 August build until
+# 26 September while nine commits sat in `master`. The fix turned out to be reconnecting the Pages
+# Git integration, and a second deploy path beside it would be two systems racing to be the live
+# version — so this keeps only the half Pages does not do.
+#
+# A Pages build runs the build command and nothing else: it will not run `npm test`. That gate
+# lives here.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # `npm run build` is `astro check && astro build`, so a type error fails here rather than
+      # reaching a Pages build that would ship it.
+      - run: npm run build
