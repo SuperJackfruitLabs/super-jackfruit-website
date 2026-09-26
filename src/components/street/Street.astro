@@ -14,6 +14,12 @@ const statusCopy: Record<string, string> = {
 <div class="scene" id="scene">
   <canvas id="street-canvas"></canvas>
 
+  <!--
+    Outside the overlay on purpose: the entrance card fades once you walk in, and a link that
+    leaves with it is a link most visitors never see. Fixed, dim, and out of the sign's way.
+  -->
+  <a class="to-writing" href="/blog">writing</a>
+
   <div class="overlay" id="entrance-overlay">
     <NeonText text="Super Jackfruit Labs" />
     <p class="overlay__script">the lab never closes</p>
@@ -42,6 +48,7 @@ const statusCopy: Record<string, string> = {
       </section>
     ))}
     <footer class="fallback__foot">
+      <a href="/blog">writing</a>
       <a href="https://github.com/rakeshgangwar" target="_blank" rel="noopener noreferrer">github.com/rakeshgangwar</a>
       <a href="https://github.com/SuperJackfruitLabs" target="_blank" rel="noopener noreferrer">github.com/SuperJackfruitLabs</a>
     </footer>
@@ -49,6 +56,28 @@ const statusCopy: Record<string, string> = {
 </div>
 
 <style define:vars={{}}>
+  .to-writing {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.1rem;
+    z-index: 5;
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: lowercase;
+    text-decoration: none;
+    color: rgba(239, 233, 220, 0.55);
+    border-bottom: 1px solid rgba(9, 230, 242, 0.2);
+    padding-bottom: 2px;
+    transition: color 0.2s ease, border-color 0.2s ease, text-shadow 0.2s ease;
+  }
+  .to-writing:hover,
+  .to-writing:focus-visible {
+    color: #09e6f2;
+    border-bottom-color: #09e6f2;
+    text-shadow: 0 0 0.6em rgba(9, 230, 242, 0.5);
+  }
+
   .scene {
     position: fixed;
     inset: 0;

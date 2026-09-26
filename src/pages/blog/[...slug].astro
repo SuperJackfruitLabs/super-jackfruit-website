@@ -1,0 +1,252 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import '@fontsource/tilt-neon';
+import '@fontsource-variable/inconsolata';
+
+import Layout from '../../layouts/Layout.astro';
+import { publishedPosts, formatPostDate } from '../../lib/posts.mjs';
+
+/**
+ * One post.
+ *
+ * Drafts get no page at all — `publishedPosts` is the single rule the index and the feed also use,
+ * so an unfinished post cannot be reachable by URL while absent from the listing.
+ */
+export async function getStaticPaths() {
+  const posts = publishedPosts(await getCollection('blog'));
+  return posts.map((post: CollectionEntry<'blog'>) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+---
+
+<Layout title={`${post.data.title} — Super Jackfruit Labs`} description={post.data.description} scroll>
+  <article class="post">
+    <nav class="post__nav">
+      <a href="/blog">← the writing</a>
+      <a href="/">the street</a>
+    </nav>
+
+    <header class="post__head">
+      <p class="post__date">
+        <time datetime={post.data.date.toISOString()}>{formatPostDate(post.data.date)}</time>
+      </p>
+      <h1>{post.data.title}</h1>
+      {post.data.tags.length > 0 && (
+        <p class="post__tags">{post.data.tags.map((tag) => <span>{tag}</span>)}</p>
+      )}
+    </header>
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    {
+      post.data.sources.length > 0 && (
+        <footer class="sources">
+          <h2>What this rests on</h2>
+          {/*
+            The claims ledger, rendered. `sjl-marketing`'s rule is that the public README,
+            changelog, release and code outrank a marketing summary — so a post shows its working
+            and a reader can check it without taking our word for anything.
+          */}
+          <ol>
+            {post.data.sources.map((source) => (
+              <li>
+                <span class="sources__claim">{source.claim}</span>
+                <a href={source.url} rel="noopener">{source.url}</a>
+              </li>
+            ))}
+          </ol>
+        </footer>
+      )
+    }
+  </article>
+</Layout>
+
+<style>
+  /*
+    The street's palette, at reading brightness: #13151a ground, #efe9dc warm off-white, #09e6f2
+    neon cyan. Tilt Neon carries the headings because it is the lab's voice; the body is the
+    system face because a whole post set in the display or the mono face is a post nobody
+    finishes. No new font is loaded for this page.
+  */
+  .post {
+    --ink: #efe9dc;
+    --ink-dim: rgba(239, 233, 220, 0.62);
+    --neon: #09e6f2;
+    box-sizing: border-box;
+    max-width: 38rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 6rem;
+    color: var(--ink);
+    /* Long-form measure and rhythm, not the 10px root the neon sign sets. */
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+
+  .post__nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 3.5rem;
+  }
+
+  .post__nav a,
+  .sources a {
+    color: var(--neon);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(9, 230, 242, 0.25);
+  }
+
+  .post__nav a:hover,
+  .sources a:hover {
+    border-bottom-color: var(--neon);
+    text-shadow: 0 0 0.5em rgba(9, 230, 242, 0.5);
+  }
+
+  .post__date,
+  .post__tags {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    margin: 0;
+  }
+
+  .post__head h1 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    /* The street uses 0.24em+; that is signage. Prose headings need far less or the words stop
+       reading as words. */
+    letter-spacing: 0.01em;
+    line-height: 1.15;
+    font-size: clamp(2rem, 6vw, 2.9rem);
+    color: #fff;
+    margin: 0.4rem 0 0.6rem;
+  }
+
+  .post__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    text-transform: lowercase;
+  }
+
+  .prose :global(h2),
+  .prose :global(h3) {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: #fff;
+    line-height: 1.25;
+    margin: 2.75rem 0 0.75rem;
+  }
+
+  .prose :global(h2) { font-size: 1.5rem; }
+  .prose :global(h3) { font-size: 1.2rem; }
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol),
+  .prose :global(blockquote) { margin: 0 0 1.4rem; }
+  /* Tailwind's preflight strips list markers from every `ul`/`ol`. Prose is the one place they
+     have to come back, or a list reads as loose lines with a mysterious indent. */
+  .prose :global(ul) { padding-left: 1.4rem; list-style: disc; }
+  .prose :global(ol) { padding-left: 1.4rem; list-style: decimal; }
+  .prose :global(li) { margin-bottom: 0.4rem; }
+
+  .prose :global(a) {
+    color: var(--neon);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(9, 230, 242, 0.35);
+  }
+  .prose :global(a:hover) { border-bottom-color: var(--neon); }
+
+  .prose :global(strong) { color: #fff; }
+
+  .prose :global(blockquote) {
+    border-left: 2px solid rgba(9, 230, 242, 0.4);
+    padding-left: 1.1rem;
+    margin-left: 0;
+    color: var(--ink-dim);
+    font-style: normal;
+  }
+
+  .prose :global(code) {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.95em;
+    background: rgba(239, 233, 220, 0.08);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+
+  .prose :global(pre) {
+    font-family: 'Inconsolata Variable', monospace;
+    background: #0d0f13;
+    border: 1px solid rgba(239, 233, 220, 0.1);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    /* A wide code block scrolls itself rather than widening the page — the fix people forget until
+       a long command breaks the layout on a phone. */
+    overflow-x: auto;
+    margin: 0 0 1.6rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .prose :global(pre code) { background: none; padding: 0; }
+
+  .prose :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+  }
+
+  .prose :global(hr) {
+    border: none;
+    border-top: 1px solid rgba(239, 233, 220, 0.14);
+    margin: 2.5rem 0;
+  }
+
+  .sources {
+    margin-top: 4rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid rgba(9, 230, 242, 0.25);
+    font-size: 0.95rem;
+  }
+
+  .sources h2 {
+    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    text-transform: lowercase;
+    color: var(--neon);
+    margin: 0 0 1rem;
+  }
+
+  .sources ol { padding-left: 1.3rem; margin: 0; list-style: decimal; }
+  .sources li { margin-bottom: 1rem; }
+
+  .sources__claim {
+    display: block;
+    color: var(--ink);
+  }
+
+  .sources a {
+    font-family: 'Inconsolata Variable', monospace;
+    font-size: 0.8rem;
+    /* A bare URL is the point — it is checkable — but it must not blow out the measure. */
+    word-break: break-all;
+  }
+</style>
