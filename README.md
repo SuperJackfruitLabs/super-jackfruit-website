@@ -7,6 +7,12 @@
 **The public face of Super Jackfruit Labs: a project catalogue and an interactive
 driving village, built with Astro, Three.js, TypeScript and Tailwind.**
 
+> **This repository is forge-primary.** Work lands on
+> [forge](https://forge.superjackfruit.com/SuperJackfruitLabs/super-jackfruit-website); GitHub is a
+> mirror of it, and pushes to GitHub are refused. Cloudflare Pages still builds the site from the
+> GitHub side, so a change reaches the web by being pushed to forge and mirrored here. Why:
+> `charter → decisions/2026-09-27-which-side-is-primary-is-a-repositorys-property.md`.
+
 [Website](https://superjackfruit.com) ·
 [Current plan](docs/VILLAGE_WEBSITE_PLAN.md) ·
 [Agentnagar design](https://github.com/SuperJackfruitLabs/agentnagar/blob/main/README.md)
