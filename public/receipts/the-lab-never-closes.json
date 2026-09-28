@@ -1,8 +1,8 @@
 {
   "what": "A trace of one card's passage across a superpipeline board, published so the post beside it can be checked rather than believed.",
-  "generatedAt": "2026-09-28T18:03:09Z",
-  "complete": false,
-  "completeness": "This card has not finished. The remaining stages, the last human decision and the publishing commit are not here yet; regenerate this file after the card reaches its final stage.",
+  "generatedAt": "2026-09-28T18:22:01Z",
+  "complete": true,
+  "completeness": "This trace covers the card through to its final stage.",
   "board": {
     "id": "brd_6a899b0f0d054046",
     "name": "Press",
@@ -52,8 +52,8 @@
   "card": {
     "id": "card_1dd097d0939c46fb",
     "title": "The lab never closes \u2014 introducing Super Jackfruit Labs",
-    "currentStage": "approved",
-    "state": "input-required"
+    "currentStage": "published",
+    "state": "submitted"
   },
   "runs": [
     {
@@ -89,6 +89,28 @@
       "status": "ended",
       "startedAt": "2026-09-28T17:58:47.142Z",
       "endedAt": "2026-09-28T18:02:30.051Z"
+    },
+    {
+      "stage": "publish",
+      "agent": "coder-kai",
+      "capabilities": [
+        "code"
+      ],
+      "outcome": "completed",
+      "status": "ended",
+      "startedAt": "2026-09-28T18:09:47.400Z",
+      "endedAt": "2026-09-28T18:11:39.077Z"
+    },
+    {
+      "stage": "publish",
+      "agent": "coder-kai",
+      "capabilities": [
+        "code"
+      ],
+      "outcome": "completed",
+      "status": "ended",
+      "startedAt": "2026-09-28T18:15:04.503Z",
+      "endedAt": "2026-09-28T18:21:09.228Z"
     }
   ],
   "humanGates": [
@@ -103,12 +125,12 @@
     },
     {
       "stage": "approved",
-      "status": "pending",
-      "decision": null,
+      "status": "resolved",
+      "decision": "approve",
       "producedBy": "analyst-echo",
-      "decidedBy": null,
+      "decidedBy": "a human principal",
       "openedAt": "2026-09-28T18:02:30.051Z",
-      "resolvedAt": null
+      "resolvedAt": "2026-09-28T18:09:42.957Z"
     }
   ],
   "notIncluded": [
@@ -121,6 +143,7 @@
   "howToReadThis": {
     "routing": "An agent did not receive a stage because of its name. The board matched the stage's required capability against the capabilities the agent declares, which is exact string equality \u2014 so the `capabilities` field beside each run is the reason that agent got that stage.",
     "gates": "A human gate parks the card until a person answers. superpipeline refuses to let the agent that produced a gate resolve it, which is why `producedBy` and `decidedBy` are both recorded here.",
-    "limits": "This records what the board observed. It is not a claim that the work is good, and a `completed` outcome means the run ended cleanly, not that it was right."
+    "limits": "This records what the board observed. It is not a claim that the work is good, and a `completed` outcome means the run ended cleanly, not that it was right.",
+    "repeatedStages": "A stage may appear more than once. superpipeline marks a run `completed` when it ends cleanly, whether or not it produced the intended result, so a repeated stage usually means an earlier run finished without doing the work \u2014 it stopped on a condition it was told to respect, or was sent back. For a repeated stage, the last run is the one whose result stands."
   }
 }
