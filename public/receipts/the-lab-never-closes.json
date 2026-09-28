@@ -1,0 +1,126 @@
+{
+  "what": "A trace of one card's passage across a superpipeline board, published so the post beside it can be checked rather than believed.",
+  "generatedAt": "2026-09-28T18:03:09Z",
+  "complete": false,
+  "completeness": "This card has not finished. The remaining stages, the last human decision and the publishing commit are not here yet; regenerate this file after the card reaches its final stage.",
+  "board": {
+    "id": "brd_6a899b0f0d054046",
+    "name": "Press",
+    "pipeline": [
+      {
+        "key": "commission",
+        "name": "Commission",
+        "ownedBy": "human"
+      },
+      {
+        "key": "brief",
+        "name": "Brief",
+        "ownedBy": "research"
+      },
+      {
+        "key": "angle",
+        "name": "Angle approved",
+        "ownedBy": "human"
+      },
+      {
+        "key": "draft",
+        "name": "Draft",
+        "ownedBy": "writing"
+      },
+      {
+        "key": "verify",
+        "name": "Verify claims",
+        "ownedBy": "claim-check"
+      },
+      {
+        "key": "approved",
+        "name": "Publish approved",
+        "ownedBy": "human"
+      },
+      {
+        "key": "publish",
+        "name": "Publish",
+        "ownedBy": "code"
+      },
+      {
+        "key": "published",
+        "name": "Published",
+        "ownedBy": "human"
+      }
+    ]
+  },
+  "card": {
+    "id": "card_1dd097d0939c46fb",
+    "title": "The lab never closes \u2014 introducing Super Jackfruit Labs",
+    "currentStage": "approved",
+    "state": "input-required"
+  },
+  "runs": [
+    {
+      "stage": "brief",
+      "agent": "research-ray",
+      "capabilities": [
+        "research"
+      ],
+      "outcome": "completed",
+      "status": "ended",
+      "startedAt": "2026-09-28T17:45:28.325Z",
+      "endedAt": "2026-09-28T17:50:41.474Z"
+    },
+    {
+      "stage": "draft",
+      "agent": "writer-quill",
+      "capabilities": [
+        "writing"
+      ],
+      "outcome": "completed",
+      "status": "ended",
+      "startedAt": "2026-09-28T17:55:10.916Z",
+      "endedAt": "2026-09-28T17:58:43.679Z"
+    },
+    {
+      "stage": "verify",
+      "agent": "analyst-echo",
+      "capabilities": [
+        "analysis",
+        "claim-check"
+      ],
+      "outcome": "completed",
+      "status": "ended",
+      "startedAt": "2026-09-28T17:58:47.142Z",
+      "endedAt": "2026-09-28T18:02:30.051Z"
+    }
+  ],
+  "humanGates": [
+    {
+      "stage": "angle",
+      "status": "resolved",
+      "decision": "approve",
+      "producedBy": "research-ray",
+      "decidedBy": "a human principal",
+      "openedAt": "2026-09-28T17:50:41.474Z",
+      "resolvedAt": "2026-09-28T17:55:08.444Z"
+    },
+    {
+      "stage": "approved",
+      "status": "pending",
+      "decision": null,
+      "producedBy": "analyst-echo",
+      "decidedBy": null,
+      "openedAt": "2026-09-28T18:02:30.051Z",
+      "resolvedAt": null
+    }
+  ],
+  "notIncluded": [
+    "credentials of any kind",
+    "Matrix room ids, event ids or message content",
+    "station, session or node identifiers",
+    "prompts, which may quote private material",
+    "private repository URLs"
+  ],
+  "howToReadThis": {
+    "routing": "An agent did not receive a stage because of its name. The board matched the stage's required capability against the capabilities the agent declares, which is exact string equality \u2014 so the `capabilities` field beside each run is the reason that agent got that stage.",
+    "gates": "A human gate parks the card until a person answers. superpipeline refuses to let the agent that produced a gate resolve it, which is why `producedBy` and `decidedBy` are both recorded here.",
+    "limits": "This records what the board observed. It is not a claim that the work is good, and a `completed` outcome means the run ended cleanly, not that it was right."
+  }
+}
