@@ -13,14 +13,20 @@ sources:
     url: https://github.com/SuperJackfruitLabs/agentpod/releases/tag/v0.1.66
   - claim: At v0.1.66, one release workflow built node and fleet binaries for Linux and macOS on amd64 and arm64.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/.github/workflows/release-node-agent.yml#L16-L80
-  - claim: At v0.1.66, the node CLI exposed an update path that checked, verified, replaced and restarted.
+  - claim: At v0.1.66, the node CLI exposed an update verb that delegated to the shared self-update path.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-node/main.go#L138-L178
+  - claim: The v0.1.66 updater downloaded the selected asset, verified it against SHA256SUMS and atomically replaced the executable with a rollback backup.
+    url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/internal/selfupdate/selfupdate.go#L137-L236
+  - claim: The v0.1.66 Update path restarted the node service after a successful replacement.
+    url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/internal/selfupdate/selfupdate.go#L369-L398
   - claim: The v0.1.66 README said node upgrades were triggered deliberately rather than by a timer.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/README.md#L29-L30
   - claim: The v0.1.66 fleet dispatcher had no update verb.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-fleet/fleet.go#L42-L72
   - claim: The v0.1.66 fleet help output documented no update command.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-fleet/help.go#L8-L25
+  - claim: The v0.1.66 fleet installer defaulted to ~/.local/bin.
+    url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/scripts/install-fleet.sh#L8-L18
   - claim: TestCarriesNoNodeVerbs explicitly forbade update in the v0.1.66 fleet CLI.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-fleet/main_test.go#L63-L75
   - claim: The v0.1.66 updater hardcoded the asset name to agentpod-node for the current operating system and architecture.
@@ -35,6 +41,8 @@ sources:
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/cmd/agentpod-fleet/fleet_update.go#L12-L52
   - claim: The v0.1.67 shared Update function still restarted the node service after a successful fleet-binary swap.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L395-L423
+  - claim: The v0.1.67 Apply primitive performed the update without restarting a service.
+    url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L344-L393
   - claim: The v0.1.67 fleet boundary test continued to forbid enroll, run and service but no longer forbade update.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/cmd/agentpod-fleet/main_test.go#L63-L86
   - claim: PR #567 first shipped in release v0.1.67.
@@ -61,9 +69,9 @@ The two binaries did not come from separate release systems. At v0.1.66, a singl
 
 That symmetry was reassuring—and misleading.
 
-The workflow could prove that a current fleet binary existed on GitHub. It could not prove that the copy in someone’s `~/.local/bin` had ever been replaced. Build pipelines control artifacts; they do not automatically control installations.
+The workflow could prove that a current fleet binary existed on GitHub. It could not prove that the copy installed by the [default fleet installer in `~/.local/bin`](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/scripts/install-fleet.sh#L8-L18) had ever been replaced. Build pipelines control artifacts; they do not automatically control installations.
 
-The node binary at least had an operating path for upgrades. In v0.1.66, the `apn update` command could check for a release, download it, verify its SHA-256 checksum, replace the executable and restart the service after a successful swap ([source](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-node/main.go#L138-L178)). This was [not an automatic timer](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/README.md#L29-L30): an operator or fleet action still had to trigger it. But the mechanism existed.
+The node binary at least had an operating path for upgrades. In v0.1.66, the [`apn update` command](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-node/main.go#L138-L178) could check for a release, [download it and verify its SHA-256 checksum](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/internal/selfupdate/selfupdate.go#L137-L220), [atomically replace the executable with a rollback backup](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/internal/selfupdate/selfupdate.go#L223-L236) and [restart the service after a successful swap](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/internal/selfupdate/selfupdate.go#L369-L398). This was [not an automatic timer](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/README.md#L29-L30): an operator or fleet action still had to trigger it. But the mechanism existed.
 
 The fleet CLI had no equivalent. Its [dispatcher](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-fleet/fleet.go#L42-L72) and [help output](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.66/apps/node-agent/cmd/agentpod-fleet/help.go#L8-L25) contained no `update` verb. The person running it had to notice the version drift, find the installer or release asset, and manually initiate a reinstall or replace the binary.
 
@@ -89,7 +97,7 @@ That distinction is useful beyond this incident. Sometimes a missing piece of UX
 
 The shared updater gained an [explicit binary option](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L29-L45). Existing callers continued to default to `agentpod-node`, while the [asset name was derived from that option](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L75-L89). The new fleet command passed `Binary: "agentpod-fleet"`, then reused the established check, checksum and replacement path ([source](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/cmd/agentpod-fleet/fleet_update.go#L12-L52)).
 
-One caveat survived the release. The fleet handler's comment says there is no service to restart, but the handler called `selfupdate.Update`; in v0.1.67, that function [always invoked the node-service restart after a successful swap](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L395-L423). The restart-free primitive was `Apply`. PR #567 fixed the wrong-artifact hazard, but the released fleet updater could still restart the node service unnecessarily—or report a restart error after the fleet binary had already been replaced.
+One caveat survived the release. The fleet handler's comment says there is no service to restart, but the handler called `selfupdate.Update`; in v0.1.67, that function [always invoked the node-service restart after a successful swap](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L395-L423). The [restart-free primitive was `Apply`](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/internal/selfupdate/selfupdate.go#L344-L393). PR #567 fixed the wrong-artifact hazard, but the released fleet updater could still restart the node service unnecessarily—or report a restart error after the fleet binary had already been replaced.
 
 The boundary test changed with the design. `enroll`, `run` and `service` remained node-only; `update` was no longer forbidden once an update could preserve the identity of the fleet binary ([test](https://github.com/SuperJackfruitLabs/agentpod/blob/v0.1.67/apps/node-agent/cmd/agentpod-fleet/main_test.go#L63-L86)).
 
