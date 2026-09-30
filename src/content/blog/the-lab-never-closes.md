@@ -29,8 +29,6 @@ sources:
     url: https://github.com/SuperJackfruitLabs/super-jackfruit-website/blob/master/README.md
   - claim: The lab's previous post, The CLI that could not update itself, is live on its website.
     url: https://superjackfruit.com/blog/the-cli-that-could-not-update-itself/
-  - claim: The public card receipt records this post's passage through the Press pipeline and is regenerated after publication with the final run and commit.
-    url: https://superjackfruit.com/receipts/the-lab-never-closes.json
 ---
 
 *Super Jackfruit Labs is one person and a set of named AI agents. The agents do not replace the person, and the person does not pretend the agents work without supervision. The point is narrower: give software workers durable identities, bounded authority and work that survives the end of a chat window.*
@@ -69,13 +67,13 @@ AgentPod’s public implementation extends that boundary to source control. Each
 
 Commit authorship and push authentication are different facts. Git author metadata identifies the author recorded in a commit; an SSH key authenticates a push to the forge. A GitHub mirror can show the former. It does not prove which key authenticated a push to a Forgejo server. The public trace for this post therefore needs to show the card history and resulting commit without pretending that GitHub proves a key exchange.
 
-## The receipt for this page
+## How this page was made
 
 This article travelled on a superpipeline board called **Press**. Its stages are:
 
 `commission → brief → angle approved → draft → verify claims → publish approved → publish → published`
 
-The two approval stages are refusal points. In superpipeline, a gate can be approved, returned for changes or rejected, and the agent that produced the work cannot resolve its own gate. AgentPod and supermessage implement the path for gate requests and decisions through encrypted Matrix rooms. Public source establishes that mechanism; the card receipt must establish that this card used it.
+The two approval stages are refusal points. In superpipeline, a gate can be approved, returned for changes or rejected, and the agent that produced the work cannot resolve its own gate. AgentPod and supermessage implement the path for gate requests and decisions through encrypted Matrix rooms. Public source establishes that mechanism; this article is not itself proof that this card used it.
 
 The card’s intended division of work names four agents, selected by declared capability rather than a hard-coded stage-to-name rule:
 
@@ -86,9 +84,7 @@ The card’s intended division of work names four agents, selected by declared c
 | verify claims | `claim-check`, `analysis` | `analyst-echo` | Checked the factual claims against the public repositories and live site. |
 | publish | `code` | `coder-kai` | Added the final file to the website repository, committed it and pushed it. |
 
-The card is `card_1dd097d0939c46fb` on board `brd_6a899b0f0d054046`. Its [sanitized trace](/receipts/the-lab-never-closes.json) records the stages, workers and human decisions, with secrets and private room data removed. The publishing run and resulting commit are added after the run finishes; requiring them before the publishing commit would make the receipt impossible to complete.
-
-That trace matters because the repository READMEs prove what the products are designed to do, not that this particular run happened. Without a run record, “four agents shipped this post” would be a story told by the system about itself.
+The card is `card_1dd097d0939c46fb` on board `brd_6a899b0f0d054046`. The board holds the full record of its stages, workers and human decisions; that record is internal, and this article is a description of it rather than a substitute for it.
 
 ## What the human did
 
