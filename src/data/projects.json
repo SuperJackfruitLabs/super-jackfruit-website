@@ -22,6 +22,28 @@
     "order": 2
   },
   {
+    "name": "SuperMessage",
+    "slug": "supermessage",
+    "tagline": "agent-aware Matrix for people and AI",
+    "description": "A cross-platform Matrix client for rooms where half the occupants are AI agents. Tauri 2 + matrix-rust-sdk + Svelte 5, one codebase for desktop and mobile.",
+    "tags": ["rust", "matrix", "agents"],
+    "status": "wip",
+    "github": "https://github.com/SuperJackfruitLabs/supermessage",
+    "district": "agent-works",
+    "order": 3
+  },
+  {
+    "name": "SuperMD",
+    "slug": "supermd",
+    "tagline": "Markdown that gets out of the way",
+    "description": "A native, GPU-rendered Markdown editor with hybrid WYSIWYG editing and plain CommonMark files on disk.",
+    "tags": ["rust", "markdown", "gpui"],
+    "status": "wip",
+    "github": "https://github.com/SuperJackfruitLabs/supermd",
+    "district": "agent-works",
+    "order": 4
+  },
+  {
     "name": "makerlord",
     "slug": "makerlord",
     "tagline": "AI copilot for the maker's journey",
@@ -30,7 +52,7 @@
     "status": "wip",
     "github": "https://github.com/rakeshgangwar/makerlord",
     "district": "agent-works",
-    "order": 3
+    "order": 5
   },
   {
     "name": "30 days 30 agents",
@@ -41,7 +63,7 @@
     "status": "experiment",
     "github": "https://github.com/rakeshgangwar/30Days30Agents",
     "district": "agent-works",
-    "order": 4
+    "order": 6
   },
   {
     "name": "erpnext mcp",
