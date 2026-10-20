@@ -138,14 +138,16 @@ export const suite: Product[] = [
       'Work history arrives as items, labelled by outcome',
       'Agents reach it over MCP',
     ],
-    status: 'Live, no tagged release yet',
+    status: 'Released',
+    version: 'v0.0.1',
     checked: '2026-10-20',
     hex: '#f2704e',
     fg: '#ffffff',
     ink: '#b8442a',
-    // the repository is private, so there is nothing public to link to until it has a site
-    cta: { label: 'Ask about Superlibrary', href: 'mailto:rakesh@superjackfruit.com?subject=Superlibrary' },
-    links: [],
+    site: 'https://superlibrary.dev',
+    cta: { label: 'Visit superlibrary.dev', href: 'https://superlibrary.dev' },
+    // no Source link yet: the repository is not public
+    links: [{ label: 'Docs', href: 'https://docs.superlibrary.dev' }],
   },
   {
     slug: 'superwitness',
