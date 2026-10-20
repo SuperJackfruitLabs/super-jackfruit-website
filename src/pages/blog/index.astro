@@ -1,9 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
-import '@fontsource/tilt-neon';
-import '@fontsource-variable/inconsolata';
 
-import Layout from '../../layouts/Layout.astro';
+import Layout from '../../layouts/Site.astro';
 import { publishedPosts, formatPostDate } from '../../lib/posts.mjs';
 
 const posts = publishedPosts(await getCollection('blog'));
@@ -12,11 +10,11 @@ const posts = publishedPosts(await getCollection('blog'));
 <Layout
   title="Writing — Super Jackfruit Labs"
   description="Notes from inside the lab: what we built, what broke, and what the evidence actually said."
-  scroll
+
 >
   <main class="writing">
     <nav class="writing__nav">
-      <a href="/">← the street</a>
+      <a href="/">← home</a>
       <a href="/rss.xml">rss</a>
     </nav>
 
@@ -54,9 +52,9 @@ const posts = publishedPosts(await getCollection('blog'));
 
 <style>
   .writing {
-    --ink: #efe9dc;
-    --ink-dim: rgba(239, 233, 220, 0.62);
-    --neon: #09e6f2;
+    --ink: var(--vk-color-text);
+    --ink-dim: var(--vk-color-muted);
+    --neon: var(--vk-color-accent-text);
     box-sizing: border-box;
     max-width: 38rem;
     margin: 0 auto;
@@ -70,7 +68,7 @@ const posts = publishedPosts(await getCollection('blog'));
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.85rem;
     letter-spacing: 0.08em;
     margin-bottom: 3.5rem;
@@ -79,17 +77,17 @@ const posts = publishedPosts(await getCollection('blog'));
   .writing__nav a {
     color: var(--neon);
     text-decoration: none;
-    border-bottom: 1px solid rgba(9, 230, 242, 0.25);
+    border-bottom: 1px solid var(--vk-color-line);
   }
   .writing__nav a:hover { border-bottom-color: var(--neon); }
 
   .writing__head h1 {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-family: var(--vk-font-display);
     font-weight: 400;
     letter-spacing: 0.18em;
     text-transform: lowercase;
     font-size: clamp(2rem, 7vw, 3rem);
-    color: #fff;
+    color: var(--vk-color-text);
     margin: 0 0 0.75rem;
   }
 
@@ -99,7 +97,7 @@ const posts = publishedPosts(await getCollection('blog'));
   }
 
   .writing__empty {
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     color: var(--ink-dim);
     letter-spacing: 0.05em;
   }
@@ -111,7 +109,7 @@ const posts = publishedPosts(await getCollection('blog'));
   }
 
   .writing__list li + li {
-    border-top: 1px solid rgba(239, 233, 220, 0.12);
+    border-top: 1px solid var(--vk-color-line);
     margin-top: 2rem;
     padding-top: 2rem;
   }
@@ -125,25 +123,25 @@ const posts = publishedPosts(await getCollection('blog'));
   }
 
   .writing__list time {
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.8rem;
     letter-spacing: 0.1em;
     color: var(--ink-dim);
   }
 
   .writing__list h2 {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-family: var(--vk-font-display);
     font-weight: 400;
     letter-spacing: 0.01em;
     line-height: 1.2;
     font-size: 1.45rem;
-    color: #fff;
+    color: var(--vk-color-text);
     margin: 0.35rem 0 0.5rem;
   }
 
   .writing__list a:hover h2 {
     color: var(--neon);
-    text-shadow: 0 0 0.6em rgba(9, 230, 242, 0.35);
+    text-shadow: none;
   }
 
   .writing__list p {

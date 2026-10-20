@@ -29,7 +29,10 @@ const STEER_RATE = 1.9;
 // arcade steering is tight enough that a full-lock corner at top speed pulls
 // ~21 — set this so ordinary cornering stays quiet and only really leaning on
 // it lays rubber.
-const GRIP = 15;
+// a keyboard turn is always full lock, so a full-lock corner at cruising
+// speed (1.9 rad/s × 11 m/s) must stay under this, or every bend leaves marks;
+// on nitro it doesn't, and those are the corners that should
+const GRIP = 22;
 /** suspension spring and damping — under-damped on purpose, so it settles with a bounce */
 const BODY_K = 90;
 const BODY_C = 13;

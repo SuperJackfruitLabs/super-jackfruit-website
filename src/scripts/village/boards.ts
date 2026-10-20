@@ -5,8 +5,6 @@ import type * as T from 'three';
 import type { Three } from './types';
 import type { District, Project } from '../../data/projects';
 
-const CREAM = '#f6f0e2';
-const INK = '#2c2a26';
 
 interface ThemedBoard {
   mat: T.MeshLambertMaterial;
@@ -16,13 +14,14 @@ interface ThemedBoard {
 
 export interface BoardKit {
   projectBoard(project: Project, accent: string, x: number, z: number, facing: number): void;
+  suiteBoard(step: number, project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   districtBoard(d: District, gx: number, gz: number, facing: number): void;
   infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number): void;
   applyNight(nightFactor: number): void;
 }
 
 export function statusDotColor(status: string): string {
-  return status === 'stable' ? '#3f9e3f' : status === 'wip' ? '#d98a1f' : '#8a5fc9';
+  return status === 'stable' || status === 'released' || status === 'live' ? '#3f9e3f' : status === 'wip' ? '#d98a1f' : '#8a5fc9';
 }
 
 export function createBoards(
@@ -68,129 +67,91 @@ export function createBoards(
     }
   }
 
-  return {
-    projectBoard(project, accent, x, z, facing): void {
-      const mat = themedMaterial((night) => (ctx, w, h) => {
-        ctx.fillStyle = night ? '#131828' : CREAM;
-        ctx.fillRect(0, 0, w, h);
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 14;
-        if (night) {
-          ctx.shadowColor = accent;
-          ctx.shadowBlur = 18;
-        }
-        ctx.strokeRect(10, 10, w - 20, h - 20);
-        ctx.shadowBlur = 0;
-        ctx.textAlign = 'center';
-        ctx.font = '700 68px "Inconsolata Variable", monospace';
-        if (night) {
-          ctx.shadowColor = accent;
-          ctx.shadowBlur = 14;
-          ctx.fillStyle = '#ffffff';
-        } else {
-          ctx.fillStyle = INK;
-        }
-        ctx.fillText(project.name, w / 2, 120, w - 80);
-        ctx.shadowBlur = 0;
-        ctx.font = '38px "Inconsolata Variable", monospace';
-        ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(44,42,38,0.75)';
-        ctx.fillText(project.tagline, w / 2, 190, w - 80);
-        ctx.fillStyle = statusDotColor(project.status);
-        ctx.beginPath();
-        ctx.arc(w / 2 - 90, 265, 13, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = night ? 'rgba(230,236,255,0.7)' : 'rgba(44,42,38,0.6)';
-        ctx.font = '34px "Inconsolata Variable", monospace';
-        ctx.fillText(project.status, w / 2 + 20, 277);
-      });
 
-      const group = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.07), mat);
-      panel.position.y = 1.45;
-      panel.castShadow = true;
-      const backing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.17, 0.06), wood);
-      backing.position.set(0, 1.45, -0.045);
-      backing.castShadow = true;
-      // fully behind the backing board — a coplanar post face z-fights the facia
-      posts(group, [-0.8, 0.8], 1.5, 0.09, -0.125);
-      group.add(panel, backing);
-      group.position.set(x, 0, z);
-      group.rotation.y = facing;
-      scene.add(group);
-      addCollider(x, z, 1.0, 0.3, facing);
+  // Every sign in the village is one style: a tall board in its own colour,
+  // big enough to read from the far end of the block — an optional lead (the
+  // suite's step number, an arrow), a title, and a line under it.
+  function bigBoard(
+    o: { lead?: string; logo?: HTMLImageElement; title: string; sub: string; accent: string; fg?: string },
+    x: number, z: number, facing: number
+  ): void {
+    const { lead, logo, title, sub, accent, fg } = o;
+    const mat = themedMaterial(
+      (night) => (ctx, w, h) => {
+        ctx.fillStyle = night ? '#131828' : accent;
+        ctx.fillRect(0, 0, w, h);
+        if (night) {
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 16;
+          ctx.shadowColor = accent;
+          ctx.shadowBlur = 24;
+          ctx.strokeRect(12, 12, w - 24, h - 24);
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillStyle = night ? '#ffffff' : (fg ?? '#fffaf0');
+        ctx.textAlign = 'left';
+        let left = 56;
+        if (logo) {
+          // the mark sits on its own white tile, so a yellow logo still reads on an olive board
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(36, 40, 240, 240, 36);
+          ctx.fill();
+          ctx.drawImage(logo, 56, 60, 200, 200);
+          ctx.fillStyle = night ? '#ffffff' : (fg ?? '#fffaf0');
+          left = 316;
+        } else if (lead) {
+          ctx.font = '800 210px "Bricolage Grotesque Variable", sans-serif';
+          ctx.fillText(lead, 56, 250);
+          left = 56 + ctx.measureText(lead).width + 40;
+        }
+        ctx.font = '800 112px "Bricolage Grotesque Variable", sans-serif';
+        ctx.fillText(title, left, 190, w - left - 40);
+        ctx.globalAlpha = 0.88;
+        ctx.font = '600 54px "Figtree Variable", sans-serif';
+        ctx.fillText(sub, left + 4, 262, w - left - 40);
+        ctx.globalAlpha = 1;
+      },
+      1024,
+      320
+    );
+
+    const group = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.31), mat);
+    panel.position.set(0, 2.9, 0.06);
+    panel.castShadow = true;
+    const panelBack = panel.clone();
+    panelBack.rotation.y = Math.PI;
+    panelBack.position.z = -0.06;
+    posts(group, [-1.9, 1.9], 3.6, 0.13, 0);
+    group.add(panel, panelBack);
+    group.position.set(x, 0, z);
+    group.rotation.y = facing;
+    scene.add(group);
+    addCollider(x, z, 2.1, 0.3, facing);
+  }
+
+  return {
+    suiteBoard(step, project, x, z, facing, logo): void {
+      const stepText = project.tagline.split(' — ')[0].replace(/^\d+ · /, '');
+      bigBoard(
+        logo
+          ? { logo, title: project.name, sub: `${step} · ${stepText}`, accent: project.accent ?? '#d98a1f', fg: project.accentFg }
+          : { lead: String(step), title: project.name, sub: stepText, accent: project.accent ?? '#d98a1f', fg: project.accentFg },
+        x, z, facing
+      );
+    },
+
+    projectBoard(project, accent, x, z, facing): void {
+      bigBoard({ title: project.name, sub: project.tagline, accent }, x, z, facing);
     },
 
     districtBoard(d, gx, gz, facing): void {
-      const mat = themedMaterial(
-        (night) => (ctx, w, h) => {
-          ctx.fillStyle = night ? '#131828' : d.accent;
-          ctx.fillRect(0, 0, w, h);
-          ctx.textAlign = 'center';
-          ctx.font = '700 74px "Inconsolata Variable", monospace';
-          if (night) {
-            ctx.shadowColor = d.accent;
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = d.accent;
-          } else {
-            ctx.fillStyle = 'rgba(255,255,255,0.92)';
-          }
-          ctx.fillText(d.name.toUpperCase(), w / 2, 150, w - 60);
-          ctx.shadowBlur = 0;
-          ctx.font = '40px "Inconsolata Variable", monospace';
-          ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(255,255,255,0.85)';
-          ctx.fillText(d.blurb, w / 2, 235, w - 60);
-        },
-        760,
-        300
-      );
-
-      const group = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 1.15), mat);
-      panel.position.set(0, 2.0, 0.06);
-      panel.castShadow = true;
-      const panelBack = panel.clone();
-      panelBack.rotation.y = Math.PI;
-      panelBack.position.z = -0.06;
-      posts(group, [-1.3, 1.3], 2.6, 0.11, 0);
-      group.add(panel, panelBack);
-      group.position.set(gx, 0, gz);
-      group.rotation.y = facing;
-      scene.add(group);
+      bigBoard({ title: d.name, sub: d.blurb, accent: d.accent }, gx, gz, facing);
     },
 
     infoBoard(title, sub, accent, x, z, facing): void {
-      const mat = themedMaterial((night) => (ctx, w, h) => {
-        ctx.fillStyle = night ? '#131828' : CREAM;
-        ctx.fillRect(0, 0, w, h);
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 14;
-        if (night) { ctx.shadowColor = accent; ctx.shadowBlur = 18; }
-        ctx.strokeRect(10, 10, w - 20, h - 20);
-        ctx.shadowBlur = 0;
-        ctx.textAlign = 'center';
-        ctx.font = '700 58px "Inconsolata Variable", monospace';
-        if (night) { ctx.shadowColor = accent; ctx.shadowBlur = 14; ctx.fillStyle = '#ffffff'; }
-        else ctx.fillStyle = INK;
-        ctx.fillText(title, w / 2, 150, w - 70);
-        ctx.shadowBlur = 0;
-        ctx.font = '36px "Inconsolata Variable", monospace';
-        ctx.fillStyle = night ? 'rgba(230,236,255,0.85)' : 'rgba(44,42,38,0.75)';
-        ctx.fillText(sub, w / 2, 225, w - 70);
-      });
-
-      const group = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35), mat);
-      panel.position.y = 1.7;
-      panel.castShadow = true;
-      const backing = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.45, 0.06), wood);
-      backing.position.set(0, 1.7, -0.045);
-      backing.castShadow = true;
-      posts(group, [-1.0, 1.0], 1.8, 0.1, -0.125);
-      group.add(panel, backing);
-      group.position.set(x, 0, z);
-      group.rotation.y = facing;
-      scene.add(group);
-      addCollider(x, z, 1.25, 0.32, facing);
+      bigBoard({ title, sub, accent }, x, z, facing);
     },
 
     applyNight(nightFactor: number): void {

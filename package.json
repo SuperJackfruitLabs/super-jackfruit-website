@@ -18,6 +18,7 @@
     "@astrojs/tailwind": "^5.1.0",
     "@fontsource-variable/inconsolata": "^5.0.18",
     "@fontsource/tilt-neon": "^5.0.5",
+    "@superjackfruit/vibekit": "file:vendor/superjackfruit-vibekit-0.0.13.tgz",
     "astro": "^4.13.3",
     "postprocessing": "^6.39.4",
     "tailwindcss": "^3.4.10",

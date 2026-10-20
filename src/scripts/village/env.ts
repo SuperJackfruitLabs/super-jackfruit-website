@@ -15,19 +15,19 @@ export const TIME_PRESETS: Record<string, EnvPreset> = {
   dawn: {
     horizon: [1.0, 0.78, 0.75], mid: [0.95, 0.85, 0.8], zenith: [0.5, 0.62, 0.82],
     glow: [0.4, 0.2, 0.12], sunDir: [0.8, 0.18, 0.3],
-    sunColor: 0xffd4ae, sunIntensity: 2.2, hemiSky: 0xe8e0ff, hemiGround: 0xbfae90, hemiIntensity: 1.05,
+    sunColor: 0xffd4ae, sunIntensity: 2.2, hemiSky: 0xe8e0ff, hemiGround: 0xbfae90, hemiIntensity: 1.3,
     fog: 0xefe2e2, exposure: 1.05, night: 0,
   },
   day: {
     horizon: [0.87, 0.94, 1.0], mid: [0.62, 0.82, 0.96], zenith: [0.29, 0.56, 0.85],
     glow: [0.22, 0.2, 0.12], sunDir: [0.35, 0.75, 0.25],
-    sunColor: 0xfff6e0, sunIntensity: 3.4, hemiSky: 0xcfe8ff, hemiGround: 0xcfc0a0, hemiIntensity: 1.4,
+    sunColor: 0xfff6e0, sunIntensity: 3.4, hemiSky: 0xcfe8ff, hemiGround: 0xcfc0a0, hemiIntensity: 1.75,
     fog: 0xdfeaf2, exposure: 1.15, night: 0,
   },
   dusk: {
     horizon: [1.0, 0.85, 0.66], mid: [0.66, 0.85, 0.96], zenith: [0.38, 0.66, 0.9],
     glow: [0.35, 0.2, 0.05], sunDir: [0.5, 0.35, 0.4],
-    sunColor: 0xffe2b0, sunIntensity: 3.2, hemiSky: 0xbfe0ff, hemiGround: 0xd8c090, hemiIntensity: 1.25,
+    sunColor: 0xffe2b0, sunIntensity: 3.2, hemiSky: 0xbfe0ff, hemiGround: 0xd8c090, hemiIntensity: 1.55,
     fog: 0xdfe9ef, exposure: 1.18, night: 0,
   },
   night: {
