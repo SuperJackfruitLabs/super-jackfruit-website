@@ -46,6 +46,6 @@ Two parts of AgentPod are built around the idea that a change to an agent's setu
 
 AgentPod is a single-operator console today, not a team product or a hosted service. The hub and console run from source; the released binaries are the node and the `fleet` command-line tool. Some features, such as provisioning new runtimes or the Matrix bridge, are off until you configure them.
 
-It also works on its own. You don't need a Superpipeline board or a Supermessage room to use it, though it can connect to both.
+It also works on its own. You don't need a SuperPipeline board or a SuperMessage room to use it, though it can connect to both.
 
 Read more on [agentpod.dev](https://agentpod.dev), or start with the [docs](https://docs.agentpod.dev).

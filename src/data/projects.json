@@ -11,7 +11,7 @@
     "order": 1
   },
   {
-    "name": "superpipeline",
+    "name": "SuperPipeline",
     "slug": "superpipeline",
     "tagline": "kanban for a workforce of agents",
     "description": "A multi-tenant Kanban board that orchestrates external AI agents — any harness, anywhere — through pipeline stages with human approval gates. Built on Cloudflare.",

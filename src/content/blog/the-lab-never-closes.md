@@ -7,9 +7,9 @@ tags: [agents, infrastructure]
 sources:
   - claim: Super Jackfruit Labs describes itself as a solo experimentation lab for AI agent infrastructure.
     url: https://github.com/SuperJackfruitLabs/.github/blob/main/profile/README.md
-  - claim: superpipeline coordinates external agents through pipeline stages and human approval gates, with capability-based staffing and a traceable event log.
+  - claim: SuperPipeline coordinates external agents through pipeline stages and human approval gates, with capability-based staffing and a traceable event log.
     url: https://github.com/SuperJackfruitLabs/superpipeline/blob/main/README.md
-  - claim: superpipeline was created on 20 June 2026 and is licensed under MIT.
+  - claim: SuperPipeline was created on 20 June 2026 and is licensed under MIT.
     url: https://api.github.com/repos/SuperJackfruitLabs/superpipeline
   - claim: AgentPod is the fleet and facilities console for agent runtimes, despite the repository's stale GitHub description.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/main/README.md
@@ -17,11 +17,11 @@ sources:
     url: https://docs.agentpod.dev/start/concepts/
   - claim: AgentPod gives each agent a Forgejo account and each provisioned station a node-held SSH key whose private half does not leave the node.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/9934f7561eecf2747f15934c659d7a98474875c0/apps/node-agent/internal/gitidentity/identity.go
-  - claim: superpipeline approval gates can approve, request changes or reject, and the producing agent cannot resolve its own gate.
+  - claim: SuperPipeline approval gates can approve, request changes or reject, and the producing agent cannot resolve its own gate.
     url: https://github.com/SuperJackfruitLabs/superpipeline/blob/a37327cde125833667b005d18f92f4261f7d74c3/apps/api/src/board/board-do.ts#L2109-L2163
-  - claim: supermessage is an agent-aware Matrix client whose clients implement superpipeline gate decisions.
+  - claim: SuperMessage is an agent-aware Matrix client whose clients implement SuperPipeline gate decisions.
     url: https://github.com/SuperJackfruitLabs/supermessage/blob/main/README.md
-  - claim: AgentPod can decrypt encrypted board-room events and pass parsed gate decisions to superpipeline.
+  - claim: AgentPod can decrypt encrypted board-room events and pass parsed gate decisions to SuperPipeline.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/9934f7561eecf2747f15934c659d7a98474875c0/apps/hub/src/services/matrix-as/inbound.ts#L191-L231
   - claim: SuperMD is a native GPU-rendered Markdown editor that keeps plain CommonMark files on disk.
     url: https://github.com/SuperJackfruitLabs/supermd/blob/master/README.md
@@ -45,9 +45,9 @@ A model can produce a patch in a clean demo. Sustained work has harder edges: Wh
 
 The public work is spread across a small set of repositories. Each has a plain job.
 
-- [**superpipeline**](https://github.com/SuperJackfruitLabs/superpipeline) is the Kanban control plane: it moves cards through stages, routes them by declared capability and stops at human approval gates. It is MIT-licensed and was [created on 20 June 2026](https://api.github.com/repos/SuperJackfruitLabs/superpipeline).
+- [**SuperPipeline**](https://github.com/SuperJackfruitLabs/superpipeline) is the Kanban control plane: it moves cards through stages, routes them by declared capability and stops at human approval gates. It is MIT-licensed and was [created on 20 June 2026](https://api.github.com/repos/SuperJackfruitLabs/superpipeline).
 - [**AgentPod**](https://github.com/SuperJackfruitLabs/agentpod) is the fleet and facilities plane: it manages the machines and workspaces where agent runtimes live. GitHub’s short repository description still calls it a mobile app for OpenCode; the current README describes the newer fleet, hub and console architecture.
-- [**supermessage**](https://github.com/SuperJackfruitLabs/supermessage) is a Matrix client for rooms shared by people and agents, including structured approval controls for superpipeline gates.
+- [**SuperMessage**](https://github.com/SuperJackfruitLabs/supermessage) is a Matrix client for rooms shared by people and agents, including structured approval controls for SuperPipeline gates.
 - [**SuperMD**](https://github.com/SuperJackfruitLabs/supermd) is a native GPU-rendered Markdown editor that keeps CommonMark files on disk. It is a writing tool, not another layer in the agent control plane.
 - [**This website**](https://github.com/SuperJackfruitLabs/super-jackfruit-website) is the lab’s public catalogue and notebook. It is where finished accounts such as [“The CLI that could not update itself”](/blog/the-cli-that-could-not-update-itself/) live.
 
@@ -59,7 +59,7 @@ The lab’s working distinction is between a macro and a teammate.
 
 A macro borrows the operator’s identity. Its commits, API calls and remote access all appear to come from the person who invoked it. That can be convenient, but it destroys an important boundary: afterward, the system cannot reliably say which actor did what. Revoking the agent may also mean revoking the human.
 
-A teammate has its own identity and a history attached to it. In AgentPod’s public model, a [principal](https://docs.agentpod.dev/start/concepts/) is “who is acting”; `human`, `agent` and `service` are separate kinds, and an agent principal acts on its own behalf. In superpipeline, agents receive scoped credentials, claim runs and encounter surfaces that remain human-only.
+A teammate has its own identity and a history attached to it. In AgentPod’s public model, a [principal](https://docs.agentpod.dev/start/concepts/) is “who is acting”; `human`, `agent` and `service` are separate kinds, and an agent principal acts on its own behalf. In SuperPipeline, agents receive scoped credentials, claim runs and encounter surfaces that remain human-only.
 
 This does not make a language model a person. It makes authority legible. The useful properties are prosaic: separate credentials, narrow permissions, attributable actions and the ability to revoke one actor without revoking another.
 
@@ -69,11 +69,11 @@ Commit authorship and push authentication are different facts. Git author metada
 
 ## How this page was made
 
-This article travelled on a superpipeline board called **Press**. Its stages are:
+This article travelled on a SuperPipeline board called **Press**. Its stages are:
 
 `commission → brief → angle approved → draft → verify claims → publish approved → publish → published`
 
-The two approval stages are refusal points. In superpipeline, a gate can be approved, returned for changes or rejected, and the agent that produced the work cannot resolve its own gate. AgentPod and supermessage implement the path for gate requests and decisions through encrypted Matrix rooms. Public source establishes that mechanism; this article is not itself proof that this card used it.
+The two approval stages are refusal points. In SuperPipeline, a gate can be approved, returned for changes or rejected, and the agent that produced the work cannot resolve its own gate. AgentPod and SuperMessage implement the path for gate requests and decisions through encrypted Matrix rooms. Public source establishes that mechanism; this article is not itself proof that this card used it.
 
 The card’s intended division of work names four agents, selected by declared capability rather than a hard-coded stage-to-name rule:
 

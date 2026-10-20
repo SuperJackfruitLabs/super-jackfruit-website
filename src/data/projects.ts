@@ -17,7 +17,7 @@ export interface Project {
   order: number;
   /** Suite only: the product's own colour, and the one after it in the flow. */
   accent?: string;
-  /** text colour on the accent, for a light accent like Superpipeline's yellow */
+  /** text colour on the accent, for a light accent like SuperPipeline's yellow */
   accentFg?: string;
   next?: string;
   /** the product's colour mark, from the SJL brand pack */

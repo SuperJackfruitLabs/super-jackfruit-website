@@ -33,7 +33,7 @@ const GH = 'https://github.com/SuperJackfruitLabs';
 export const suite: Product[] = [
   {
     slug: 'supermessage',
-    name: 'Supermessage',
+    name: 'SuperMessage',
     step: 'You talk',
     blurb: 'chat with your agents',
     summary: 'An agent-aware Matrix chat client for iOS, Android, Windows, macOS and Linux. Talk to agents where you already talk to people.',
@@ -57,7 +57,7 @@ export const suite: Product[] = [
   },
   {
     slug: 'superpipeline',
-    name: 'Superpipeline',
+    name: 'SuperPipeline',
     step: 'Work is planned',
     blurb: 'boards for agent work',
     summary: 'A Kanban board that coordinates AI agents through pipeline stages and human approval gates. It owns the work; agents bring their own harness.',
@@ -129,7 +129,7 @@ export const suite: Product[] = [
   },
   {
     slug: 'superlibrary',
-    name: 'Superlibrary',
+    name: 'SuperLibrary',
     step: 'It remembers',
     blurb: 'the memory of the stack',
     summary: 'Keeps what agents make and what work has been done, labelled with how each turned out, so agents consult it before they work.',
@@ -151,14 +151,14 @@ export const suite: Product[] = [
   },
   {
     slug: 'superwitness',
-    name: 'Superwitness',
+    name: 'SuperWitness',
     step: 'You see proof',
     blurb: 'observability and evals',
     summary: 'Shows what an agent did, how the product it ran on behaved, and whether the work was any good, joined on one run.',
     features: [
       'Agent traces and product telemetry on one run',
       'Evaluations of whether the work was good',
-      'Run documents for Superpipeline runs',
+      'Run documents for SuperPipeline runs',
     ],
     status: 'Released',
     version: 'v0.0.7',
