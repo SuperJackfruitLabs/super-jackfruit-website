@@ -1,0 +1,36 @@
+---
+import Site from '../layouts/Site.astro';
+import { archiveDistricts as districts, archiveByDistrict as byDistrict } from '../data/projects';
+---
+
+<Site title="Archive — Super Jackfruit Labs" description="Earlier experiments from the lab: agents, MCP servers and odd curiosities.">
+  <header class="head">
+    <p class="kicker">Archive</p>
+    <h1>Earlier experiments</h1>
+    <p>What the lab built before the suite. Kept for reference; some are no longer maintained.</p>
+    <a class="btn ghost" href="/">Drive through the village →</a>
+  </header>
+  {districts.map((d) => (
+    <section>
+      <h2>{d.name}</h2>
+      <ul>
+        {byDistrict(d.id).map((p) => (
+          <li>
+            <a href={p.demo ?? p.github}><strong>{p.name}</strong></a>
+            <span>{p.tagline}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</Site>
+
+<style>
+  .head { padding: 3rem 0 1rem; max-width: 40rem; }
+  h1 { font-family: var(--vk-font-display); margin: .25rem 0 .75rem; }
+  h2 { font-family: var(--vk-font-display); font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  .head p { color: var(--vk-color-muted); }
+  ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--vk-color-line); }
+  li { display: flex; gap: 1rem; flex-wrap: wrap; padding: .75rem 0; border-bottom: 1px solid var(--vk-color-line); }
+  li span { color: var(--vk-color-muted); }
+</style>

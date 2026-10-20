@@ -42,6 +42,11 @@ export const ALL_VILLAGE_MODELS = [
   'street-lamp',
   'offroad-car',
   ...NPC_MODELS,
+  // KayKit City Builder road tiles (CC0)
+  'kk-road-straight',
+  'kk-road-corner-curved',
+  'kk-road-tsplit',
+  'kk-road-junction',
 ];
 
 /**
@@ -49,7 +54,7 @@ export const ALL_VILLAGE_MODELS = [
  * hard (see public/_headers) — bump this whenever `npm run assets` regenerates
  * them, or returning visitors keep the old ones for a week.
  */
-export const ASSET_VERSION = '2026-08-10b';
+export const ASSET_VERSION = '2026-10-20a';
 
 export const modelUrl = (name: string): string =>
   `/assets/village/${name}.glb?v=${ASSET_VERSION}`;

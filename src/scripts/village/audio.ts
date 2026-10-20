@@ -9,6 +9,29 @@ const MUSIC_URL = '/assets/village/music.m4a';
 
 /** speed span of one imaginary gear, in m/s */
 const GEAR_SPAN = 6.5;
+/** how far past a gear's edge the speed must go before the gear changes, m/s */
+const GEAR_HYSTERESIS = 0.6;
+
+/**
+ * The audible span of a decoded loop. An MP3 carries encoder padding — this
+ * one has 25 ms of silence at the head and 19 ms at the tail — and looping the
+ * whole buffer plays that gap every pass: the engine cut out for a beat every
+ * 8 s at idle and every 3–4 s at full pitch. Loop between the first and last
+ * loud samples instead, each nudged to a rising zero crossing so the seam
+ * doesn't click.
+ */
+export function loopSpan(d: Float32Array, rate: number, threshold = 0.01): { start: number; end: number } {
+  let a = 0;
+  while (a < d.length && Math.abs(d[a]) < threshold) a++;
+  let b = d.length - 1;
+  while (b > a && Math.abs(d[b]) < threshold) b--;
+  const rising = (i: number) => d[i - 1] < 0 && d[i] >= 0;
+  let s = Math.max(1, a);
+  while (s < b && !rising(s)) s++;
+  let e = b;
+  while (e > s && !rising(e)) e--;
+  return { start: s / rate, end: e / rate };
+}
 
 export interface AudioBus {
   /** safe to call on every input event; only the first one does anything */
@@ -34,6 +57,7 @@ export function createAudio(): AudioBus {
   let muted = false;
   let engineOn = true;
   let musicOn = true;
+  let gear = 0;
 
   function makeNoise(actx: AudioContext): AudioBuffer {
     const len = Math.floor(actx.sampleRate * 2);
@@ -79,11 +103,14 @@ export function createAudio(): AudioBus {
         const src = actx.createBufferSource();
         src.buffer = buf;
         src.loop = true;
+        const span = loopSpan(buf.getChannelData(0), buf.sampleRate);
+        src.loopStart = span.start;
+        src.loopEnd = span.end;
         const gain = actx.createGain();
         gain.gain.value = 0;
         src.connect(gain);
         gain.connect(comp);
-        src.start();
+        src.start(0, span.start);
         engineSrc = src;
         engineGain = gain;
       } catch {
@@ -107,6 +134,9 @@ export function createAudio(): AudioBus {
     ensure(): void {
       start();
       startMusic();
+      // a browser suspends audio when the tab is hidden or iOS takes the
+      // speaker; the next touch or key brings it back
+      if (ctx && !muted && ctx.state !== 'running') void ctx.resume();
     },
 
     toggleMute(): boolean {
@@ -137,7 +167,12 @@ export function createAudio(): AudioBus {
         return;
       }
       const sp = Math.abs(speed);
-      const inGear = sp < 0.15 ? 0 : (sp % GEAR_SPAN) / GEAR_SPAN;
+      // change gear only once the speed is clear of the edge, so a car
+      // cruising right at a gear's top doesn't flick between two pitches
+      if (sp > (gear + 1) * GEAR_SPAN + GEAR_HYSTERESIS) gear++;
+      else if (gear > 0 && sp < gear * GEAR_SPAN - GEAR_HYSTERESIS) gear--;
+      gear = Math.max(0, Math.min(gear, Math.floor((sp + GEAR_HYSTERESIS) / GEAR_SPAN)));
+      const inGear = sp < 0.15 ? 0 : Math.min(1, Math.max(0, (sp - gear * GEAR_SPAN) / GEAR_SPAN));
       const rpm = Math.min(1, 0.18 + inGear * 0.82 + (nitro ? 0.12 : 0));
       engineSrc.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
       // an idle floor, so a parked car still sounds like a running one

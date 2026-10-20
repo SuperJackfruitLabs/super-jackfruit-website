@@ -22,6 +22,7 @@ const ANIMATE_RADIUS = 70;
 
 export { NPC_MODELS } from '../../data/village-models';
 import { NPC_MODELS } from '../../data/village-models';
+import { FOOTPATH, KERB_TOP } from './road';
 
 export interface IdleSpot {
   x: number;
@@ -205,10 +206,11 @@ export async function createNpcs(
           }
           v.seg.curve.getPointAt(v.t, point);
           const n = v.seg.perp(v.t);
-          const pavement = v.seg.width / 2 - 0.8;
+          // the middle of the footpath, standing on it rather than in the road
+          const pavement = v.seg.width / 2 + FOOTPATH / 2;
           v.root.position.set(
             point.x + n.x * pavement * v.side,
-            0,
+            KERB_TOP,
             point.z + n.z * pavement * v.side
           );
           v.seg.curve.getTangentAt(v.t, tangent);

@@ -1,0 +1,69 @@
+---
+import Site from '../layouts/Site.astro';
+import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
+---
+
+<Site title="Super Jackfruit Labs — agent-native tools">
+  <section class="hero">
+    <p class="kicker">Agent-native tools</p>
+    <h1>Six tools for working with agents. Each stands alone; together they carry a task from ask to proof.</h1>
+    <div class="actions">
+      <a class="btn" href="#products">See the suite</a>
+      <a class="btn ghost" href={`mailto:${CONTACT}`}>Run it with your team</a>
+    </div>
+  </section>
+
+  <section id="products">
+    <h2>How the suite fits together</h2>
+    <ol class="flow">
+      {suite.map((p, i) => (
+        <li {...accentAttrs(p)}>
+          <img class="logo" src={`/brand/${p.slug}.svg`} alt="" width="44" height="44" />
+          <span class="kicker">{i + 1} · {p.step}</span>
+          <a class="name" href={`/products/${p.slug}`}><strong>{p.name}</strong></a>
+          <span class="blurb">{p.blurb}</span>
+          <span class="status">● {p.status}{p.version ? ` · ${p.version}` : ''}</span>
+          <span class="ctas">
+            <a class="cta" href={p.site ?? p.cta.href} title={p.site ? new URL(p.site).host : undefined}>{p.site ? 'Website' : 'Ask'} →</a>
+            <a class="more" href={`/products/${p.slug}`}>Details</a>
+          </span>
+        </li>
+      ))}
+    </ol>
+    <p class="note">Each works on its own. One sign-in across every product.</p>
+    <div class="coming">
+      <span class="kicker">Coming</span>
+      {coming.map((c) => <span><strong>{c.name}</strong> — {c.blurb}</span>)}
+    </div>
+  </section>
+
+  <section class="paths">
+    <a href="#products"><span class="kicker">Developer</span><strong>Try one product</strong><span>Install it today; no suite required.</span></a>
+    <a href={`mailto:${CONTACT}`}><span class="kicker">Team</span><strong>Run the suite</strong><span>Write to {CONTACT}.</span></a>
+    <a href="/blog"><span class="kicker">Follow</span><strong>Read the lab</strong><span>Notes with their sources, and an RSS feed.</span></a>
+  </section>
+</Site>
+
+<style>
+  .hero { padding: 3rem 0 2.5rem; max-width: 48rem; }
+  h1 { font-family: var(--vk-font-display); font-size: clamp(1.75rem, 4vw, 2.75rem); line-height: 1.15; margin: .5rem 0 1.5rem; }
+  h2 { font-family: var(--vk-font-display); margin: 0 0 1rem; }
+  .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .flow { list-style: none; padding: 0; margin: 0; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); counter-reset: s; }
+  .flow li { display: flex; flex-direction: column; gap: .35rem; height: 100%; box-sizing: border-box; padding: 1rem; background: var(--vk-color-surface); border: 1px solid var(--vk-color-line); border-top: 4px solid var(--vk-color-accent); border-radius: var(--vk-radius-md); }
+  .flow .name { text-decoration: none; }
+  .flow .logo { width: 44px; height: 44px; margin-bottom: .2rem; }
+  .flow .name:hover { color: var(--vk-color-accent-text); }
+  .ctas { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-top: auto; padding-top: .4rem; }
+  .status { margin-bottom: .2rem; }
+  .cta { display: inline-block; padding: .4rem .7rem; border-radius: var(--vk-radius-sm); background: var(--vk-color-accent); color: var(--vk-color-accent-fg); font-size: .85rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .more { font-size: .85rem; color: var(--vk-color-muted); }
+  .flow strong { font-size: 1.15rem; }
+  .blurb { color: var(--vk-color-muted); font-size: .9rem; flex: 1; }
+  .status { font-size: .75rem; color: var(--vk-color-success-text); }
+  .note { color: var(--vk-color-muted); margin: 1rem 0; }
+  .coming { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: baseline; padding: 1rem; border: 1px dashed var(--vk-color-line); border-radius: var(--vk-radius-md); color: var(--vk-color-muted); }
+  .paths { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin-top: 3rem; }
+  .paths a { display: flex; flex-direction: column; gap: .3rem; padding: 1.25rem; background: var(--vk-color-raised); border-radius: var(--vk-radius-md); text-decoration: none; }
+  .paths span:last-child { color: var(--vk-color-muted); font-size: .9rem; }
+</style>

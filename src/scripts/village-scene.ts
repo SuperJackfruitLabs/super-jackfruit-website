@@ -15,8 +15,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // models ship meshopt-compressed (scripts/compress-assets.mjs); the decoder is
 // a few KB and rides along inside three's addons
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { projects, districts, byDistrict, type Project } from '../data/projects';
-import { createRoads, Z_START, Z_END, type BranchSpec } from './village/road';
+import { districts, byDistrict, type Project } from '../data/projects';
+import { createRoads, Z_START, Z_END, FOOTPATH } from './village/road';
 import { createEnv } from './village/env';
 import { createProps } from './village/props';
 import { createBoards } from './village/boards';
@@ -36,6 +36,8 @@ const EXPECTED_ASSETS = 34;
 
 interface Station {
   kind: 'project' | 'info';
+  /** How close the car has to come before the card rises; boards default to 4.4. */
+  reach?: number;
   project?: Project;
   accent: string;
   x: number;
@@ -65,6 +67,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const fontsReady = Promise.race([
     Promise.all([
       document.fonts.load('700 90px "Inconsolata Variable"'),
+      document.fonts.load('800 112px "Bricolage Grotesque Variable"'),
+      document.fonts.load('600 54px "Figtree Variable"'),
       document.fonts.load('44px "Inconsolata Variable"'),
     ]),
     new Promise((resolve) => setTimeout(resolve, 1500)),
@@ -75,7 +79,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   renderer.setPixelRatio(quality.settings.pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = quality.settings.shadows;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
@@ -91,20 +95,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   };
 
   const env = createEnv(THREE, scene, renderer, quality.settings.shadowMapSize);
-  // Three district streets branch off the spine, one per district in the
-  // project data, sized to how many projects each holds: Agent Works has five
-  // and gets a broad residential turn, MCP Alley has seven and becomes the long
-  // narrow lane its name promises, the Odd Shop has three and gets a short
-  // crooked dead end. Offsets are [outward, along] from the junction.
-  const DISTRICT_STREETS: BranchSpec[] = [
-    { id: 'agent-works', t: 0.15, side: -1, width: 8.6, culDeSac: 7,
-      shape: [[2, 0], [17, 2], [32, 7], [46, -1], [56, -13]] },
-    { id: 'mcp-alley', t: 0.46, side: 1, width: 7.4, culDeSac: 6,
-      shape: [[2, 0], [19, -2], [36, -9], [53, -4], [69, 5], [80, 17]] },
-    { id: 'odd-shop', t: 0.74, side: -1, width: 7.8, culDeSac: 6.5,
-      shape: [[2, 0], [16, 3], [28, 14], [38, 24]] },
-  ];
-  const road = createRoads(THREE, scene, maxAniso, DISTRICT_STREETS);
 
   // the page shows a real bar while the village downloads; `total` climbs as
   // later batches are queued, so hold the fraction against a known floor and
@@ -120,7 +110,62 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const props = createProps(THREE, scene, loader, rand);
   mark('setup');
 
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178 });
+  // ---------- the streets, on a 10 m grid of road tiles ----------
+  // The spine runs south from the start, jogs east and back so the drive has
+  // corners to take, and ends at the square. The suite lines its first long
+  // straight; MCP Alley leaves east and the Odd Shop west, each from a T.
+  const run = (x0: number, z0: number, x1: number, z1: number): Array<[number, number]> => {
+    const out: Array<[number, number]> = [];
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+    for (let i = 0; i <= n; i++) out.push([x0 + Math.sign(x1 - x0) * i, z0 + Math.sign(z1 - z0) * i]);
+    return out;
+  };
+  const MAIN_CELLS = [
+    ...run(0, 1, 0, -10),
+    ...run(1, -10, 3, -10),
+    ...run(3, -11, 3, -18),
+    ...run(2, -18, 0, -18),
+    ...run(0, -19, 0, -25),
+  ];
+  const road = await createRoads(
+    THREE, scene, props.loadAsset,
+    { id: 'main', cells: MAIN_CELLS, culDeSac: 0, startCulDeSac: 9 },
+    [
+      { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
+      { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
+    ],
+    (o) => {
+      if ((o as import('three').Mesh).isMesh) o.receiveShadow = true;
+    }
+  );
+
+  // A flat colour reads as a void at speed. A speckled tile, multiplied by the
+  // season's colour, gives the eye something to track and the car a sense of pace.
+  const groundTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2600; i++) {
+      const v = 200 + Math.floor(rand() * 55);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect(rand() * 256, rand() * 256, 2 + rand() * 5, 2 + rand() * 5);
+    }
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = 'rgba(150,150,150,0.18)';
+      g.beginPath();
+      g.arc(rand() * 256, rand() * 256, 8 + rand() * 22, 0, Math.PI * 2);
+      g.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(70, 70);
+    tex.anisotropy = maxAniso;
+    return tex;
+  })();
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x9fc178, map: groundTex });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.z = (Z_START + Z_END) / 2;
@@ -167,8 +212,41 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const clearOfHouses = (x: number, z: number, gap: number): boolean =>
     !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap);
 
-  function putHouse(x: number, z: number, facing: number, size: number): void {
-    const proto = houses[Math.floor(rand() * houses.length)];
+  // ---------- lit windows ----------
+  // The houses share Kenney's palette texture, and their glass is one swatch
+  // of it (the pale-blue cell, column 6 of the second row). A mask that is
+  // warm light on that swatch and black everywhere else, used as the houses'
+  // emissive map, makes every window glow without touching walls or roofs;
+  // the glow fades in with the night.
+  const windowMask = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#fff';
+    g.fillRect(320, 128, 64, 128);
+    const tex = new THREE.CanvasTexture(c);
+    tex.flipY = false; // as glTF's own textures are
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  for (const h of houses) {
+    h.traverse((o) => {
+      const mesh = o as import('three').Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const lm = m as import('three').MeshStandardMaterial;
+        if (!('emissive' in lm)) continue;
+        lm.emissiveMap = windowMask;
+        lm.emissive.set(0xffc46b);
+        lm.emissiveIntensity = 0;
+      }
+    });
+  }
+
+  function putHouse(x: number, z: number, facing: number, size: number, pick?: (typeof houses)[number]): void {
+    const proto = pick ?? houses[Math.floor(rand() * houses.length)];
     props.place(proto, size, x, z, facing, 'box');
     houseCenters.push({ x, z });
     if (chimneys.length < quality.settings.chimneys) {
@@ -183,30 +261,88 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  // ---------- the suite: the first six houses down the main road, in flow order ----------
+  // A visitor meets the suite before anything else, one step after another,
+  // alternating sides so each house gets its own frontage.
+  const startT = 0.012;
+  {
+    const half = road.main.width / 2;
+    const items = byDistrict('agent-works');
+    // the signs are painted once, so their logos have to be in hand first
+    const logos = new Map<string, HTMLImageElement>();
+    await Promise.all(items.map((p) => new Promise<void>((resolve) => {
+      if (!p.logo) return resolve();
+      const img = new Image();
+      img.onload = () => { logos.set(p.slug, img); resolve(); };
+      img.onerror = () => resolve(); // a missing logo falls back to the step number
+      img.src = p.logo;
+    })));
+    items.forEach((project, i) => {
+      const t = 0.07 + i * (12 / road.main.length);
+      const c = road.main.curve.getPointAt(t);
+      const tan = road.main.curve.getTangentAt(t);
+      const n = road.main.perp(t).multiplyScalar(i % 2 === 0 ? -1 : 1);
+      const faceRoad = Math.atan2(-n.x, -n.z);
+      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[(i * 3 + 1) % houses.length]);
+      const dx = c.x + n.x * (half + 2.6);
+      const dz = c.z + n.z * (half + 2.6);
+      props.place(driveway, 3.0, dx, dz, faceRoad);
+      // the sign stands side-on to the road so it reads as you approach
+      const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
+      const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
+      boards.suiteBoard(i + 1, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
+      const ix = c.x + n.x * (half + 4.4) + tan.x * 2.2;
+      const iz = c.z + n.z * (half + 4.4) + tan.z * 2.2;
+      idleSpots.push({ x: ix, z: iz, facing: faceRoad });
+    });
+
+    // where the drive starts: what this place is, and how to skip it
+    const c = road.main.curve.getPointAt(startT + 0.02);
+    const tan = road.main.curve.getTangentAt(startT + 0.02);
+    const n = road.main.perp(startT + 0.02).multiplyScalar(1);
+    const sx = c.x + n.x * (half + FOOTPATH + 1.2);
+    const sz = c.z + n.z * (half + FOOTPATH + 1.2);
+    boards.infoBoard('START HERE', 'six tools, one task — drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    stations.push({
+      kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
+      info: {
+        title: 'Super Jackfruit Labs',
+        tagline: 'six tools for working with agents',
+        lines: [
+          'Drive on: the next six houses are the suite, in the order a task moves through it — you talk, the work is planned, an agent does it, your fleet runs it, it remembers, you see proof.',
+          'Each one works on its own. Further down the road are the experiments that taught us what to build.',
+        ],
+        links: [
+          { label: 'the suite as a page →', url: '/suite' },
+          { label: 'run it with your team →', url: 'mailto:rakesh@superjackfruit.com' },
+        ],
+      },
+    });
+  }
+
   for (const d of districts) {
+    if (d.id === 'agent-works') continue; // the suite, placed above
     const street = road.get(d.id);
+
+    // a sign on the spine before the turning, so the street is somewhere you
+    // decide to go rather than something you notice in the mirror
+    {
+      const spec = road.junctions.find((b) => b.id === d.id)!;
+      const at = spec.t - 24 / road.main.length;
+      const c = road.main.curve.getPointAt(at);
+      const tan = road.main.curve.getTangentAt(at);
+      const n = road.main.perp(at).multiplyScalar(spec.side);
+      const half = road.main.width / 2;
+      const off = half + FOOTPATH + 1.2;
+      boards.infoBoard(
+        spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent,
+        c.x + n.x * off, c.z + n.z * off, Math.atan2(-tan.x, -tan.z)
+      );
+      gates.push({ x: c.x + n.x * off, z: c.z + n.z * off });
+    }
     const items = byDistrict(d.id);
     const half = street.width / 2;
-
-    // Gate just past the mouth, angled at traffic coming off the spine. It has
-    // to clear the main road: right at the junction, "beside this lane" is the
-    // middle of the spine, which is exactly where these used to end up.
-    {
-      let placed = false;
-      for (const gt of [0.1, 0.14, 0.18, 0.24]) {
-        for (const gs of [1, -1]) {
-          if (placed) continue;
-          const m = street.curve.getPointAt(gt);
-          const n = street.perp(gt).multiplyScalar(gs);
-          const gx = m.x + n.x * (half + 2.8);
-          const gz = m.z + n.z * (half + 2.8);
-          if (road.onRibbon(gx, gz, 1.6)) continue;
-          boards.districtBoard(d, gx, gz, Math.atan2(-n.x, -n.z));
-          gates.push({ x: gx, z: gz });
-          placed = true;
-        }
-      }
-    }
 
     let side = 1;
     items.forEach((project, i) => {
@@ -241,10 +377,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const dz = c.z + n.z * (half + 2.6 + push);
       if (!road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.0, dx, dz, faceRoad);
 
-      const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
-      const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
+      const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
+      const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
       boards.projectBoard(project, d.accent, bx, bz, faceRoad);
-      stations.push({ kind: 'project', project, accent: d.accent, x: bx, z: bz });
+      stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
       const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
       const iz = c.z + n.z * (half + 4.4 + push) - tan.z * 2.2;
@@ -328,17 +464,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     const hqx = plaza.x + plaza.n.x * 8.5;
     const hqz = plaza.z + plaza.n.z * 8.5;
-    boards.infoBoard('SUPER JACKFRUIT LABS', 'an open-source lab you can drive through', '#d98a1f', hqx, hqz, faceP);
+    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP);
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
         title: 'Super Jackfruit Labs',
-        tagline: 'an open-source lab you can drive through',
+        tagline: 'agent-native tools, built in the open',
         lines: [
-          "Hi — I'm Rakesh. This village is my lab: every house on the road is a real open-source project, most of them work-in-progress, all of them free to fork.",
-          'By night this lab is a neon street — same projects, different weather.',
+          'The first street is the suite: six tools that carry a task from ask to proof. Each works on its own.',
+          'The other streets hold the experiments that taught us what to build.',
         ],
-        links: [{ label: 'the neon street (night site) →', url: 'https://superjackfruit.com/' }],
+        links: [
+          { label: 'the suite as a page →', url: '/suite' },
+          { label: 'run it with your team →', url: 'mailto:rakesh@superjackfruit.com' },
+        ],
       },
     });
 
@@ -396,7 +535,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const c = seg.curve.getPointAt(t);
       for (const sd of [-1, 1]) {
         const n = seg.perp(t).multiplyScalar(sd);
-        const off = half + 0.3 + rand() * 0.5;
+        // in the verge just past the footpath, not on it
+        const off = half + FOOTPATH + 0.5 + rand() * 0.6;
         const fx = c.x + n.x * off;
         const fz = c.z + n.z * off;
         if (rand() < quality.settings.flowerChance && !road.onRibbon(fx, fz, 0.15)) {
@@ -427,6 +567,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // everything scattered so far becomes a handful of instanced meshes
   props.commit();
   mark('commit-instances');
+  // the instanced copies of the house materials, whose glow follows the night
+  const windowMats: import('three').MeshStandardMaterial[] = [];
+  scene.traverse((o) => {
+    const m = (o as import('three').Mesh).material as import('three').MeshStandardMaterial | undefined;
+    if (m && !Array.isArray(m) && m.emissiveMap === windowMask && !windowMats.includes(m)) windowMats.push(m);
+  });
 
   // drifting cartoon clouds
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
@@ -453,6 +599,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
   const car = await createCar(THREE, props.loadGltf, scene);
+  {
+    const p = road.main.curve.getPointAt(startT);
+    const tan = road.main.curve.getTangentAt(startT);
+    car.teleport(p.x, p.z, Math.atan2(tan.x, tan.z));
+  }
   mark('car');
   const audio = createAudio();
   const input = createInput(canvas, audio.ensure);
@@ -501,13 +652,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }
 
   // visited tracking + completion fireworks over the square
+  // progress counts the suite alone, under a new key so the old catalogue's
+  // visits don't arrive as a head start
+  const VISITED_KEY = 'sjl-suite-visited';
+  const suiteSlugs = byDistrict('agent-works').map((p) => p.slug);
   let visited = new Set<string>();
   try {
-    visited = restoreVisits(localStorage.getItem('sjl-visited'), projects.map((project) => project.slug));
-    localStorage.setItem('sjl-visited', JSON.stringify([...visited]));
+    visited = restoreVisits(localStorage.getItem(VISITED_KEY), suiteSlugs);
+    localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
   } catch {}
   setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: projects.length } }));
+    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
   }, 500);
 
   // ---------- driving surface ----------
@@ -524,19 +679,28 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   // ---------- loop ----------
   let activeStation: Station | null = null;
-  const camPos = new THREE.Vector3(0, 4.5, 16);
-  const camTarget = new THREE.Vector3(0, 1.6, 8);
+  const startFwd = new THREE.Vector3(Math.sin(car.heading), 0, Math.cos(car.heading));
+  const camPos = car.root.position.clone().addScaledVector(startFwd, -8.4).setY(4.1);
+  const camTarget = car.root.position.clone().addScaledVector(startFwd, 4.5).setY(1.3);
   const fwd = new THREE.Vector3();
   const desiredCam = new THREE.Vector3();
   const desiredTarget = new THREE.Vector3();
   camera.position.copy(camPos);
 
-  const clock = new THREE.Clock();
+  // Compile every shader before the first frame: left to the first render,
+  // it stalled the page for seconds right as the visitor pressed a key.
+  camera.lookAt(camTarget);
+  await renderer.compileAsync(scene, camera);
+  renderer.render(scene, camera);
+  mark('compile');
+
+  const timer = new THREE.Timer();
   let framesTimed = 0;
-  renderer.setAnimationLoop(() => {
+  renderer.setAnimationLoop((now) => {
     const frameStart = performance.now();
-    const dt = Math.min(0.05, clock.getDelta());
-    const t = clock.elapsedTime;
+    timer.update(now);
+    const dt = Math.min(0.05, timer.getDelta());
+    const t = timer.getElapsed();
 
     quality.monitor(dt, applyQuality);
 
@@ -556,6 +720,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
+    for (const m of windowMats) m.emissiveIntensity = nightFactor * 1.6;
     car.applyNight(nightFactor);
 
     props.updateSway(t);
@@ -568,10 +733,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     // nearest station within reach → raise the card
     let nearest: Station | null = null;
-    let bestD = 4.4;
+    let bestD = Infinity;
     for (const st of stations) {
       const d = Math.hypot(st.x - car.root.position.x, st.z - car.root.position.z);
-      if (d < bestD) {
+      if (d < (st.reach ?? 4.4) && d < bestD) {
         bestD = d;
         nearest = st;
       }
@@ -587,13 +752,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
             : null,
         })
       );
-      if (nearest && nearest.kind === 'project' && nearest.project && !visited.has(nearest.project.slug)) {
+      if (nearest && nearest.kind === 'project' && nearest.project && suiteSlugs.includes(nearest.project.slug) && !visited.has(nearest.project.slug)) {
         visited.add(nearest.project.slug);
         try {
-          localStorage.setItem('sjl-visited', JSON.stringify([...visited]));
+          localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
         } catch {}
-        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: projects.length } }));
-        if (visited.size === projects.length) fx.celebrate(plaza.x, plaza.z);
+        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
+        if (visited.size === suiteSlugs.length) fx.celebrate(plaza.x, plaza.z);
       }
     }
 
@@ -652,7 +817,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const onRoad = (list: Array<{ x: number; z: number }>, clearance: number) =>
         list.filter((o) => road.onRibbon(o.x, o.z, clearance)).length;
       return {
-        boardsOnRoad: onRoad(stations, 0),
+        // a suite stop's point is on the road on purpose (it's where the card rises); its sign is not
+        boardsOnRoad: onRoad(stations.filter((st) => st.reach === undefined), 0),
         gatesOnRoad: onRoad(gates, 0),
         housesOnRoad: onRoad(houseCenters, 1.5),
         lampsOnRoad: onRoad(lamps.poles(), 0),

@@ -1,9 +1,7 @@
 ---
 import { getCollection, type CollectionEntry } from 'astro:content';
-import '@fontsource/tilt-neon';
-import '@fontsource-variable/inconsolata';
 
-import Layout from '../../layouts/Layout.astro';
+import Layout from '../../layouts/Site.astro';
 import { publishedPosts, formatPostDate } from '../../lib/posts.mjs';
 
 /**
@@ -28,11 +26,11 @@ const { post } = Astro.props;
 const { Content } = await post.render();
 ---
 
-<Layout title={`${post.data.title} — Super Jackfruit Labs`} description={post.data.description} scroll>
+<Layout title={`${post.data.title} — Super Jackfruit Labs`} description={post.data.description}>
   <article class="post">
     <nav class="post__nav">
       <a href="/blog">← the writing</a>
-      <a href="/">the street</a>
+      <a href="/">home</a>
     </nav>
 
     <header class="post__head">
@@ -74,15 +72,13 @@ const { Content } = await post.render();
 
 <style>
   /*
-    The street's palette, at reading brightness: #13151a ground, #efe9dc warm off-white, #09e6f2
-    neon cyan. Tilt Neon carries the headings because it is the lab's voice; the body is the
-    system face because a whole post set in the display or the mono face is a post nobody
-    finishes. No new font is loaded for this page.
+    vibekit tokens throughout, so a post follows whichever vibe the reader picked. Headings use
+    the vibe's display face; the body stays in its reading face.
   */
   .post {
-    --ink: #efe9dc;
-    --ink-dim: rgba(239, 233, 220, 0.62);
-    --neon: #09e6f2;
+    --ink: var(--vk-color-text);
+    --ink-dim: var(--vk-color-muted);
+    --neon: var(--vk-color-accent-text);
     box-sizing: border-box;
     max-width: 38rem;
     margin: 0 auto;
@@ -97,7 +93,7 @@ const { Content } = await post.render();
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.85rem;
     letter-spacing: 0.08em;
     margin-bottom: 3.5rem;
@@ -107,18 +103,18 @@ const { Content } = await post.render();
   .sources a {
     color: var(--neon);
     text-decoration: none;
-    border-bottom: 1px solid rgba(9, 230, 242, 0.25);
+    border-bottom: 1px solid var(--vk-color-line);
   }
 
   .post__nav a:hover,
   .sources a:hover {
     border-bottom-color: var(--neon);
-    text-shadow: 0 0 0.5em rgba(9, 230, 242, 0.5);
+    text-shadow: none;
   }
 
   .post__date,
   .post__tags {
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.85rem;
     letter-spacing: 0.1em;
     color: var(--ink-dim);
@@ -126,14 +122,14 @@ const { Content } = await post.render();
   }
 
   .post__head h1 {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-family: var(--vk-font-display);
     font-weight: 400;
     /* The street uses 0.24em+; that is signage. Prose headings need far less or the words stop
        reading as words. */
     letter-spacing: 0.01em;
     line-height: 1.15;
     font-size: clamp(2rem, 6vw, 2.9rem);
-    color: #fff;
+    color: var(--vk-color-text);
     margin: 0.4rem 0 0.6rem;
   }
 
@@ -146,10 +142,10 @@ const { Content } = await post.render();
 
   .prose :global(h2),
   .prose :global(h3) {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-family: var(--vk-font-display);
     font-weight: 400;
     letter-spacing: 0.01em;
-    color: #fff;
+    color: var(--vk-color-text);
     line-height: 1.25;
     margin: 2.75rem 0 0.75rem;
   }
@@ -169,14 +165,14 @@ const { Content } = await post.render();
   .prose :global(a) {
     color: var(--neon);
     text-decoration: none;
-    border-bottom: 1px solid rgba(9, 230, 242, 0.35);
+    border-bottom: 1px solid var(--vk-color-line);
   }
   .prose :global(a:hover) { border-bottom-color: var(--neon); }
 
-  .prose :global(strong) { color: #fff; }
+  .prose :global(strong) { color: var(--vk-color-text); }
 
   .prose :global(blockquote) {
-    border-left: 2px solid rgba(9, 230, 242, 0.4);
+    border-left: 2px solid var(--vk-color-line);
     padding-left: 1.1rem;
     margin-left: 0;
     color: var(--ink-dim);
@@ -184,17 +180,17 @@ const { Content } = await post.render();
   }
 
   .prose :global(code) {
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.95em;
-    background: rgba(239, 233, 220, 0.08);
+    background: var(--vk-color-line);
     padding: 0.1em 0.35em;
     border-radius: 3px;
   }
 
   .prose :global(pre) {
-    font-family: 'Inconsolata Variable', monospace;
-    background: #0d0f13;
-    border: 1px solid rgba(239, 233, 220, 0.1);
+    font-family: var(--vk-font-mono);
+    background: var(--vk-color-raised);
+    border: 1px solid var(--vk-color-line);
     border-radius: 6px;
     padding: 1rem 1.1rem;
     /* A wide code block scrolls itself rather than widening the page — the fix people forget until
@@ -214,19 +210,19 @@ const { Content } = await post.render();
 
   .prose :global(hr) {
     border: none;
-    border-top: 1px solid rgba(239, 233, 220, 0.14);
+    border-top: 1px solid var(--vk-color-line);
     margin: 2.5rem 0;
   }
 
   .sources {
     margin-top: 4rem;
     padding-top: 1.75rem;
-    border-top: 1px solid rgba(9, 230, 242, 0.25);
+    border-top: 1px solid var(--vk-color-line);
     font-size: 0.95rem;
   }
 
   .sources h2 {
-    font-family: 'Tilt Neon', system-ui, sans-serif;
+    font-family: var(--vk-font-display);
     font-weight: 400;
     font-size: 1.1rem;
     letter-spacing: 0.12em;
@@ -244,7 +240,7 @@ const { Content } = await post.render();
   }
 
   .sources a {
-    font-family: 'Inconsolata Variable', monospace;
+    font-family: var(--vk-font-mono);
     font-size: 0.8rem;
     /* A bare URL is the point — it is checkable — but it must not blow out the measure. */
     word-break: break-all;
