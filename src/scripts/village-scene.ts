@@ -325,16 +325,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       // the sign stands side-on to the road so it reads as you approach
       const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
-      if (seg === road.main) {
-        // Main Street is a high street: a sign swinging from a bracket, the bracket reaching
-        // out over the pavement toward the road
-        // the sign's face stays side-on to the road; turn it so its bracket (local +x) points at the road
+      {
+        // every suite product hangs the same sign: a round board swinging from a bracket,
+        // the bracket reaching out over the pavement toward the road
         const along = Math.atan2(-tan.x, -tan.z);
         const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
         boards.hangingSign(project, bx + n.x * 1.6, bz + n.z * 1.6, towardRoad ? along : along + Math.PI, logos.get(project.slug));
-      } else {
-        // the Agent Quarter flies flags
-        boards.flag(project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
       }
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
@@ -597,6 +593,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const kx = plaza.x + plaza.n.x * front - plaza.n.z * 3.2;
     const kz = plaza.z + plaza.n.z * front + plaza.n.x * 3.2;
     const faceK = faceP;
+    // the lab flies its flag on the other side of the door
+    boards.flag(
+      { name: 'Super Jackfruit Labs', slug: 'sjl', tagline: 'agent-native tools, built in the open', accent: '#d98a1f' } as Project,
+      plaza.x + plaza.n.x * front + plaza.n.z * 3.6,
+      plaza.z + plaza.n.z * front - plaza.n.x * 3.6,
+      // flying outward, away from the monument, so the stone doesn't hide it
+      faceP + Math.PI,
+      mark
+    );
     boards.chalkboard('say hi', ['the lab is always open', 'everything here is', 'open source', 'come and wave'], kx, kz, faceK);
     stations.push({
       kind: 'info', accent: '#3f9e3f', x: kx, z: kz,
