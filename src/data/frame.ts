@@ -9,12 +9,12 @@ export const frame = {
     { label: 'The suite', href: '/' },
     { label: 'The village', href: '/village' },
     { label: 'Products', href: '/#products' },
-    { label: 'Writing', href: '/blog' },
+    { label: 'Lab notes', href: '/blog' },
     { label: 'Archive', href: '/archive' },
   ],
   /** the street footer's links, beside the frame's own */
   links: [
-    { label: 'Writing', href: '/blog' },
+    { label: 'Lab notes', href: '/blog' },
     { label: 'Archive', href: '/archive' },
     { label: 'RSS', href: '/rss.xml' },
   ],
