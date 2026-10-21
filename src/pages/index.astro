@@ -106,8 +106,17 @@ const docs = (p: (typeof suite)[number]) => p.links.find((l) => l.label === 'Doc
     background: var(--vk-color-surface);
     border: 1px solid var(--vk-color-line);
     border-radius: 18px;
+    /* keeps the frame's reveal (opacity, transform, its stagger delay) alongside the hover */
+    transition: opacity .6s cubic-bezier(.2, .8, .2, 1) var(--vk-rv-d, 0ms), transform .4s cubic-bezier(.2, .8, .2, 1) var(--vk-rv-d, 0ms), border-color .25s ease, box-shadow .25s ease;
   }
-  .logo { width: 44px; height: 44px; flex: none; }
+  /* the cards answer the pointer as the product pages' do: a small lift, the logo turns */
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--vk-color-accent) 45%, var(--vk-color-line));
+    box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--vk-color-accent) 60%, transparent);
+  }
+  .logo { width: 44px; height: 44px; flex: none; transition: transform .45s cubic-bezier(.3, 1.6, .5, 1); }
+  .card:hover .logo { transform: rotate(-8deg) scale(1.08); }
   .card__body { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
   .card__title { display: flex; flex-wrap: wrap; gap: .25rem .6rem; align-items: baseline; }
   .name { font-family: var(--vk-font-display); font-weight: 700; font-size: 1.25rem; text-decoration: none; }
@@ -152,5 +161,5 @@ const docs = (p: (typeof suite)[number]) => p.links.find((l) => l.label === 'Doc
     .cards { grid-template-columns: 1fr; }
     .team { margin-left: 0; }
   }
-  @media (prefers-reduced-motion: reduce) { .window img { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .window img, .card, .logo { transition: none; } .card:hover, .card:hover .logo { transform: none; } }
 </style>
