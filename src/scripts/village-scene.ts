@@ -606,7 +606,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   mark('scatter');
   // everything scattered so far becomes a handful of instanced meshes
-  const bounds = { minX: -130, maxX: 130, minZ: Z_END + 4, maxZ: Z_START - 2 };
+  // the drivable area: everything built plus a margin, so the hedge round it never meets a
+  // house, the square or a turning circle
+  const bounds = { minX: -150, maxX: 150, minZ: Z_END - 28, maxZ: Z_START + 22 };
   // a hedge just past the edge of the drivable area, so the car stops against something
   {
     const out = 1.8, step = 1.9;

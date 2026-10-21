@@ -186,9 +186,14 @@ export async function createNpcs(
             v.yielding = near;
             if (v.walk) {
               // half a second is long enough to read as stopping, short enough
-              // not to look like a stutter at speed
-              v.walk.crossFadeTo(v.idle, 0.35, false);
-              if (!near) v.idle.crossFadeTo(v.walk, 0.35, false);
+              // not to look like a stutter at speed. Fade one way only, and wake the
+              // action being faded in: fading both ways at once could leave the walk
+              // at zero weight while the walker kept moving, so it glided.
+              const [from, to] = near ? [v.walk, v.idle] : [v.idle, v.walk];
+              to.enabled = true;
+              to.setEffectiveTimeScale(1);
+              to.setEffectiveWeight(1);
+              from.crossFadeTo(to, 0.35, false);
             }
           }
           if (!v.yielding) {
