@@ -214,7 +214,7 @@ export function createBoards(
   const stone = new THREE.MeshLambertMaterial({ color: 0xb9b2a4 });
   const stoneDark = new THREE.MeshLambertMaterial({ color: 0x8f887a });
   const swingers: Array<{ o: T.Object3D; phase: number; amp: number }> = [];
-  const flags: Array<{ front: T.BufferGeometry; back: T.BufferGeometry; base: Float32Array; phase: number; fly: T.Object3D; w: number }> = [];
+  const flags: Array<{ front: T.BufferGeometry; back: T.BufferGeometry; base: Float32Array; phase: number; fly: T.Object3D; w: number; hang: number }> = [];
   const glowMats: Array<{ mat: T.MeshLambertMaterial; color: number }> = [];
 
   const place = (group: T.Group, x: number, z: number, facing: number, scale = 1) => {
@@ -367,7 +367,7 @@ export function createBoards(
     for (const m of [fm, bm]) m.position.set(0.06, 0, 0);
     fly.add(fm, bm);
     g.add(fly);
-    flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28, fly, w: W });
+    flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28, fly, w: W, hang: 0 });
     // a low plinth so the pole stands on something
     if (opts.baseY) {
       // on a roof: no plinth and nothing for the car to hit
@@ -761,9 +761,11 @@ export function createBoards(
       const windDir = Math.sin(t * 0.035) * 1.2 + Math.sin(t * 0.09 + 2) * 0.35;
       for (const f of flags) {
         f.fly.rotation.y += (windDir + Math.sin(t * 0.3 + f.phase) * 0.12 - f.fly.rotation.y) * 0.02;
-        // calm: the cloth falls toward the pole; wind lifts it out
-        const hang = (1 - wind) * (1 - wind) * 1.25;
-        f.fly.rotation.z += (-hang - f.fly.rotation.z) * 0.03;
+        // calm: the cloth falls; wind lifts it out. The hoist edge (x = 0) never moves,
+        // so the flag stays on its pole however far it droops
+        f.hang += ((1 - wind) * (1 - wind) * 1.2 - f.hang) * 0.03;
+        const ch = Math.cos(f.hang);
+        const sh = Math.sin(f.hang);
         const amp = 0.02 + 0.1 * wind;
         const speed = 1.6 + 2.4 * wind;
         for (const [geo, sign] of [[f.front, 1], [f.back, -1]] as const) {
@@ -775,8 +777,9 @@ export function createBoards(
             const wave =
               Math.sin(x * 1.8 - t * speed + f.phase) * amp +
               Math.sin(x * 3.1 - t * speed * 1.4 + y * 1.2 + f.phase) * amp * 0.25;
+            pos.setX(i, x * ch);
+            pos.setY(i, y - x * sh + Math.sin(x * 2 - t * speed * 0.8 + f.phase) * 0.02 * k);
             pos.setZ(i, sign * wave * k);
-            pos.setY(i, y + Math.sin(x * 2 - t * speed * 0.8 + f.phase) * 0.02 * k);
           }
           pos.needsUpdate = true;
           geo.computeVertexNormals();
