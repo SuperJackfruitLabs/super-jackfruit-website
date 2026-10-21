@@ -784,6 +784,17 @@ import '@superjackfruit/vibekit/fonts.css';
   const tagsEl = document.getElementById('card-tags')!;
   const githubEl = document.getElementById('card-github') as HTMLAnchorElement;
   const demoEl = document.getElementById('card-demo') as HTMLAnchorElement;
+  // The village has no frame around it, so it mounts the frame's Captain Jack sheet itself;
+  // the sheet answers sjl-ask, as it does on every other page of the site.
+  import('@superjackfruit/frontdoor/client').then(({ mountJack }) => mountJack({ product: 'lab' })).catch((e) => console.warn('[village] Captain Jack', e));
+  // a card link to #captain-jack opens the frame's Captain Jack sheet instead of navigating
+  for (const el of [githubEl, demoEl]) {
+    el.addEventListener('click', (e) => {
+      if (el.getAttribute('href') !== '#captain-jack') return;
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('sjl-ask', { detail: {} }));
+    });
+  }
 
   interface StationDetail {
     kind: 'project' | 'info';

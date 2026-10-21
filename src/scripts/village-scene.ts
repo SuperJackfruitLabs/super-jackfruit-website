@@ -665,6 +665,44 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  // ---------- Captain Jack's house: the nearest neighbour to HQ ----------
+  // Pull up outside and the card offers a talk with him: the frame's own Captain Jack sheet,
+  // opened through its sjl-ask event, the same as "Ask Captain Jack" anywhere on the site.
+  {
+    const hqX = plaza.x + plaza.n.x * 18;
+    const hqZ = plaza.z + plaza.n.z * 18;
+    const home = houseBoxes
+      .filter((h) => Math.hypot(h.x - hqX, h.z - hqZ) > 4)
+      .sort((a, b) => Math.hypot(a.x - plaza.x, a.z - plaza.z) - Math.hypot(b.x - plaza.x, b.z - plaza.z))[0];
+    if (home) {
+      const fx = Math.sin(home.facing);
+      const fz = Math.cos(home.facing);
+      // out front of the door, at the pavement
+      const sx = home.x + fx * (home.hz + 2.2);
+      const sz = home.z + fz * (home.hz + 2.2);
+      const portrait = await new Promise<HTMLImageElement | undefined>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(undefined);
+        img.src = '/brand/captain-jack.svg';
+      });
+      boards.hangingSign(
+        { name: 'Captain Jack', slug: 'captain-jack', tagline: "the lab's guide — come and ask", accent: '#173d83' } as Project,
+        sx + fz * 1.2, sz - fx * 1.2, home.facing + Math.PI / 2, portrait
+      );
+      stations.push({
+        kind: 'info', accent: '#173d83', x: sx, z: sz, reach: 8,
+        info: {
+          title: 'Captain Jack',
+          logo: '/brand/captain-jack.svg',
+          tagline: "the lab's guide",
+          lines: ["This is Captain Jack's house. Ask him anything about the lab and its tools. He's a character; an AI writes his answers."],
+          links: [{ label: 'talk to Captain Jack →', url: '#captain-jack' }],
+        },
+      });
+    }
+  }
+
   // ---------- bunting: strings of the suite's colours across every street, well spaced ----------
   {
     const colours = byDistrict('agent-works').map((p) => p.accent ?? '#d98a1f');
