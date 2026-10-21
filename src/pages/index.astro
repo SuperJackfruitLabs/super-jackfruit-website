@@ -1,10 +1,10 @@
 ---
-import Layout from '../layouts/Layout.astro';
+import Layout from '../layouts/Village.astro';
 import '@fontsource-variable/inconsolata';
 import '@superjackfruit/vibekit/fonts.css';
 ---
 
-<Layout title="Super Jackfruit Labs — agent-native tools" greet={false}>
+<Layout title="Super Jackfruit Labs — agent-native tools">
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
@@ -116,15 +116,10 @@ import '@superjackfruit/vibekit/fonts.css';
 </Layout>
 
 <style>
-  /* A block of one screen inside the frame: the suite bar and lab header above it, the street
-     footer below. Its children are placed against it, not against the window. */
   .scene {
     --build: 3;
-    position: relative;
-    width: 100%;
-    height: 100vh;
-    height: 100svh;
-    overflow: hidden;
+    position: fixed;
+    inset: 0;
     background: #9ed4f5;
     font-family: 'Figtree Variable', system-ui, sans-serif;
   }
@@ -522,7 +517,7 @@ import '@superjackfruit/vibekit/fonts.css';
   .scene[data-touch='true'] .card { bottom: 9.5rem; }
 
   /* ---------- the two always-on controls, and the menu behind one of them ---------- */
-  .hud { position: absolute; top: calc(var(--frame-cover, 0px) + 1.4rem); right: 1.4rem; display: flex; gap: 0.5rem; }
+  .hud { position: absolute; top: 1.4rem; right: 1.4rem; display: flex; gap: 0.5rem; }
   .hud__btn {
     width: 2.8rem; height: 2.8rem; display: grid; place-items: center; padding: 0; cursor: pointer;
     border-radius: 999px; border: 1.5px solid rgba(40, 50, 60, 0.16);
@@ -535,15 +530,15 @@ import '@superjackfruit/vibekit/fonts.css';
   .hud__btn[aria-pressed='false'] .hud__wave { display: none; }
 
   .env.menu {
-    top: calc(var(--frame-cover, 0px) + 4.9rem); right: 1.4rem; left: auto;
+    top: 4.9rem; right: 1.4rem; left: auto;
     display: grid; grid-template-columns: auto auto; align-items: center; justify-items: start;
     gap: 0.6rem 1rem; padding: 1rem 1.1rem; border-radius: 14px;
     background: rgba(250, 247, 240, 0.94); box-shadow: 0 10px 30px rgba(40, 50, 60, 0.2); backdrop-filter: blur(6px);
   }
   .env.menu[hidden] { display: none; }
   @media (max-width: 640px) {
-    .hud { top: calc(var(--frame-cover, 0px) + 0.8rem); right: 0.8rem; }
-    .env.menu { top: calc(var(--frame-cover, 0px) + 4.2rem); right: 0.8rem; left: 0.8rem; justify-content: start; }
+    .hud { top: 0.8rem; right: 0.8rem; }
+    .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
   }
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
   .menu .env__group { background: rgba(40, 50, 60, 0.05); }
@@ -580,23 +575,7 @@ import '@superjackfruit/vibekit/fonts.css';
 </style>
 
 <script>
-  import { isTyping } from '../scripts/village/input';
   import { initVillageScene } from '../scripts/village-scene';
-
-  // The frame's header is sticky over the top of the scene. --frame-cover is how much of the
-  // scene it hides right now, so the scene's top-right controls always sit just below it.
-  {
-    const scene = document.querySelector<HTMLElement>('.scene');
-    const cover = () => {
-      const head = document.querySelector('sjl-product-header');
-      if (!scene || !head) return;
-      const px = Math.max(0, head.getBoundingClientRect().bottom - scene.getBoundingClientRect().top);
-      scene.style.setProperty('--frame-cover', `${Math.round(px)}px`);
-    };
-    cover();
-    addEventListener('scroll', cover, { passive: true });
-    addEventListener('resize', cover);
-  }
 
   const canvas = document.getElementById('village-canvas');
   if (canvas instanceof HTMLCanvasElement) {
@@ -705,7 +684,7 @@ import '@superjackfruit/vibekit/fonts.css';
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' }));
   });
   window.addEventListener('keydown', (e) => {
-    if (!isTyping(e) && e.key.toLowerCase() === 'm') showSound(soundBtn.getAttribute('aria-pressed') !== 'true');
+    if (e.key.toLowerCase() === 'm') showSound(soundBtn.getAttribute('aria-pressed') !== 'true');
   });
 
   // the driving legend fades once the visitor has had a few seconds with it
