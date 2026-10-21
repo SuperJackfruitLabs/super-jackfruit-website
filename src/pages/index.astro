@@ -116,10 +116,15 @@ import '@superjackfruit/vibekit/fonts.css';
 </Layout>
 
 <style>
+  /* A block of one screen inside the frame: the suite bar and lab header above it, the street
+     footer below. Its children are placed against it, not against the window. */
   .scene {
     --build: 3;
-    position: fixed;
-    inset: 0;
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100svh;
+    overflow: hidden;
     background: #9ed4f5;
     font-family: 'Figtree Variable', system-ui, sans-serif;
   }
@@ -575,6 +580,7 @@ import '@superjackfruit/vibekit/fonts.css';
 </style>
 
 <script>
+  import { isTyping } from '../scripts/village/input';
   import { initVillageScene } from '../scripts/village-scene';
 
   const canvas = document.getElementById('village-canvas');
@@ -684,7 +690,7 @@ import '@superjackfruit/vibekit/fonts.css';
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' }));
   });
   window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'm') showSound(soundBtn.getAttribute('aria-pressed') !== 'true');
+    if (!isTyping(e) && e.key.toLowerCase() === 'm') showSound(soundBtn.getAttribute('aria-pressed') !== 'true');
   });
 
   // the driving legend fades once the visitor has had a few seconds with it

@@ -6,7 +6,7 @@ import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
 <Site title="Super Jackfruit Labs — agent-native tools">
   <section class="hero">
     <p class="kicker">Agent-native tools</p>
-    <h1>Six tools for working with agents. Each stands alone; together they carry a task from ask to proof.</h1>
+    <h1>Six tools for working with agents. Together they carry a task from ask to proof.</h1>
     <div class="actions">
       <a class="btn" href="#products">See the suite</a>
       <a class="btn ghost" href={`mailto:${CONTACT}`}>Run it with your team</a>
@@ -24,13 +24,13 @@ import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
           <span class="blurb">{p.blurb}</span>
           <span class="status">● {p.status}{p.version ? ` · ${p.version}` : ''}</span>
           <span class="ctas">
-            <a class="cta" href={p.site ?? p.cta.href} title={p.site ? new URL(p.site).host : undefined}>{p.site ? 'Website' : 'Ask'} →</a>
+            <a class="cta" href={p.cta.href}>{p.cta.label} →</a>
+            <a class="more" href={p.site}>{new URL(p.site).host}</a>
             <a class="more" href={`/products/${p.slug}`}>Details</a>
           </span>
         </li>
       ))}
     </ol>
-    <p class="note">Each works on its own. One sign-in across every product.</p>
     <div class="coming">
       <span class="kicker">Coming</span>
       {coming.map((c) => <span><strong>{c.name}</strong> — {c.blurb}</span>)}
@@ -38,7 +38,7 @@ import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
   </section>
 
   <section class="paths">
-    <a href="#products"><span class="kicker">Developer</span><strong>Try one product</strong><span>Install it today; no suite required.</span></a>
+    <a href="#products"><span class="kicker">Developer</span><strong>Try one product</strong><span>Sign in, download or install one, and start there.</span></a>
     <a href={`mailto:${CONTACT}`}><span class="kicker">Team</span><strong>Run the suite</strong><span>Write to {CONTACT}.</span></a>
     <a href="/blog"><span class="kicker">Follow</span><strong>Read the lab</strong><span>Notes with their sources, and an RSS feed.</span></a>
   </section>

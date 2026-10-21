@@ -30,6 +30,7 @@ import { createNpcs, type IdleSpot } from './village/npcs';
 import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
 import { restoreVisits } from './village/visits.mjs';
+import { isTyping } from './village/input';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
 const EXPECTED_ASSETS = 34;
@@ -77,7 +78,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const quality = createQuality();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.settings.tier !== 'low' });
   renderer.setPixelRatio(quality.settings.pixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // The scene is a block inside the site frame, not the whole window: size to it, so a window
+  // scrollbar or the frame's bars never make the canvas wider than its box.
+  const view = () => {
+    const box = canvas.parentElement ?? document.documentElement;
+    return { w: Math.max(1, box.clientWidth), h: Math.max(1, box.clientHeight) };
+  };
+  renderer.setSize(view().w, view().h);
   renderer.shadowMap.enabled = quality.settings.shadows;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -85,7 +92,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(50, view().w / view().h, 0.1, 400);
 
   // deterministic layout randomness — the village looks the same every visit
   let seed = 20260809;
@@ -611,6 +618,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   // ---------- page wiring ----------
   window.addEventListener('keydown', (e) => {
+    if (isTyping(e)) return;
     if (e.key.toLowerCase() === 'm') audio.toggleMute();
   });
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
@@ -629,9 +637,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }) as EventListener);
 
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const { w, h } = view();
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(w, h);
   });
 
   // a downgrade can only touch what's cheap to change mid-flight; scenery

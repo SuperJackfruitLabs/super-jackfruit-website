@@ -15,6 +15,7 @@ const next = suite[i + 1];
   <article {...accentAttrs(p)}>
     <p class="kicker">Step {i + 1} of {suite.length} · {p.step}</p>
     <h1><img class="logo" src={`/brand/${p.slug}.svg`} alt="" width="72" height="72" />{p.name}</h1>
+    <p class="headline">{p.headline}</p>
     <p class="lede">{p.summary}</p>
     <p class="status">● {p.status}{p.version ? ` · ${p.version}` : ''} <span>checked {p.checked}</span></p>
     <ul class="features">{p.features.map((f) => <li>{f}</li>)}</ul>
@@ -22,7 +23,7 @@ const next = suite[i + 1];
       <a class="btn" href={p.cta.href}>{p.cta.label}</a>
       {p.links.map((l) => <a class="btn ghost" href={l.href}>{l.label}</a>)}
     </div>
-    <p class="alone">{p.name} works on its own. It does not need the rest of the suite.</p>
+    <p class="alone">In its own words, from <a href={p.site}>{new URL(p.site).host}</a>.</p>
   </article>
   <nav class="steps">
     {prev ? <a href={`/products/${prev.slug}`}>← {prev.step}: {prev.name}</a> : <span />}
@@ -35,6 +36,7 @@ const next = suite[i + 1];
   h1 { font-family: var(--vk-font-display); font-size: clamp(2.25rem, 6vw, 3.5rem); margin: .25rem 0 1rem; color: var(--vk-color-accent-text); }
   h1 { display: flex; align-items: center; gap: .9rem; }
   h1 .logo { width: 1.25em; height: 1.25em; flex: none; }
+  .headline { font-family: var(--vk-font-display); font-size: clamp(1.4rem, 3.5vw, 1.9rem); line-height: 1.2; margin: 0 0 .75rem; }
   .lede { font-size: 1.2rem; line-height: 1.5; }
   .status { color: var(--vk-color-success-text); font-size: .9rem; }
   .status span { color: var(--vk-color-faint); margin-left: .5rem; }

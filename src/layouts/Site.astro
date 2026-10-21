@@ -1,19 +1,16 @@
 ---
 import '@superjackfruit/vibekit/fonts.css';
 import '@superjackfruit/vibekit/vibekit.css';
+import SuiteHead from '@superjackfruit/frontdoor/components/SuiteHead.astro';
+import Frame from '@superjackfruit/frontdoor/components/Frame.astro';
+import { frame } from '../data/frame';
 
 interface Props {
   title: string;
   description?: string;
 }
 
-const { title, description = 'Super Jackfruit Labs builds agent-native tools: six products that each work on their own and fit together.' } = Astro.props;
-const path = Astro.url.pathname;
-const nav = [
-  { href: '/#products', label: 'Products' },
-  { href: '/blog', label: 'Writing' },
-  { href: '/archive', label: 'Archive' },
-];
+const { title, description = 'Super Jackfruit Labs builds six tools for working with agents, which together carry a task from ask to proof.' } = Astro.props;
 ---
 
 <!doctype html>
@@ -25,69 +22,20 @@ const nav = [
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍈</text></svg>" />
     <link rel="alternate" type="application/rss+xml" title="Super Jackfruit Labs" href="/rss.xml" />
     <title>{title}</title>
-    <script is:inline>
-      // Before first paint: the remembered vibe, and Daylight's sun-aware theme (light by day, dark
-      // at night by local clock). Storage can be unavailable; the defaults then stand.
-      (function () {
-        var d = document.documentElement, vibe = 'daylight';
-        try { vibe = localStorage.getItem('sjl-vibe') || vibe; } catch (e) {}
-        d.dataset.vibe = vibe;
-        var h = new Date().getHours();
-        d.dataset.theme = vibe === 'daylight' ? (h >= 6 && h < 19 ? 'light' : 'dark')
-          : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      })();
-    </script>
+    <SuiteHead product="lab" />
   </head>
   <body>
-    <header class="top">
-      <a class="brand" href="/">Super Jackfruit Labs</a>
-      <nav>
-        {nav.map((n) => <a href={n.href} aria-current={path.startsWith(n.href) && n.href !== '/#products' ? 'page' : undefined}>{n.label}</a>)}
-      </nav>
-    </header>
-    <main><slot /></main>
-    <footer class="foot">
-      <span>© 2026 Super Jackfruit Labs</span>
-      <label>Vibe
-        <select id="vibe">
-          <option value="daylight">Daylight</option>
-          <option value="paper">Paper</option>
-          <option value="studio">Studio</option>
-          <option value="quiet">Quiet</option>
-        </select>
-      </label>
-      <a href="/rss.xml">RSS</a>
-    </footer>
-    <script is:inline>
-      (function () {
-        // vibekit scopes accents to one element carrying vibe, theme and accent together.
-        var d = document.documentElement;
-        document.querySelectorAll('[data-accent]').forEach(function (el) {
-          el.dataset.vibe = d.dataset.vibe;
-          el.dataset.theme = d.dataset.theme;
-        });
-        var s = document.getElementById('vibe');
-        s.value = document.documentElement.dataset.vibe;
-        s.addEventListener('change', function () {
-          try { localStorage.setItem('sjl-vibe', s.value); } catch (e) {}
-          location.reload();
-        });
-      })();
-    </script>
+    <!-- The frame owns the header, the light/dark switch and the footer; the page is Daylight. -->
+    <Frame product="lab" {...frame}>
+      <main><slot /></main>
+    </Frame>
   </body>
 </html>
 
 <style is:global>
-  body { background: var(--vk-color-bg); color: var(--vk-color-text); margin: 0; min-height: 100vh; display: flex; flex-direction: column; }
-  main { flex: 1; width: 100%; max-width: 72rem; margin: 0 auto; padding: 0 16px 4rem; box-sizing: border-box; }
+  body { background: var(--vk-color-bg); color: var(--vk-color-text); margin: 0; }
+  main { width: 100%; max-width: 72rem; margin: 0 auto; padding: 0 16px 4rem; box-sizing: border-box; }
   a { color: inherit; }
-  .top, .foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; max-width: 72rem; width: 100%; margin: 0 auto; padding: 1.25rem 16px; box-sizing: border-box; }
-  .brand { font-family: var(--vk-font-display); font-weight: 700; text-decoration: none; }
-  .top nav { display: flex; gap: 1.25rem; }
-  .top nav a { text-decoration: none; color: var(--vk-color-muted); }
-  .top nav a:hover, .top nav a[aria-current] { color: var(--vk-color-text); }
-  .foot { border-top: 1px solid var(--vk-color-line); color: var(--vk-color-muted); font-size: .875rem; }
-  .foot select { margin-left: .5rem; font: inherit; color: var(--vk-color-text); background: var(--vk-color-surface); border: 1px solid var(--vk-color-line); border-radius: var(--vk-radius-sm); padding: .25rem .5rem; }
   /* a product's own colours (from its logo) stand in for vibekit's accent inside it */
   [data-brand] {
     --vk-color-accent: var(--brand);
