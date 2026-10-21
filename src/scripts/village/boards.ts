@@ -167,7 +167,8 @@ export function createBoards(
 
     const group = new THREE.Group();
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(size.width, panelH), mat);
-    // an arch is raised clear of the chase camera (about 4 m up), not just the car
+    // an arch is raised clear of the chase camera (about 4 m up). An ordinary board
+    // already is: its panel spans ~2.25–3.55 m, over the car and under the lens
     const lift = size.gate ? 1.2 : 0;
     panel.position.set(0, 2.9 + lift + (panelH - 1.31) / 2, 0.06);
     panel.castShadow = true;
@@ -181,11 +182,9 @@ export function createBoards(
     group.rotation.y = facing;
     group.scale.setScalar(size.scale);
     scene.add(group);
-    if (size.gate) {
-      // an arch over the road: only its posts are solid, so the car drives underneath
-      const off = (size.width / 2 - 0.2) * size.scale;
-      for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * off * k, z - Math.sin(facing) * off * k, 0.3, 0.3, facing);
-    } else addCollider(x, z, (size.width / 2) * size.scale, 0.3, facing);
+    // only the posts are solid, so the car drives underneath any panel
+    const off = (size.width / 2 - 0.2) * size.scale;
+    for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * off * k, z - Math.sin(facing) * off * k, 0.3, 0.3, facing);
   }
 
   return {

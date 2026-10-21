@@ -64,7 +64,7 @@ import '@superjackfruit/vibekit/fonts.css';
       </div>
       <span class="menu__label" id="tilt-label" hidden>Steering</span>
       <div class="env__group" id="tilt-row" hidden>
-        <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer">tilt to steer</button>
+        <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
       </div>
       <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · car: Han66st (CC-BY, sketchfab) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
     </div>
@@ -110,6 +110,7 @@ import '@superjackfruit/vibekit/fonts.css';
       <p class="card__tagline" id="card-tagline"></p>
       <p class="card__status" id="card-status"></p>
       <p class="card__desc" id="card-desc"></p>
+      <button type="button" class="card__more" id="card-more" aria-expanded="false" aria-controls="card-desc">more ▾</button>
       <p class="card__tags" id="card-tags"></p>
       <div class="card__actions">
         <a id="card-github" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
@@ -336,6 +337,30 @@ import '@superjackfruit/vibekit/fonts.css';
   }
 
   .card__tags { display: none; }
+
+  .card[data-expanded='true'] .card__desc {
+    display: block;
+    -webkit-line-clamp: unset;
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+  .card__more {
+    display: block;
+    margin: -0.25rem 0 0.45rem;
+    padding: 0.35rem 0;
+    min-height: 2rem;
+    border: 0;
+    background: none;
+    font: 600 0.78rem 'Figtree Variable', system-ui, sans-serif;
+    color: var(--card-muted);
+    cursor: pointer;
+  }
+  .card__more:hover, .card__more:focus-visible { color: var(--card-fg); text-decoration: underline; outline: none; }
+  .card__more[hidden] { display: none; }
+
+  /* tilt steers, so the pad stands down; the pedals keep their corner */
+  .touch[data-tilt='true'] .touch__wheel { display: none; }
+  .touch[data-tilt='true'] .touch__pedals { margin-left: auto; }
 
   .card__actions {
     display: flex;
@@ -590,8 +615,19 @@ import '@superjackfruit/vibekit/fonts.css';
     .card { left: 0.8rem; right: 0.8rem; width: auto; padding: 0.55rem 0.8rem; }
     .card__logo { width: 1.9rem; height: 1.9rem; }
     .card__desc { display: none; }
-    .card[data-expanded='true'] .card__desc { display: -webkit-box; }
-    .card { cursor: pointer; }
+    .card[data-expanded='true'] .card__desc { display: block; }
+    /* the car sits centre-bottom and the pedals take the corners, so on a phone
+       the card is a strip at the top, just under the sound/menu buttons */
+    .card, .scene[data-touch='true'] .card { top: calc(3.9rem + env(safe-area-inset-top)); bottom: auto; }
+    .card { transform: translateY(-12px); }
+    /* the pedals, a third smaller: still >= 44px to hit, and clear of Safari's bottom bar */
+    .touch { padding: 0 0.8rem calc(0.8rem + env(safe-area-inset-bottom)); }
+    .touch__wheel { width: min(10rem, 38vw); height: 3.2rem; }
+    .touch__knob { width: 2.4rem; height: 2.4rem; }
+    .touch__wheel-label { transform: translateY(2.2rem); font-size: 0.7rem; }
+    .touch__pedals { gap: 0.4rem; }
+    .touch__btn--gas { width: 3.9rem; height: 3.9rem; font-size: 1.4rem; }
+    .touch__btn--brake, .touch__btn--nitro { width: 2.85rem; height: 2.85rem; font-size: 1rem; }
   }
   @media (max-width: 640px) {
     .hint { font-size: 1.2rem; bottom: 1.2rem; }
@@ -754,7 +790,7 @@ import '@superjackfruit/vibekit/fonts.css';
       card.dataset.open = 'false';
       return;
     }
-    card.dataset.expanded = 'false';
+    setExpanded(false);
     const { accent } = e.detail;
     card.style.setProperty('--accent', accent);
     if (e.detail.kind === 'info' && e.detail.info) {
@@ -779,6 +815,7 @@ import '@superjackfruit/vibekit/fonts.css';
         demoEl.hidden = true;
       }
       card.dataset.open = 'true';
+      showMore();
       return;
     }
     const project = e.detail.project!;
@@ -817,13 +854,22 @@ import '@superjackfruit/vibekit/fonts.css';
     }
     card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
     card.dataset.open = 'true';
+    showMore();
   }) as EventListener);
 
-  // on a phone the card is a short sheet; a tap (not on a link) shows the description
-  card.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).closest('a')) return;
-    card.dataset.expanded = String(card.dataset.expanded !== 'true');
-  });
+  // "more" opens the whole description (scrolling inside the card if it's long), and closes it again
+  const moreBtn = document.getElementById('card-more')!;
+  const setExpanded = (open: boolean) => {
+    card.dataset.expanded = String(open);
+    moreBtn.setAttribute('aria-expanded', String(open));
+    moreBtn.textContent = open ? 'less ▴' : 'more ▾';
+  };
+  // only offered when there's more to read than the card already shows
+  const showMore = () => {
+    const phone = getComputedStyle(descEl).display === 'none';
+    moreBtn.hidden = !descEl.textContent || (!phone && descEl.scrollHeight <= descEl.clientHeight + 1);
+  };
+  moreBtn.addEventListener('click', () => setExpanded(card.dataset.expanded !== 'true'));
 
   // visited counter
   const visitedChip = document.getElementById('visited-chip')!;
@@ -946,8 +992,11 @@ import '@superjackfruit/vibekit/fonts.css';
         tiltBtn.setAttribute('aria-pressed', String(on));
         tiltBtn.dataset.active = String(on);
         if (!on) tiltSteer = 0;
+        panel.dataset.tilt = String(on);
         push();
       };
+      // NB: iOS Safari only delivers orientation events over HTTPS, so this path
+      // is unverified on a real iPhone until it's deployed (localhost http won't fire)
       // roll, whichever way up the phone is held: gamma in portrait, beta on its side
       let smooth = 0;
       window.addEventListener('deviceorientation', (e) => {
