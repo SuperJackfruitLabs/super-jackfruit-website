@@ -351,22 +351,26 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (d.id === 'agent-works') continue; // the suite, placed above
     const street = road.get(d.id);
 
-    // a sign on the spine before the turning, so the street is somewhere you
-    // decide to go rather than something you notice in the mirror
+    // an arch over the street's entrance, as at the Agent Quarter and the square: it names the
+    // street without standing in front of the signs further along the main road
+    {
+      const at = 4 / street.length;
+      const c = street.curve.getPointAt(at);
+      const tan = street.curve.getTangentAt(at);
+      boards.infoBoard(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+    }
+    // a turning's arch is edge-on until you reach it, so a small, low pointer on the main road
+    // says it's coming; low enough that the signs beyond it stay in view
     {
       const spec = road.junctions.find((b) => b.id === d.id)!;
-      const at = spec.t - 24 / road.main.length;
+      const at = spec.t - 22 / road.main.length;
       const c = road.main.curve.getPointAt(at);
       const tan = road.main.curve.getTangentAt(at);
       const n = road.main.perp(at).multiplyScalar(spec.side);
-      const half = road.main.width / 2;
-      const off = half + FOOTPATH + 1.2;
-      boards.infoBoard(
-        spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent,
-        c.x + n.x * off, c.z + n.z * off, Math.atan2(-tan.x, -tan.z)
-      );
-      gates.push({ x: c.x + n.x * off, z: c.z + n.z * off });
-      signSpots.push({ x: c.x + n.x * off, z: c.z + n.z * off });
+      const off = road.main.width / 2 + FOOTPATH + 0.8;
+      const px = c.x + n.x * off, pz = c.z + n.z * off;
+      boards.infoBoard(spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent, px, pz, Math.atan2(-tan.x, -tan.z), { width: 4.2, scale: 0.55 });
+      signSpots.push({ x: px, z: pz });
     }
     const items = byDistrict(d.id);
     const half = street.width / 2;
