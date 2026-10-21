@@ -214,7 +214,7 @@ export function createBoards(
   const stone = new THREE.MeshLambertMaterial({ color: 0xb9b2a4 });
   const stoneDark = new THREE.MeshLambertMaterial({ color: 0x8f887a });
   const swingers: Array<{ o: T.Object3D; phase: number; amp: number }> = [];
-  const flags: Array<{ front: T.BufferGeometry; back: T.BufferGeometry; base: Float32Array; phase: number }> = [];
+  const flags: Array<{ front: T.BufferGeometry; back: T.BufferGeometry; base: Float32Array; phase: number; fly: T.Object3D; w: number }> = [];
   const glowMats: Array<{ mat: T.MeshLambertMaterial; color: number }> = [];
 
   const place = (group: T.Group, x: number, z: number, facing: number, scale = 1) => {
@@ -361,9 +361,13 @@ export function createBoards(
     const bm = new THREE.Mesh(back, mat);
     bm.rotation.y = Math.PI;
     bm.scale.x = -1;
-    for (const m of [fm, bm]) m.position.set(0.06, 4.7, 0);
-    g.add(fm, bm);
-    flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28 });
+    // the cloth hangs from a swivel on the pole, so the wind can swing it round
+    const fly = new THREE.Group();
+    fly.position.set(0, 4.7, 0);
+    for (const m of [fm, bm]) m.position.set(0.06, 0, 0);
+    fly.add(fm, bm);
+    g.add(fly);
+    flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28, fly, w: W });
     // a low plinth so the pole stands on something
     if (opts.baseY) {
       // on a roof: no plinth and nothing for the car to hit
@@ -748,14 +752,31 @@ export function createBoards(
 
     tick(t: number): void {
       for (const s of swingers) s.o.rotation.x = Math.sin(t * 1.3 + s.phase) * s.amp;
+      // One wind for the whole village: it gusts and slowly backs and veers. Each flag
+      // swings round its pole to follow it, a little behind, and the cloth ripples in
+      // waves running from the pole to the free end, harder in a gust.
+      const gust = 0.55 + 0.45 * Math.sin(t * 0.37) * Math.sin(t * 0.91 + 1.3);
+      const windDir = Math.sin(t * 0.07) * 1.1 + Math.sin(t * 0.23 + 2) * 0.45;
       for (const f of flags) {
+        const lag = Math.sin(t * 0.5 + f.phase) * 0.25 + Math.sin(t * 1.7 + f.phase * 2) * 0.08 * gust;
+        f.fly.rotation.y = windDir + lag;
+        const amp = 0.08 + 0.22 * gust;
         for (const [geo, sign] of [[f.front, 1], [f.back, -1]] as const) {
           const pos = geo.getAttribute('position') as T.BufferAttribute;
           for (let i = 0; i < pos.count; i++) {
             const x = f.base[i * 3];
-            pos.setZ(i, sign * Math.sin(x * 1.6 - t * 3.2 + f.phase) * 0.14 * (x / 3.6));
+            const y = f.base[i * 3 + 1];
+            const k = x / f.w; // 0 at the pole, 1 at the free end
+            const wave =
+              Math.sin(x * 2.4 - t * (5 + 4 * gust) + f.phase) * amp +
+              Math.sin(x * 4.1 - t * 8.3 + y * 1.7 + f.phase) * amp * 0.35;
+            pos.setZ(i, sign * wave * k);
+            // in a lull the free end droops; in a gust it stands out
+            pos.setY(i, y - (1 - gust) * 0.35 * k * k + Math.sin(x * 3 - t * 6 + f.phase) * 0.04 * k);
+            pos.setX(i, x * (1 - 0.06 * k * Math.abs(Math.sin(x * 2.4 - t * 6))));
           }
           pos.needsUpdate = true;
+          geo.computeVertexNormals();
         }
       }
     },
