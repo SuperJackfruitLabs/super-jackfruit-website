@@ -770,7 +770,8 @@ import '@superjackfruit/vibekit/fonts.css';
     // a suite product's main link is its own website (or its page here when it
     // has none); anything else is an experiment, whose link is its source
     const internal = project.github.startsWith('/');
-    const suite = project.status === 'released' || project.status === 'live';
+    // a suite product has its page here as its second link, whatever its status
+    const suite = project.demo?.startsWith('/products/') ?? false;
     githubEl.textContent = internal
       ? 'open the product page →'
       : suite
