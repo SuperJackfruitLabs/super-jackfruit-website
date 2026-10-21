@@ -7,7 +7,7 @@ import '@superjackfruit/vibekit/fonts.css';
 <Layout title="Super Jackfruit Labs — agent-native tools">
   <div class="scene">
     <canvas id="village-canvas"></canvas>
-    <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
+    <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute · ? keys</p>
     <!-- the only controls always on screen: sound, and the menu with everything else -->
     <div class="hud">
       <button type="button" id="sound-toggle" class="hud__btn" aria-pressed="true" aria-label="Sound on. Mute" title="Sound (m)">
@@ -108,6 +108,23 @@ import '@superjackfruit/vibekit/fonts.css';
       </div>
     </div>
 
+    <!-- every desktop shortcut in one place; ? opens it, Esc or ? closes it -->
+    <div class="keys" id="keys" role="dialog" aria-label="Keyboard shortcuts" hidden>
+      <h2>Keys</h2>
+      <dl>
+        <dt>W A S D / arrows</dt><dd>drive · steer · brake &amp; reverse</dd>
+        <dt>Shift</dt><dd>nitro</dd>
+        <dt>1–6</dt><dd>SuperMessage · SuperPipeline · SuperLibrary · SuperWitness · Salaam · AgentPod</dd>
+        <dt>H / R</dt><dd>the lab · back to the start</dd>
+        <dt>↵ / P</dt><dd>open the card's first / second link</dd>
+        <dt>Space / I</dt><dd>more about it</dd>
+        <dt>T</dt><dd>time of day</dd>
+        <dt>M</dt><dd>mute</dd>
+        <dt>Esc</dt><dd>menu</dd>
+        <dt>?</dt><dd>this list</dd>
+      </dl>
+    </div>
+
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
       <img id="card-logo" class="card__logo" alt="" width="48" height="48" hidden />
       <h2 id="card-name"></h2>
@@ -117,8 +134,8 @@ import '@superjackfruit/vibekit/fonts.css';
       <button type="button" class="card__more" id="card-more" aria-expanded="false" aria-controls="card-desc">more ▾</button>
       <p class="card__tags" id="card-tags"></p>
       <div class="card__actions">
-        <a id="card-github" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
-        <a id="card-demo" href="#" target="_blank" rel="noopener noreferrer" hidden>live demo →</a>
+        <a id="card-github" data-key="↵" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
+        <a id="card-demo" data-key="P" href="#" target="_blank" rel="noopener noreferrer" hidden>live demo →</a>
       </div>
     </aside>
   </div>
@@ -332,6 +349,39 @@ import '@superjackfruit/vibekit/fonts.css';
   }
 
   .card__tags { display: none; }
+
+  /* desktop key hints in front of the card's links */
+  .scene:not([data-touch='true']) .card__actions a::before {
+    content: attr(data-key);
+    display: inline-block;
+    min-width: 1.1em;
+    margin-right: 0.35rem;
+    padding: 0 0.25rem;
+    border: 1px solid var(--card-muted);
+    border-radius: 4px;
+    font: 600 0.7rem 'Inconsolata Variable', monospace;
+    text-align: center;
+    color: var(--card-muted);
+    vertical-align: 0.1em;
+  }
+
+  .keys {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    width: min(26rem, calc(100vw - 2.4rem));
+    padding: 1rem 1.2rem;
+    border-radius: 14px;
+    background: rgba(250, 247, 240, 0.97);
+    color: #2c2a26;
+    box-shadow: 0 10px 30px rgba(40, 50, 60, 0.25);
+  }
+  .keys[hidden] { display: none; }
+  .keys h2 { margin: 0 0 0.6rem; font-size: 1.1rem; }
+  .keys dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; font-size: 0.85rem; }
+  .keys dt { font: 600 0.82rem 'Inconsolata Variable', monospace; white-space: nowrap; }
+  .keys dd { margin: 0; color: rgba(44, 42, 38, 0.75); }
 
   .card[data-expanded='true'] .card__desc {
     display: block;
@@ -627,6 +677,7 @@ import '@superjackfruit/vibekit/fonts.css';
 
 <script>
   import { initVillageScene } from '../scripts/village-scene';
+  import { isTyping } from '../scripts/village/input';
 
   const canvas = document.getElementById('village-canvas');
   if (canvas instanceof HTMLCanvasElement) {
@@ -721,9 +772,31 @@ import '@superjackfruit/vibekit/fonts.css';
   document.addEventListener('pointerdown', (e) => {
     if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn && !menuBtn.contains(e.target as Node)) setMenu(false);
   });
+  // Esc toggles it; opened from the keyboard, focus goes to its first control and
+  // the arrow keys walk the controls; closing hands focus back to the menu button
+  const menuItems = () => [...menu.querySelectorAll<HTMLElement>('button, a')].filter((el) => el.offsetParent !== null);
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') setMenu(false);
-  });
+    if (e.key === 'Escape') {
+      if (!keysPanel.hidden) return;
+      if (menu.hidden) {
+        if (isTyping(e)) return;
+        setMenu(true);
+        menuItems()[0]?.focus();
+      } else {
+        setMenu(false);
+        menuBtn.focus();
+      }
+      return;
+    }
+    if (menu.hidden || !menu.contains(document.activeElement)) return;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    e.stopImmediatePropagation(); // walking the menu isn't driving
+    const items = menuItems();
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    items[(i + step + items.length) % items.length]?.focus();
+  }, { capture: true });
 
   // sound: the one switch that's always to hand, the same as pressing m
   const soundBtn = document.getElementById('sound-toggle')!;
@@ -1021,6 +1094,30 @@ import '@superjackfruit/vibekit/fonts.css';
     }
 
     hold(document.getElementById('touch-nitro')!, () => (touchState.nitro = true), () => (touchState.nitro = false));
+  }
+
+  // ---------- desktop shortcuts: the card, the clock and the key list ----------
+  const keysPanel = document.getElementById('keys')!;
+  if (!window.matchMedia('(pointer: coarse)').matches) {
+    const TIMES = ['auto', 'dawn', 'day', 'dusk', 'night'];
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === '?' || (e.key === 'Escape' && !keysPanel.hidden)) {
+        keysPanel.hidden = e.key === 'Escape' ? true : !keysPanel.hidden;
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 't') {
+        const now = timeRow.querySelector<HTMLElement>('[data-active="true"]')?.dataset.time ?? 'auto';
+        timeRow.querySelector<HTMLElement>(`[data-time="${TIMES[(TIMES.indexOf(now) + 1) % TIMES.length]}"]`)?.click();
+        return;
+      }
+      // a focused button or link already answers Enter and Space itself
+      if (card.dataset.open !== 'true' || (document.activeElement as HTMLElement)?.closest?.('button, a')) return;
+      if (e.key === 'Enter') githubEl.click();
+      else if (k === 'p' && !demoEl.hidden) demoEl.click();
+      else if ((k === ' ' || k === 'i') && !moreBtn.hidden) setExpanded(card.dataset.expanded !== 'true');
+    });
   }
 
   // separate audio toggles

@@ -23,7 +23,7 @@ import { createBoards } from './village/boards';
 import { createLamps } from './village/lamps';
 import { createCar } from './village/car';
 import { createAudio } from './village/audio';
-import { createInput } from './village/input';
+import { createInput, isTyping } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
@@ -270,6 +270,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // A visitor meets the suite before anything else, one step after another,
   // alternating sides so each house gets its own frontage.
   const startT = 0.012;
+  // keyboard jumps (1–6, H, R): a spot on the road a little before each place, facing it
+  const jumps = new Map<string, { x: number; z: number; h: number }>();
+  const before = (seg: typeof road.main, t: number, metres: number) => {
+    const at = Math.max(0, t - metres / seg.length);
+    const p = seg.curve.getPointAt(at);
+    const tan = seg.curve.getTangentAt(at);
+    return { x: p.x, z: p.z, h: Math.atan2(tan.x, tan.z) };
+  };
   {
     const half = road.main.width / 2;
     const items = byDistrict('agent-works');
@@ -291,6 +299,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const tan = seg.curve.getTangentAt(t);
       const n = seg.perp(t).multiplyScalar(side);
       const faceRoad = Math.atan2(-n.x, -n.z);
+      jumps.set(project.slug, before(seg, t, 14));
       const step = items.indexOf(project) + 1;
       putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[((step - 1) * 3 + 1) % houses.length]);
       const dx = c.x + n.x * (half + 2.6);
@@ -503,6 +512,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     // the lab's sign spans the road where it opens into the square
     const hqx = plaza.c.x;
+    jumps.set('hq', before(road.main, 1, 16));
     const hqz = plaza.c.z;
     // the lab's own sign: its mark, and wide enough that the name isn't squeezed
     const mark = await new Promise<HTMLImageElement | undefined>((resolve) => {
@@ -669,6 +679,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const tan = road.main.curve.getTangentAt(startT);
     car.teleport(p.x, p.z, Math.atan2(tan.x, tan.z));
   }
+  const startJump = before(road.main, startT, 0);
   mark('car');
   const audio = createAudio();
   const input = createInput(canvas, audio.ensure);
@@ -678,6 +689,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'm') audio.toggleMute();
   });
+  // desktop shortcuts for getting around: 1–6 the suite in order, H the lab, R the start
+  if (!(window.matchMedia?.('(pointer: coarse)').matches ?? false)) {
+    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'salaam', 'agentpod'];
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
+      if (to) car.teleport(to.x, to.z, to.h);
+    });
+  }
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
     audio.setChannel(e.detail.channel, e.detail.on);
   }) as EventListener);
