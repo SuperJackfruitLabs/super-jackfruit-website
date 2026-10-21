@@ -146,8 +146,10 @@ export const suite: Product[] = [
     ink: '#b8442a',
     site: 'https://superlibrary.dev',
     cta: { label: 'Visit superlibrary.dev', href: 'https://superlibrary.dev' },
-    // no Source link yet: the repository is not public
-    links: [{ label: 'Docs', href: 'https://docs.superlibrary.dev' }],
+    links: [
+      { label: 'Docs', href: 'https://docs.superlibrary.dev' },
+      { label: 'Source', href: `${GH}/superlibrary` },
+    ],
   },
   {
     slug: 'superwitness',
