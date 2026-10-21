@@ -36,8 +36,6 @@ export const FOREST_MODELS = [
 export const SCENERY_MODELS = [
   'driveway-short',
   'planter',
-  'tree-large',
-  'tree-small',
   'flower_purpleA',
   'flower_redA',
   'flower_yellowA',
@@ -45,12 +43,6 @@ export const SCENERY_MODELS = [
   'plant_bushLarge',
   'rock_smallA',
   'rock_smallC',
-  'tree_default',
-  'tree_detailed',
-  'tree_oak',
-  'tree_default_fall',
-  'tree_detailed_fall',
-  'tree_oak_fall',
   // the woods: Lowpoly Forest Pack, converted from FBX with each texture's flat colour baked in
   ...FOREST_MODELS,
 ];
