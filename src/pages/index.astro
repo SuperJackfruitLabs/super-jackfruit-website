@@ -8,7 +8,6 @@ import '@superjackfruit/vibekit/fonts.css';
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
-    <p class="tag"><a href="/suite">the suite as a page →</a></p>
     <!-- the only controls always on screen: sound, and the menu with everything else -->
     <div class="hud">
       <button type="button" id="sound-toggle" class="hud__btn" aria-pressed="true" aria-label="Sound on. Mute" title="Sound (m)">
@@ -20,6 +19,12 @@ import '@superjackfruit/vibekit/fonts.css';
     </div>
 
     <div class="env menu" id="menu" hidden>
+      <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
+      <span class="menu__label">Suite</span>
+      <div class="menu__suite">
+        <a href="/suite">see it as a page →</a>
+        <span class="visited" id="visited-chip" hidden>visited <span id="visited-count">0/6</span></span>
+      </div>
       <span class="menu__label">Time</span>
       <!-- time reads as one track the day moves along, not four loose buttons -->
       <div class="env__group env__group--track" id="time-row" role="group" aria-label="Time of day">
@@ -69,7 +74,6 @@ import '@superjackfruit/vibekit/fonts.css';
       <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · car: Han66st (CC-BY, sketchfab) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
     </div>
 
-    <p class="visited" id="visited-chip" hidden>suite visited <span id="visited-count">0/6</span></p>
 
     <div class="welcome" id="welcome" data-open="true">
       <div class="welcome__card">
@@ -138,8 +142,7 @@ import '@superjackfruit/vibekit/fonts.css';
     touch-action: none;
   }
 
-  .hint,
-  .tag {
+  .hint {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -152,14 +155,6 @@ import '@superjackfruit/vibekit/fonts.css';
     bottom: 2.2rem;
     font-size: 1.5rem;
     color: rgba(40, 50, 60, 0.85);
-  }
-
-  .tag {
-    top: 1.6rem;
-    font-size: 1.2rem;
-    letter-spacing: 0.08em;
-    color: rgba(40, 50, 60, 0.55);
-    pointer-events: auto;
   }
 
   .env {
@@ -388,18 +383,14 @@ import '@superjackfruit/vibekit/fonts.css';
   .scene[data-night='true'] .card__actions a:hover,
   .scene[data-night='true'] .card__actions a:focus-visible { color: var(--card-fg); text-decoration: underline; }
 
+  .menu__suite { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 1.05rem; }
+  .menu__suite a { color: #2c2a26; font-weight: 600; }
   .visited {
-    position: absolute;
-    left: 1.4rem;
-    top: 1.4rem;
-    margin: 0;
-    font-size: 1.1rem;
-    letter-spacing: 0.04em;
-    color: rgba(40, 50, 60, 0.7);
-    background: rgba(255, 255, 255, 0.55);
+    font-size: 0.95rem;
+    color: rgba(40, 50, 60, 0.75);
+    background: rgba(40, 50, 60, 0.07);
     border-radius: 999px;
-    padding: 0.35rem 0.95rem;
-    pointer-events: none;
+    padding: 0.15rem 0.6rem;
   }
 
   .visited.done { background: rgba(63, 158, 63, 0.85); color: #f6f0e2; }
@@ -583,7 +574,9 @@ import '@superjackfruit/vibekit/fonts.css';
     gap: 0.6rem 1rem; padding: 1rem 1.1rem; border-radius: 14px;
     background: rgba(250, 247, 240, 0.94); box-shadow: 0 10px 30px rgba(40, 50, 60, 0.2); backdrop-filter: blur(6px);
   }
-  .env.menu[hidden] { display: none; }
+  .env.menu[hidden], .env__group[hidden], .visited[hidden] { display: none; }
+  /* the menu and the card share the top of a phone; while the menu is open it has the room */
+  .scene:has(#menu:not([hidden])) .card { visibility: hidden; }
   @media (max-width: 640px) {
     .hud { top: 0.8rem; right: 0.8rem; }
     .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
@@ -602,10 +595,8 @@ import '@superjackfruit/vibekit/fonts.css';
 
   /* a phone has room for the controls and the card, not for the chrome around them */
   @media (max-width: 640px) {
-    .credit, .tag { display: none; }
-    .visited { top: auto; bottom: 1.2rem; left: 1.2rem; font-size: 0.95rem; }
+    .credit { display: none; }
     .env { top: 0.8rem; right: 0.8rem; left: 0.8rem; justify-content: center; }
-    .visited { display: none; }
     .env { gap: 0.25rem; flex-wrap: nowrap; }
     .scene[data-touch='true'] .env button { width: 2.35rem; height: 2.35rem; }
     .scene[data-touch='true'] .env button svg { width: 1.2rem; height: 1.2rem; }
@@ -980,7 +971,8 @@ import '@superjackfruit/vibekit/fonts.css';
     const Orientation = (window as any).DeviceOrientationEvent as
       | (typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> })
       | undefined;
-    if (Orientation) {
+    // desktop browsers expose the event too; tilt is for devices held in the hand
+    if (Orientation && matchMedia('(pointer: coarse)').matches) {
       const tiltBtn = document.getElementById('tilt-toggle')!;
       document.getElementById('tilt-row')!.hidden = false;
       document.getElementById('tilt-label')!.hidden = false;
