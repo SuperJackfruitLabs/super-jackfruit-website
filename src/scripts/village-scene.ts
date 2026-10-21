@@ -180,7 +180,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // half a second of dead air on the wire for nothing.
   for (const name of ALL_VILLAGE_MODELS) void props.loadGltf(name);
 
-  const [houses, driveway, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees] =
+  const [houses, driveway, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees, oaks, fallOaks, spruces, deadTrees, bigRocks, forestRocks] =
     await Promise.all([
       Promise.all(HOUSE_MODELS.map(props.loadAsset)),
       props.loadAsset('driveway-short'),
@@ -192,6 +192,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       Promise.all(['rock_smallA', 'rock_smallC'].map(props.loadAsset)),
       Promise.all(['tree_default', 'tree_detailed', 'tree_oak'].map(props.loadAsset)),
       Promise.all(['tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'].map(props.loadAsset)),
+      Promise.all(['forest-oak-a', 'forest-oak-b', 'forest-oak-c'].map(props.loadAsset)),
+      Promise.all(['forest-oak-a-fall', 'forest-oak-b-fall', 'forest-oak-c-fall'].map(props.loadAsset)),
+      Promise.all(['forest-spruce-a', 'forest-spruce-b', 'forest-spruce-c'].map(props.loadAsset)),
+      Promise.all(['forest-dead-spruce', 'forest-dead-oak'].map(props.loadAsset)),
+      Promise.all(['forest-rock-big-a', 'forest-rock-big-b'].map(props.loadAsset)),
+      Promise.all(['forest-rock-a', 'forest-rock-b', 'forest-rock-c'].map(props.loadAsset)),
     ]);
 
   mark('load-assets');
@@ -601,6 +607,60 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if (rand() < quality.settings.flowerChance && !road.onRibbon(fx, fz, 0.15)) {
           props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, fx, fz, rand() * 6.28, false, 0.05);
         }
+      }
+    }
+  }
+
+  // ---------- the woods ----------
+  // The empty ground between the streets grows woods: clumps rather than an even
+  // sprinkle, spruce thick in the middle of a clump and oaks thinning out at its
+  // edge, a dead tree now and then, and boulders half sunk among the trunks.
+  // The spruce stay green in autumn; the oaks turn.
+  {
+    const groves: Array<{ x: number; z: number; r: number }> = [];
+    for (let tries = 0; groves.length < 26 && tries < 900; tries++) {
+      const x = (rand() - 0.5) * 290;
+      const z = Z_END - 20 + rand() * (Z_START - Z_END + 40);
+      const r = 14 + rand() * 18;
+      if (road.distTo(x, z) < 20 + r * 0.3) continue;
+      if (Math.hypot(x - plaza.x, z - plaza.z) < 34) continue;
+      if (!clearOfHouses(x, z, 16)) continue;
+      if (groves.some((g) => Math.hypot(g.x - x, g.z - z) < (g.r + r) * 0.7)) continue;
+      groves.push({ x, z, r });
+    }
+    const perGrove = Math.ceil(quality.settings.forestTrees / Math.max(1, groves.length));
+    for (const g of groves) {
+      for (let i = 0; i < perGrove; i++) {
+        // denser toward the middle
+        const d = Math.sqrt(rand()) * g.r;
+        const a = rand() * Math.PI * 2;
+        const x = g.x + Math.cos(a) * d;
+        const z = g.z + Math.sin(a) * d;
+        if (road.distTo(x, z) < 11 || !clearOfHouses(x, z, 9)) continue;
+        if (x < -148 || x > 148) continue;
+        const edge = d / g.r;
+        const rot = rand() * 6.28;
+        const pick = rand();
+        if (pick < 0.04) {
+          props.place(deadTrees[Math.floor(rand() * deadTrees.length)], 2 + rand() * 2, x, z, rot, 'trunk');
+        } else if (edge > 0.6 ? pick < 0.75 : pick < 0.25) {
+          const k = Math.floor(rand() * oaks.length);
+          props.placeSeasonalTree(oaks[k], fallOaks[k], 4 + rand() * 4, x, z, rot);
+        } else {
+          const s = spruces[Math.floor(rand() * spruces.length)];
+          props.placeSeasonalTree(s, s, 2.6 + rand() * 2.6, x, z, rot);
+        }
+      }
+      // a boulder or two, and loose stones
+      for (let i = 0; i < 1 + Math.floor(rand() * 2); i++) {
+        const x = g.x + (rand() - 0.5) * g.r;
+        const z = g.z + (rand() - 0.5) * g.r;
+        if (road.distTo(x, z) > 12 && clearOfHouses(x, z, 9)) props.place(bigRocks[Math.floor(rand() * bigRocks.length)], 3 + rand() * 3, x, z, rand() * 6.28, 'box');
+      }
+      for (let i = 0; i < 4; i++) {
+        const x = g.x + (rand() - 0.5) * g.r * 1.6;
+        const z = g.z + (rand() - 0.5) * g.r * 1.6;
+        if (road.distTo(x, z) > 9) props.place(forestRocks[Math.floor(rand() * forestRocks.length)], 0.6 + rand() * 1.2, x, z, rand() * 6.28);
       }
     }
   }
