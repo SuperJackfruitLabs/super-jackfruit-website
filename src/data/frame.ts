@@ -3,11 +3,12 @@
  * theme switch and the footer; these are the site's own entries in them.
  */
 export const frame = {
-  cta: { label: 'Explore the suite', href: '/suite' },
+  cta: { label: 'Drive the village', href: '/village' },
   /** the header's menu drawer */
   sections: [
-    { label: 'The village', href: '/' },
-    { label: 'Products', href: '/suite#products' },
+    { label: 'The suite', href: '/' },
+    { label: 'The village', href: '/village' },
+    { label: 'Products', href: '/#products' },
     { label: 'Writing', href: '/blog' },
     { label: 'Archive', href: '/archive' },
   ],

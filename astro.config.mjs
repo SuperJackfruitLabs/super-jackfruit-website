@@ -7,5 +7,5 @@ export default defineConfig({
   // canonical URLs and sitemaps correct if either is added later.
   site: "https://superjackfruit.com",
   integrations: [tailwind()],
-  redirects: { "/village": "/" },
+  redirects: { "/suite": "/" },
 });

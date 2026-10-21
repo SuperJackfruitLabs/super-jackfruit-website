@@ -21,7 +21,7 @@ sources:
 
 When an agent finishes a piece of work, three different things are true at once. The agent did a series of things. The system it ran on behaved a certain way while it did them. And the result was either good or it wasn't. Usually those three live in three places: a transcript, a tracing tool and somebody's opinion in a chat thread.
 
-[SuperWitness](/products/superwitness) puts them in one record. It is the last step in [the suite](/suite): you see proof.
+[SuperWitness](/products/superwitness) puts them in one record. It is the last step in [the suite](/): you see proof.
 
 ## One document per run
 
