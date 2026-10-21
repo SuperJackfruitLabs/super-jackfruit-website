@@ -448,12 +448,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
       const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
-      // turned 45° toward the street's mouth: the front reads to cars coming in, the back to cars going out
-      const tc = street.curve.getTangentAt(t);
-      const turn = (f: number) => Math.sin(f) * -tc.x + Math.cos(f) * -tc.z;
-      const angled = turn(faceRoad + Math.PI / 4) > turn(faceRoad - Math.PI / 4) ? faceRoad + Math.PI / 4 : faceRoad - Math.PI / 4;
-      if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, bx, bz, angled);
-      else boards.plank(project, d.accent, bx, bz, angled);
+      // a V-board: two faces joined at the back, one turned 45° toward each direction of
+      // traffic, so the sign reads to cars coming in and going out alike
+      const w = d.id === 'mcp-alley' ? 2.0 : 4.5;
+      const apexX = bx - n.x * 0.6;
+      const apexZ = bz - n.z * 0.6;
+      for (const a of [faceRoad + Math.PI / 4, faceRoad - Math.PI / 4]) {
+        const xd = { x: Math.cos(a), z: -Math.sin(a) };
+        // the point of the V is at the kerb; each wing runs back from it, away from the road
+        const sgn = xd.x * n.x + xd.z * n.z > 0 ? 1 : -1;
+        const cx = apexX + xd.x * sgn * (w / 2);
+        const cz = apexZ + xd.z * sgn * (w / 2);
+        if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, cx, cz, a);
+        else boards.plank(project, d.accent, cx, cz, a);
+      }
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
