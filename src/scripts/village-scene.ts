@@ -318,7 +318,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         tagline: 'six tools for working with agents',
         lines: [
           'Drive on: the next six houses are the suite, in the order a task moves through it — you talk, the work is planned, an agent does it, your fleet runs it, it remembers, you see proof.',
-          'Each one works on its own. Further down the road are the experiments that taught us what to build.',
+          'Further down the road are the experiments that taught us what to build.',
         ],
         links: [
           { label: 'the suite as a page →', url: '/suite' },
@@ -472,8 +472,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const faceP = Math.atan2(plaza.c.x - plaza.x, plaza.c.z - plaza.z);
     props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP, 'box');
 
-    const hqx = plaza.x + plaza.n.x * 8.5;
-    const hqz = plaza.z + plaza.n.z * 8.5;
+    // the lab's sign spans the road where it opens into the square
+    const hqx = plaza.c.x;
+    const hqz = plaza.c.z;
     // the lab's own sign: its mark, and wide enough that the name isn't squeezed
     const mark = await new Promise<HTMLImageElement | undefined>((resolve) => {
       const img = new Image();
@@ -481,14 +482,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.onerror = () => resolve(undefined);
       img.src = '/brand/sjl-facet.jpg'; // the Facet mark (raster until its vector is drawn)
     });
-    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7 });
+    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7, gate: true });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
         title: 'Super Jackfruit Labs',
         tagline: 'agent-native tools, built in the open',
         lines: [
-          'The first street is the suite: six tools that carry a task from ask to proof. Each works on its own.',
+          'The first street is the suite: six tools that carry a task from ask to proof.',
           'The other streets hold the experiments that taught us what to build.',
         ],
         links: [
