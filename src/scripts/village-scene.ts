@@ -129,7 +129,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   ];
   const road = await createRoads(
     THREE, scene, props.loadAsset,
-    { id: 'main', cells: MAIN_CELLS, culDeSac: 0, startCulDeSac: 9 },
+    { id: 'main', cells: MAIN_CELLS, culDeSac: 13, startCulDeSac: 9 } /* the far end is the village square */,
     [
       // straight on at the first bend, back into the main street where it returns
       { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
@@ -458,7 +458,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const plaza = (() => {
     const c = road.main.curve.getPointAt(1);
     const dir = road.main.curve.getTangentAt(1).normalize(); // direction of travel
-    return { x: c.x + dir.x * 12, z: c.z + dir.z * 12, n: dir, c };
+    // the road lays the square's kerb and footpath ring; the paving goes inside it
+    return { x: road.main.end.x, z: road.main.end.z, n: dir, c };
   })();
   {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 44), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));

@@ -307,6 +307,10 @@ export async function createRoads(
     const c = turningCircle(seg.end.x, seg.end.z, seg.curve.getTangentAt(1), seg.end.r);
     seg.end = { x: c.x, z: c.z, r: seg.end.r };
   }
+  if (main.culDeSac > 0) {
+    const c = turningCircle(mainSeg.end.x, mainSeg.end.z, mainSeg.curve.getTangentAt(1), main.culDeSac);
+    mainSeg.end = { x: c.x, z: c.z, r: main.culDeSac };
+  }
   if (main.startCulDeSac) {
     const p0 = mainSeg.curve.getPointAt(0);
     turningCircle(p0.x, p0.z, mainSeg.curve.getTangentAt(0).negate(), main.startCulDeSac);
