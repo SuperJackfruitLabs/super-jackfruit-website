@@ -479,7 +479,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = () => resolve(undefined);
-      img.src = '/brand/sjl.svg';
+      img.src = '/brand/sjl-facet.jpg'; // the Facet mark (raster until its vector is drawn)
     });
     boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7 });
     stations.push({
