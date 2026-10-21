@@ -13,11 +13,29 @@ export const HOUSE_MODELS = [
   'building-type-q',
 ];
 
+/** the woods round the village — trees and rocks from the Lowpoly Forest Pack */
+export const FOREST_MODELS = [
+  'forest-oak-a',
+  'forest-oak-b',
+  'forest-oak-c',
+  'forest-oak-a-fall',
+  'forest-oak-b-fall',
+  'forest-oak-c-fall',
+  'forest-spruce-a',
+  'forest-spruce-b',
+  'forest-spruce-c',
+  'forest-dead-spruce',
+  'forest-dead-oak',
+  'forest-rock-big-a',
+  'forest-rock-big-b',
+  'forest-rock-a',
+  'forest-rock-b',
+  'forest-rock-c',
+];
+
 export const SCENERY_MODELS = [
   'driveway-short',
   'planter',
-  'tree-large',
-  'tree-small',
   'flower_purpleA',
   'flower_redA',
   'flower_yellowA',
@@ -25,12 +43,8 @@ export const SCENERY_MODELS = [
   'plant_bushLarge',
   'rock_smallA',
   'rock_smallC',
-  'tree_default',
-  'tree_detailed',
-  'tree_oak',
-  'tree_default_fall',
-  'tree_detailed_fall',
-  'tree_oak_fall',
+  // the woods: Lowpoly Forest Pack, converted from FBX with each texture's flat colour baked in
+  ...FOREST_MODELS,
 ];
 
 /** the villagers — Kenney Blocky Characters, the ordinary ones */
@@ -54,7 +68,7 @@ export const ALL_VILLAGE_MODELS = [
  * hard (see public/_headers) — bump this whenever `npm run assets` regenerates
  * them, or returning visitors keep the old ones for a week.
  */
-export const ASSET_VERSION = '2026-10-20a';
+export const ASSET_VERSION = '2026-10-22a';
 
 export const modelUrl = (name: string): string =>
   `/assets/village/${name}.glb?v=${ASSET_VERSION}`;

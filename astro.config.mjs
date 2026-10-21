@@ -10,4 +10,7 @@ export default defineConfig({
   // The 404 page is a real page (Pages serves it with a 404 status) and must not be listed.
   integrations: [tailwind(), sitemap({ filter: (page) => !page.endsWith("/404/") })],
   redirects: { "/suite": "/" },
+  // The village imports the frame's client by name to mount Captain Jack. Pre-bundled, its
+  // `?url` import of the rig breaks in dev; served as source it works, as it does for the frame.
+  vite: { optimizeDeps: { exclude: ["@superjackfruit/frontdoor"] } },
 });

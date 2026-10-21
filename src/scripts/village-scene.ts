@@ -180,27 +180,37 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // half a second of dead air on the wire for nothing.
   for (const name of ALL_VILLAGE_MODELS) void props.loadGltf(name);
 
-  const [houses, driveway, planter, kTreeLarge, kTreeSmall, flowers, bushes, rocks, nTrees, fallTrees] =
+  const [houses, driveway, planter, flowers, bushes, rocks, oaks, fallOaks, spruces, deadTrees, bigRocks, forestRocks] =
     await Promise.all([
       Promise.all(HOUSE_MODELS.map(props.loadAsset)),
       props.loadAsset('driveway-short'),
       props.loadAsset('planter'),
-      props.loadAsset('tree-large'),
-      props.loadAsset('tree-small'),
       Promise.all(['flower_purpleA', 'flower_redA', 'flower_yellowA'].map(props.loadAsset)),
       Promise.all(['plant_bush', 'plant_bushLarge'].map(props.loadAsset)),
       Promise.all(['rock_smallA', 'rock_smallC'].map(props.loadAsset)),
-      Promise.all(['tree_default', 'tree_detailed', 'tree_oak'].map(props.loadAsset)),
-      Promise.all(['tree_default_fall', 'tree_detailed_fall', 'tree_oak_fall'].map(props.loadAsset)),
+      Promise.all(['forest-oak-a', 'forest-oak-b', 'forest-oak-c'].map(props.loadAsset)),
+      Promise.all(['forest-oak-a-fall', 'forest-oak-b-fall', 'forest-oak-c-fall'].map(props.loadAsset)),
+      Promise.all(['forest-spruce-a', 'forest-spruce-b', 'forest-spruce-c'].map(props.loadAsset)),
+      Promise.all(['forest-dead-spruce', 'forest-dead-oak'].map(props.loadAsset)),
+      Promise.all(['forest-rock-big-a', 'forest-rock-big-b'].map(props.loadAsset)),
+      Promise.all(['forest-rock-a', 'forest-rock-b', 'forest-rock-c'].map(props.loadAsset)),
     ]);
 
   mark('load-assets');
   await fontsReady;
   mark('fonts');
-  const seasonalTree = (i: number, size: number, x: number, z: number, rotY: number) =>
-    props.placeSeasonalTree(nTrees[i % nTrees.length], fallTrees[i % fallTrees.length], size, x, z, rotY);
+  // every tree comes from the woods' set now: oaks that turn, spruce that don't
+  const seasonalTree = (i: number, size: number, x: number, z: number, rotY: number) => {
+    if (i % 3 === 0) props.placeSeasonalTree(spruces[i % spruces.length], spruces[i % spruces.length], size * 0.7, x, z, rotY);
+    else props.placeSeasonalTree(oaks[i % oaks.length], fallOaks[i % fallOaks.length], size * 1.15, x, z, rotY);
+  };
 
-  const boards = createBoards(THREE, scene, maxAniso, props.addOrientedCollider);
+  // every solid part of every sign, kept so the audit can prove none of them stands inside a house
+  const signSolids: Array<{ x: number; z: number; hx: number; hz: number }> = [];
+  const boards = createBoards(THREE, scene, maxAniso, (x, z, hx, hz, rotY) => {
+    signSolids.push({ x, z, hx, hz });
+    props.addOrientedCollider(x, z, hx, hz, rotY);
+  });
 
   // ---------- the town ----------
   // Projects live on their district's street, so each district is somewhere you
@@ -251,10 +261,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     });
   }
 
+  const houseBoxes: Array<{ x: number; z: number; facing: number; hx: number; hz: number }> = [];
   function putHouse(x: number, z: number, facing: number, size: number, pick?: (typeof houses)[number]): void {
     const proto = pick ?? houses[Math.floor(rand() * houses.length)];
     props.place(proto, size, x, z, facing, 'box');
     houseCenters.push({ x, z });
+    const dims = props.scaledSize(proto, size);
+    houseBoxes.push({ x, z, facing, hx: dims.x / 2, hz: dims.z / 2 });
     if (chimneys.length < quality.settings.chimneys) {
       const fx = Math.sin(facing);
       const fz = Math.cos(facing);
@@ -302,14 +315,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const faceRoad = Math.atan2(-n.x, -n.z);
       jumps.set(project.slug, before(seg, t, 14));
       const step = items.indexOf(project) + 1;
-      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[((step - 1) * 3 + 1) % houses.length]);
+      const proto = houses[((step - 1) * 3 + 1) % houses.length];
+      const hx = c.x + n.x * (half + 8);
+      const hz = c.z + n.z * (half + 8);
+      putHouse(hx, hz, faceRoad, 7.6, proto);
       const dx = c.x + n.x * (half + 2.6);
       const dz = c.z + n.z * (half + 2.6);
       props.place(driveway, 3.0, dx, dz, faceRoad);
       // the sign stands side-on to the road so it reads as you approach
       const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
-      boards.suiteBoard(step, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      {
+        // every suite product hangs the same sign: a round board swinging from a bracket,
+        // the bracket reaching out over the pavement toward the road
+        const along = Math.atan2(-tan.x, -tan.z);
+        const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
+        boards.hangingSign(project, bx + n.x * 1.6, bz + n.z * 1.6, towardRoad ? along : along + Math.PI, logos.get(project.slug));
+      }
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
       const ix = c.x + n.x * (half + 4.4) + tan.x * 2.2;
@@ -329,7 +351,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     {
       const c = quarter.curve.getPointAt(0.04);
       const tan = quarter.curve.getTangentAt(0.04);
-      boards.infoBoard('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+      boards.streetArch('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), 11.2);
     }
 
     // where the drive starts: what this place is, and how to skip it
@@ -338,7 +360,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const n = road.main.perp(startT + 0.02).multiplyScalar(1);
     const sx = c.x + n.x * (half + FOOTPATH + 1.2);
     const sz = c.z + n.z * (half + FOOTPATH + 1.2);
-    boards.infoBoard('START HERE', 'Main Street — your work, drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    boards.fingerpost([
+      { text: 'Main Street', accent: '#d98a1f', dir: 0 },
+      { text: 'Agent Quarter', accent: '#2196f3', dir: 0 },
+      { text: 'MCP Alley', accent: '#f2a707', dir: 0 },
+      { text: 'The Odd Shop', accent: '#a12cf9', dir: 0 },
+      { text: 'HQ', accent: '#8a5a1a', dir: 0 },
+    ], sx, sz, Math.atan2(-tan.x, -tan.z));
     signSpots.push({ x: sx, z: sz });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
@@ -368,7 +396,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const at = 4 / street.length;
       const c = street.curve.getPointAt(at);
       const tan = street.curve.getTangentAt(at);
-      boards.infoBoard(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+      boards.streetArch(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), 11.2);
     }
     // a turning's arch is edge-on until you reach it, so a small, low pointer on the main road
     // says it's coming; low enough that the signs beyond it stay in view
@@ -380,19 +408,24 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const n = road.main.perp(at).multiplyScalar(spec.side);
       const off = road.main.width / 2 + FOOTPATH + 0.8;
       const px = c.x + n.x * off, pz = c.z + n.z * off;
-      boards.infoBoard(spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent, px, pz, Math.atan2(-tan.x, -tan.z), {
-        width: 4.2,
-        scale: 0.55,
-        // seen from the other carriageway the turning is on the other hand
-        backTitle: spec.side === 1 ? `← ${d.name}` : `${d.name} →`,
-      });
+      boards.fingerpost([
+        { text: d.name, accent: d.accent, dir: spec.side === 1 ? 1 : -1 },
+        { text: 'HQ', accent: '#8a5a1a', dir: 0 },
+      ], px, pz, Math.atan2(-tan.x, -tan.z));
       signSpots.push({ x: px, z: pz });
     }
     const items = byDistrict(d.id);
     const half = street.width / 2;
 
+    // the V-board's wings reach this far back from the kerb; the house stands clear behind them
+    const wing = d.id === 'mcp-alley' ? 2.0 : 4.5;
+    const signDepth = FOOTPATH + 0.6 + wing * 0.72 + 1.2;
     let side = 1;
     items.forEach((project, i) => {
+      const proto = houses[Math.floor(rand() * houses.length)];
+      const houseSize = 7.2 + rand() * 1.4;
+      const dims = props.scaledSize(proto, houseSize);
+      const setback = signDepth + dims.z / 2;
       const t = 0.22 + ((i + 0.5) / items.length) * 0.64;
       const c = street.curve.getPointAt(t);
       const tan = street.curve.getTangentAt(t);
@@ -405,8 +438,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const n = street.perp(t).multiplyScalar(s);
         const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
         const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
-        const hx = c.x + n.x * (half + 7.4 + push);
-        const hz = c.z + n.z * (half + 7.4 + push);
+        const hx = c.x + n.x * (half + setback + push);
+        const hz = c.z + n.z * (half + setback + push);
         if (road.onRibbon(bx, bz, 1.2) || road.onRibbon(hx, hz, 2.5)) return null;
         return { n, push };
       };
@@ -416,9 +449,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const { n, push } = spot;
       const faceRoad = Math.atan2(-n.x, -n.z);
 
-      const hx = c.x + n.x * (half + 7.4 + push);
-      const hz = c.z + n.z * (half + 7.4 + push);
-      putHouse(hx, hz, faceRoad, 7.2 + rand() * 1.4);
+      const hx = c.x + n.x * (half + setback + push);
+      const hz = c.z + n.z * (half + setback + push);
+      putHouse(hx, hz, faceRoad, houseSize, proto);
 
       const dx = c.x + n.x * (half + 2.6 + push);
       const dz = c.z + n.z * (half + 2.6 + push);
@@ -426,7 +459,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
       const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
-      boards.projectBoard(project, d.accent, bx, bz, faceRoad);
+      // a V-board: two faces joined at the back, one turned 45° toward each direction of
+      // traffic, so the sign reads to cars coming in and going out alike
+      const w = wing;
+      const apexX = bx - n.x * 0.6;
+      const apexZ = bz - n.z * 0.6;
+      for (const a of [faceRoad + Math.PI / 4, faceRoad - Math.PI / 4]) {
+        const xd = { x: Math.cos(a), z: -Math.sin(a) };
+        // the point of the V is at the kerb; each wing runs back from it, away from the road
+        const sgn = xd.x * n.x + xd.z * n.z > 0 ? 1 : -1;
+        const cx = apexX + xd.x * sgn * (w / 2);
+        const cz = apexZ + xd.z * sgn * (w / 2);
+        if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, cx, cz, a);
+        else boards.plank(project, d.accent, cx, cz, a);
+      }
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
@@ -522,7 +568,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.onerror = () => resolve(undefined);
       img.src = '/brand/sjl-facet.svg'; // the Facet mark
     });
-    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7, gate: true });
+    // the lab's stone stands in the middle of the square, plaque toward the road
+    boards.monument('Super Jackfruit Labs', 'agent-native tools, built in the open', plaza.x, plaza.z, faceP + Math.PI, mark);
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
@@ -540,10 +587,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       },
     });
 
-    const kx = plaza.x - plaza.n.z * 9.5;
-    const kz = plaza.z + plaza.n.x * 9.5;
-    const faceK = Math.atan2(plaza.x - kx, plaza.z - kz);
-    boards.infoBoard('say hi', 'the lab is always open', '#3f9e3f', kx, kz, faceK);
+    // the A-board stands out front of HQ, to one side of its door, the way a shop puts one out
+    const hqDepth = props.scaledSize(houses[7], 13).z;
+    const front = 18 - hqDepth / 2 - 1.6;
+    const kx = plaza.x + plaza.n.x * front - plaza.n.z * 3.2;
+    const kz = plaza.z + plaza.n.z * front + plaza.n.x * 3.2;
+    const faceK = faceP;
+    // the lab's flag flies from its roof: the mark alone, no words
+    const hqTop = props.scaledSize(houses[7], 13).y;
+    boards.flag(
+      { name: 'Super Jackfruit Labs', slug: 'sjl', tagline: '', accent: '#d98a1f' } as Project,
+      plaza.x + plaza.n.x * 18,
+      plaza.z + plaza.n.z * 18,
+      faceP + Math.PI,
+      mark,
+      { baseY: hqTop - 0.3, emblem: true }
+    );
+    boards.chalkboard('say hi', ['the lab is always open', 'everything here is', 'open source', 'come and wave'], kx, kz, faceK);
     stations.push({
       kind: 'info', accent: '#3f9e3f', x: kx, z: kz,
       info: {
@@ -601,6 +661,138 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if (rand() < quality.settings.flowerChance && !road.onRibbon(fx, fz, 0.15)) {
           props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, fx, fz, rand() * 6.28, false, 0.05);
         }
+      }
+    }
+  }
+
+  // ---------- Captain Jack's house: the nearest neighbour to HQ ----------
+  // Pull up outside and the card offers a talk with him: the frame's own Captain Jack sheet,
+  // opened through its sjl-ask event, the same as "Ask Captain Jack" anywhere on the site.
+  {
+    const hqX = plaza.x + plaza.n.x * 18;
+    const hqZ = plaza.z + plaza.n.z * 18;
+    const home = houseBoxes
+      .filter((h) => Math.hypot(h.x - hqX, h.z - hqZ) > 4)
+      .sort((a, b) => Math.hypot(a.x - plaza.x, a.z - plaza.z) - Math.hypot(b.x - plaza.x, b.z - plaza.z))[0];
+    if (home) {
+      const fx = Math.sin(home.facing);
+      const fz = Math.cos(home.facing);
+      // out front of the door, at the pavement
+      const sx = home.x + fx * (home.hz + 2.2);
+      const sz = home.z + fz * (home.hz + 2.2);
+      const portrait = await new Promise<HTMLImageElement | undefined>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(undefined);
+        img.src = '/brand/captain-jack.svg';
+      });
+      // at the kerb in front of his house, like the suite's signs on Main Street: face side-on
+      // to the road, bracket reaching out toward it
+      let bestT = 0;
+      for (let i = 0, bestD = Infinity; i <= 400; i++) {
+        const p = road.main.curve.getPointAt(i / 400);
+        const d = Math.hypot(p.x - home.x, p.z - home.z);
+        if (d < bestD) [bestD, bestT] = [d, i / 400];
+      }
+      {
+        const c = road.main.curve.getPointAt(bestT);
+        const tan = road.main.curve.getTangentAt(bestT);
+        const side = Math.sign(road.main.perp(bestT).x * (home.x - c.x) + road.main.perp(bestT).z * (home.z - c.z)) || 1;
+        const n = road.main.perp(bestT).multiplyScalar(side);
+        const half = road.main.width / 2;
+        const bx = c.x + n.x * (half + FOOTPATH + 1.2 + 1.6);
+        const bz = c.z + n.z * (half + FOOTPATH + 1.2 + 1.6);
+        const along = Math.atan2(-tan.x, -tan.z);
+        const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
+        boards.hangingSign(
+          { name: 'Captain Jack', slug: 'captain-jack', tagline: "the lab's guide — come and ask", accent: '#173d83' } as Project,
+          bx, bz, towardRoad ? along : along + Math.PI, portrait
+        );
+      }
+      stations.push({
+        kind: 'info', accent: '#173d83', x: sx, z: sz, reach: 8,
+        info: {
+          title: 'Captain Jack',
+          logo: '/brand/captain-jack.svg',
+          tagline: "the lab's guide",
+          lines: ["This is Captain Jack's house. Ask him anything about the lab and its tools. He's a character; an AI writes his answers."],
+          links: [{ label: 'talk to Captain Jack →', url: '#captain-jack' }],
+        },
+      });
+    }
+  }
+
+  // ---------- bunting: strings of the suite's colours across every street, well spaced ----------
+  {
+    const colours = byDistrict('agent-works').map((p) => p.accent ?? '#d98a1f');
+    const gap = 46;
+    for (const seg of road.all) {
+      const half = seg.width / 2;
+      for (let d = 30; d < seg.length - 12; d += gap) {
+        const t = d / seg.length;
+        const c = seg.curve.getPointAt(t);
+        const n = seg.perp(t);
+        const w = half + FOOTPATH + 0.4;
+        const a = { x: c.x + n.x * w, z: c.z + n.z * w };
+        const b = { x: c.x - n.x * w, z: c.z - n.z * w };
+        // keep the poles off junctions, signs and houses
+        if (road.onRibbon(a.x, a.z, 0.2) || road.onRibbon(b.x, b.z, 0.2)) continue;
+        if (!clearOfHouses(a.x, a.z, 4.5) || !clearOfHouses(b.x, b.z, 4.5)) continue;
+        boards.bunting(a.x, a.z, b.x, b.z, colours);
+      }
+    }
+  }
+
+  // ---------- the woods ----------
+  // The empty ground between the streets grows woods: clumps rather than an even
+  // sprinkle, spruce thick in the middle of a clump and oaks thinning out at its
+  // edge, a dead tree now and then, and boulders half sunk among the trunks.
+  // The spruce stay green in autumn; the oaks turn.
+  {
+    const groves: Array<{ x: number; z: number; r: number }> = [];
+    for (let tries = 0; groves.length < 26 && tries < 900; tries++) {
+      const x = (rand() - 0.5) * 290;
+      const z = Z_END - 20 + rand() * (Z_START - Z_END + 40);
+      const r = 14 + rand() * 18;
+      if (road.distTo(x, z) < 20 + r * 0.3) continue;
+      if (Math.hypot(x - plaza.x, z - plaza.z) < 34) continue;
+      if (!clearOfHouses(x, z, 16)) continue;
+      if (groves.some((g) => Math.hypot(g.x - x, g.z - z) < (g.r + r) * 0.7)) continue;
+      groves.push({ x, z, r });
+    }
+    const perGrove = Math.ceil(quality.settings.forestTrees / Math.max(1, groves.length));
+    for (const g of groves) {
+      for (let i = 0; i < perGrove; i++) {
+        // denser toward the middle
+        const d = Math.sqrt(rand()) * g.r;
+        const a = rand() * Math.PI * 2;
+        const x = g.x + Math.cos(a) * d;
+        const z = g.z + Math.sin(a) * d;
+        if (road.distTo(x, z) < 11 || !clearOfHouses(x, z, 9)) continue;
+        if (x < -148 || x > 148) continue;
+        const edge = d / g.r;
+        const rot = rand() * 6.28;
+        const pick = rand();
+        if (pick < 0.04) {
+          props.place(deadTrees[Math.floor(rand() * deadTrees.length)], 2 + rand() * 2, x, z, rot, 'trunk');
+        } else if (edge > 0.6 ? pick < 0.75 : pick < 0.25) {
+          const k = Math.floor(rand() * oaks.length);
+          props.placeSeasonalTree(oaks[k], fallOaks[k], 4 + rand() * 4, x, z, rot);
+        } else {
+          const s = spruces[Math.floor(rand() * spruces.length)];
+          props.placeSeasonalTree(s, s, 2.6 + rand() * 2.6, x, z, rot);
+        }
+      }
+      // a boulder or two, and loose stones
+      for (let i = 0; i < 1 + Math.floor(rand() * 2); i++) {
+        const x = g.x + (rand() - 0.5) * g.r;
+        const z = g.z + (rand() - 0.5) * g.r;
+        if (road.distTo(x, z) > 12 && clearOfHouses(x, z, 9)) props.place(bigRocks[Math.floor(rand() * bigRocks.length)], 3 + rand() * 3, x, z, rand() * 6.28, 'box');
+      }
+      for (let i = 0; i < 4; i++) {
+        const x = g.x + (rand() - 0.5) * g.r * 1.6;
+        const z = g.z + (rand() - 0.5) * g.r * 1.6;
+        if (road.distTo(x, z) > 9) props.place(forestRocks[Math.floor(rand() * forestRocks.length)], 0.6 + rand() * 1.2, x, z, rand() * 6.28);
       }
     }
   }
@@ -825,6 +1017,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
+    boards.tick(t);
     // the page's own chrome (the station card) goes dark with the village
     const night = sceneEl?.dataset.night === 'true' ? nightFactor > 0.45 : nightFactor > 0.55;
     if (sceneEl && String(night) !== sceneEl.dataset.night) sceneEl.dataset.night = String(night);
@@ -929,6 +1122,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         boardsOnRoad: onRoad(stations.filter((st) => st.reach === undefined), 0),
         gatesOnRoad: onRoad(gates, 0),
         housesOnRoad: onRoad(houseCenters, 1.5),
+        // any solid part of a sign inside a house's footprint
+        signsInHouses: signSolids.filter((sg) => houseBoxes.some((h) => {
+          const dx = sg.x - h.x, dz = sg.z - h.z;
+          const lx = Math.cos(h.facing) * dx - Math.sin(h.facing) * dz;
+          const lz = Math.sin(h.facing) * dx + Math.cos(h.facing) * dz;
+          const r = Math.max(sg.hx, sg.hz);
+          return Math.abs(lx) < h.hx + r && Math.abs(lz) < h.hz + r;
+        })).map((sg) => ({ x: +sg.x.toFixed(1), z: +sg.z.toFixed(1) })),
         lampsOnRoad: onRoad(lamps.poles(), 0),
         totals: { boards: stations.length, gates: gates.length, houses: houseCenters.length, lamps: lamps.poles().length },
       };
