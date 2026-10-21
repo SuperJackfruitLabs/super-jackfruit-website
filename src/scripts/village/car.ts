@@ -1,13 +1,12 @@
 // The car, and everything that makes it feel like it has mass.
 //
-// "Low poly Japan Offroad Car" by Han66st (sketchfab, CC-BY-4.0). The file is
-// a three-paint showroom of complete cars stacked at the origin, plus a baked
-// ground decal per car — pick one body, leave the rest behind.
+// Which car, and how it handles, comes from cars.ts.
 //
 // Rig, outermost first:
 //   root  — world position + heading yaw
 //   body  — suspension: pitch, roll, and vertical travel
-//   car   — the scaled model; wheels hang off its `variant` child
+//   car   — the scaled model, swapped out whole when another car is picked;
+//           its wheels hang off pivots built in rig()
 // Lights and exhaust ride on `body`, so braking really does throw the
 // headlights down at the road.
 import type * as T from 'three';
@@ -15,27 +14,10 @@ import type { Three } from './types';
 import type { Impact, LoadedGltf } from './props';
 import type { InputState } from './input';
 import type { AudioBus } from './audio';
+import { carById, type CarChoice, type CarSpec, type Handling } from './cars';
 
-const MAX_SPEED = 11;
-const NITRO_MAX = 18;
+// Handling lives per car in cars.ts; only reverse is the same for all.
 const MAX_REVERSE = 4;
-const ACCEL = 9;
-const NITRO_ACCEL = 17;
-const BRAKE = 16;
-const DRAG = 3.2;
-const STEER_RATE = 1.9;
-
-// Lateral acceleration the tyres hold before they start scrubbing, m/s². The
-// arcade steering is tight enough that a full-lock corner at top speed pulls
-// ~21 — set this so ordinary cornering stays quiet and only really leaning on
-// it lays rubber.
-// a keyboard turn is always full lock, so a full-lock corner at cruising
-// speed (1.9 rad/s × 11 m/s) must stay under this, or every bend leaves marks;
-// on nitro it doesn't, and those are the corners that should
-const GRIP = 22;
-/** suspension spring and damping — under-damped on purpose, so it settles with a bounce */
-const BODY_K = 90;
-const BODY_C = 13;
 
 const MARKS = 160;
 const MARK_LIFE = 9;
@@ -59,6 +41,10 @@ export interface Car {
   update(dt: number, t: number, input: InputState, ctx: CarCtx, audio: AudioBus): void;
   applyNight(nightFactor: number): void;
   teleport(x: number, z: number, heading: number): void;
+  /** the car being driven */
+  readonly spec: CarSpec;
+  /** swap to another car or paint where the current one stands */
+  choose(choice: CarChoice): Promise<void>;
 }
 
 function softBlob(size: number, inner: string, outer: string): HTMLCanvasElement {
@@ -73,80 +59,133 @@ function softBlob(size: number, inner: string, outer: string): HTMLCanvasElement
   return c;
 }
 
-export async function createCar(
-  THREE: Three,
-  load: (name: string) => Promise<LoadedGltf>,
-  scene: T.Scene
-): Promise<Car> {
-  const gltf = await load('offroad-car');
-  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
-  let variant: T.Object3D | undefined;
-  gltf.scene.traverse((o: T.Object3D) => {
-    if (!variant && norm(o.name) === 'cube5') variant = o; // the olive-green paint
-  });
-  if (!variant) throw new Error('offroad-car: paint variant not found');
-  variant.position.x = 0;
-  variant.position.z = 0;
+interface Wheel {
+  pivot: T.Object3D;
+  roll: T.Object3D;
+  baseY: number;
+  x: number;
+  z: number;
+  front: boolean;
+}
+
+/** One car model, rigged: its scaled body, its wheels and its paint. */
+interface Model {
+  car: T.Group;
+  wheels: Wheel[];
+  /** the paint, kept with its daylight colour, so it can be lifted after dark */
+  paint: Array<{ mat: T.MeshStandardMaterial; base: T.Color }>;
+  /** the materials the picker repaints; empty for a car that comes as it is */
+  paintMats: T.MeshStandardMaterial[];
+  wheelRadius: number;
+  /** root-space extents, for where the lights and exhaust go */
+  halfW: number;
+  front: number;
+  rear: number;
+  height: number;
+}
+
+const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+/**
+ * Rig a freshly cloned model. The off-roader is a three-paint showroom (see
+ * scripts/extract-car.mjs) whose wheels are "Cylinder" nodes; Kenney's cars
+ * are a body plus four "wheel-front-left"-style nodes.
+ */
+function rig(THREE: Three, spec: CarSpec, gltf: LoadedGltf): Model {
+  const src = gltf.scene.clone(true);
+  let variant: T.Object3D = src;
+  if (spec.id === 'offroad') {
+    let found: T.Object3D | undefined;
+    src.traverse((o: T.Object3D) => {
+      if (!found && norm(o.name) === 'cube5') found = o; // the olive-green paint
+    });
+    if (!found) throw new Error('offroad-car: paint variant not found');
+    found.position.x = 0;
+    found.position.z = 0;
+    variant = found;
+  }
 
   const car = new THREE.Group();
   car.add(variant);
-  // the paint, kept with its daylight colour, so it can be lifted after dark
-  // without the car turning into a silhouette parked under its own headlights
-  const paint: Array<{ mat: T.MeshStandardMaterial; base: T.Color }> = [];
+  const paint: Model['paint'] = [];
+  const paintMats: T.MeshStandardMaterial[] = [];
   car.traverse((o) => {
     const mesh = o as T.Mesh;
     if (!mesh.isMesh) return;
     mesh.castShadow = true;
+    // materials are shared with the loader's cache; repainting one car must
+    // not repaint the next time it's picked
+    if (Array.isArray(mesh.material)) mesh.material = mesh.material.map((m) => m.clone());
+    else mesh.material = mesh.material.clone();
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
       const std = m as T.MeshStandardMaterial;
-      if ('metalness' in std) {
-        std.metalness = 0;
-        std.roughness = Math.max(0.85, std.roughness ?? 1);
-      }
-      if ('emissive' in std && !paint.some((p) => p.mat === std)) {
-        paint.push({ mat: std, base: std.color.clone() });
-      }
+      if (!('emissive' in std)) continue;
+      // a textured palette glows through its own texture, not as a flat wash
+      if (std.map) std.emissiveMap = std.map;
+      paint.push({ mat: std, base: std.map ? new THREE.Color(1, 1, 1) : std.color.clone() });
+      // the off-roader's body paint is its olive material
+      if (spec.paints.length && norm(std.name) === 'material') paintMats.push(std);
     }
   });
 
-  // Wheels are the low cylinder groups; the spare on the tailgate rides high
-  // and stays fixed. The nodes carry baked rotations, so steering yaw and axle
-  // roll each get their own clean pivot instead of touching the node's Euler.
-  const rollGroups: T.Object3D[] = [];
-  const pivots: Array<{ pivot: T.Object3D; baseY: number; x: number; z: number }> = [];
-  const frontPivots: T.Object3D[] = [];
-  for (const child of [...variant.children]) {
-    if (!/^Cylinder/.test(child.name) || child.position.y > -0.5) continue;
+  // Steering yaw and axle roll each get their own clean pivot instead of
+  // touching the node's Euler, since the nodes carry baked rotations.
+  const wheels: Wheel[] = [];
+  const parent = variant;
+  for (const child of [...parent.children]) {
+    const kenney = /^wheel/i.test(child.name);
+    // the off-roader's spare on the tailgate rides high and stays fixed
+    const offroad = /^Cylinder/.test(child.name) && child.position.y <= -0.5;
+    if (!kenney && !offroad) continue;
     const pivot = new THREE.Group();
     pivot.position.copy(child.position);
-    const rollG = new THREE.Group();
-    pivot.add(rollG);
+    const roll = new THREE.Group();
+    pivot.add(roll);
     child.position.set(0, 0, 0);
-    rollG.add(child);
-    variant.add(pivot);
-    rollGroups.push(rollG);
-    pivots.push({ pivot, baseY: pivot.position.y, x: pivot.position.x, z: pivot.position.z });
-    if (pivot.position.z > 0) frontPivots.push(pivot); // nose is +z
+    roll.add(child);
+    parent.add(pivot);
+    const front = kenney ? /front/i.test(child.name) : pivot.position.z > 0; // nose is +z
+    wheels.push({ pivot, roll, baseY: pivot.position.y, x: pivot.position.x, z: pivot.position.z, front });
   }
 
-  let carScale = 1;
-  {
-    const box = new THREE.Box3().setFromObject(car);
-    const len = box.getSize(new THREE.Vector3()).z || 1;
-    carScale = 2.9 / len; // a friendly toy-car length
-    car.scale.setScalar(carScale);
-    car.position.y = -box.min.y * carScale;
+  const box = new THREE.Box3().setFromObject(car);
+  const size = box.getSize(new THREE.Vector3());
+  const scale = spec.length / (size.z || 1);
+  car.scale.setScalar(scale);
+  car.position.y = -box.min.y * scale;
+
+  let wheelRadius = 0.3;
+  if (wheels.length) {
+    const wb = new THREE.Box3().setFromObject(wheels[0].roll);
+    wheelRadius = (wb.getSize(new THREE.Vector3()).y / 2) * scale || 0.3;
   }
 
-  // rear axle in root-space, for where dust and rubber come off
-  const rearOffsets = pivots
-    .filter((p) => p.z <= 0)
-    .map((p) => ({ x: p.x * carScale, z: p.z * carScale }));
-  if (rearOffsets.length === 0) rearOffsets.push({ x: -0.45, z: -0.95 }, { x: 0.45, z: -0.95 });
+  return {
+    car,
+    wheels,
+    paint,
+    paintMats,
+    wheelRadius,
+    halfW: (size.x / 2) * scale,
+    front: box.max.z * scale,
+    rear: box.min.z * scale,
+    height: size.y * scale,
+  };
+}
+
+export async function createCar(
+  THREE: Three,
+  load: (name: string) => Promise<LoadedGltf>,
+  scene: T.Scene,
+  choice: CarChoice
+): Promise<Car> {
+  let spec = carById(choice.car);
+  let h: Handling = spec.handling;
+  let model = rig(THREE, spec, await load(spec.model));
 
   const body = new THREE.Group();
-  body.add(car);
+  body.add(model.car);
   const root = new THREE.Group();
   root.add(body);
   root.position.set(0, 0, 8);
@@ -158,11 +197,10 @@ export async function createCar(
   );
   flameTex.colorSpace = THREE.SRGBColorSpace;
   const nitroFlames: T.Sprite[] = [];
-  for (const fx of [-0.32, 0.32]) {
+  for (let i = 0; i < 2; i++) {
     const flame = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: flameTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })
     );
-    flame.position.set(fx, 0.35, -1.55);
     flame.scale.setScalar(0.5);
     body.add(flame);
     nitroFlames.push(flame);
@@ -170,32 +208,64 @@ export async function createCar(
 
   // ---------- head- and taillights ----------
   const headlights: T.SpotLight[] = [];
+  const headGlows: T.Sprite[] = [];
+  const tails: T.Sprite[] = [];
   const lightSprites: T.Sprite[] = [];
   {
     const headTex = new THREE.CanvasTexture(softBlob(64, 'rgba(255,246,214,1)', 'rgba(255,246,214,0)'));
-    for (const hx of [-0.42, 0.42]) {
+    for (let i = 0; i < 2; i++) {
       const spot = new THREE.SpotLight(0xfff2cc, 0, 24, 0.52, 0.4, 1.0);
-      spot.position.set(hx, 1.0, 1.35);
-      const tgt = new THREE.Object3D();
-      tgt.position.set(hx * 0.6, -0.8, 8.5);
-      body.add(tgt);
-      spot.target = tgt;
+      spot.target = new THREE.Object3D();
+      body.add(spot.target);
       body.add(spot);
       headlights.push(spot);
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, transparent: true, opacity: 0, depthWrite: false }));
       glow.scale.setScalar(0.4);
-      glow.position.set(hx, 0.55, 1.5);
       body.add(glow);
+      headGlows.push(glow);
       lightSprites.push(glow);
     }
-    for (const hx of [-0.42, 0.42]) {
+    for (let i = 0; i < 2; i++) {
       const tail = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff3324, transparent: true, opacity: 0, depthWrite: false }));
       tail.scale.setScalar(0.14);
-      tail.position.set(hx, 0.55, -1.42);
       body.add(tail);
+      tails.push(tail);
       lightSprites.push(tail);
     }
   }
+
+  // rear axle in root-space, for where dust and rubber come off
+  let rearOffsets: Array<{ x: number; z: number }> = [];
+
+  /** hang the lights, exhaust and tyre marks off the current model's shape */
+  function fit(): void {
+    const m = model;
+    const s = m.car.scale.x;
+    rearOffsets = m.wheels.filter((w) => !w.front).map((w) => ({ x: w.x * s, z: w.z * s }));
+    if (rearOffsets.length === 0) rearOffsets.push({ x: -0.45, z: -0.95 }, { x: 0.45, z: -0.95 });
+    const lx = m.halfW * 0.62;
+    const lampY = Math.min(0.62, m.height * 0.38);
+    [-lx, lx].forEach((x, i) => {
+      headlights[i].position.set(x, Math.min(1.0, m.height * 0.6), m.front - 0.1);
+      headlights[i].target.position.set(x * 0.6, -0.8, m.front + 7.2);
+      headGlows[i].position.set(x, lampY, m.front + 0.05);
+      tails[i].position.set(x, lampY, m.rear - 0.03);
+      nitroFlames[i].position.set(x * 0.55, 0.35, m.rear - 0.12);
+    });
+  }
+  fit();
+
+  function repaint(paintIdx: number): void {
+    const hex = spec.paints[paintIdx];
+    if (!hex) return;
+    for (const mat of model.paintMats) {
+      mat.color.set(hex);
+      const p = model.paint.find((q) => q.mat === mat);
+      if (p) p.base.copy(mat.color);
+    }
+  }
+  repaint(choice.paint);
+  let lastNight = 0;
 
   // ---------- skid marks: one mesh, one draw call, quads built in world space ----------
   const markPos = new Float32Array(MARKS * 4 * 3);
@@ -303,11 +373,34 @@ export async function createCar(
   let shake = 0;
   let lastImpactAt = -10;
 
+  let choosing = 0;
   const api: Car = {
     root,
     speed,
     heading,
     shake,
+    get spec() {
+      return spec;
+    },
+
+    async choose(next: CarChoice): Promise<void> {
+      const nextSpec = carById(next.car);
+      if (nextSpec.id === spec.id) {
+        repaint(next.paint);
+        return;
+      }
+      const ticket = ++choosing;
+      const gltf = await load(nextSpec.model);
+      if (ticket !== choosing) return; // a later pick won the race
+      body.remove(model.car);
+      spec = nextSpec;
+      h = spec.handling;
+      model = rig(THREE, spec, gltf);
+      body.add(model.car);
+      fit();
+      repaint(next.paint);
+      api.applyNight(lastNight);
+    },
 
     teleport(x: number, z: number, h: number): void {
       root.position.set(x, 0, z);
@@ -316,10 +409,11 @@ export async function createCar(
     },
 
     applyNight(nightFactor: number): void {
+      lastNight = nightFactor;
       const on = nightFactor > 0.25;
       // a touch of its own colour back into the paint, so the car stays legible
       // against a dark road without looking lit from nowhere
-      for (const p of paint) p.mat.emissive.copy(p.base).multiplyScalar(0.26 * nightFactor);
+      for (const p of model.paint) p.mat.emissive.copy(p.base).multiplyScalar(0.26 * nightFactor);
       for (const h of headlights) h.intensity = nightFactor * 120;
       lightSprites.forEach((sp, i) => {
         sp.material.opacity = on ? (i < 2 ? 0.85 : 0.7) * nightFactor : 0;
@@ -332,22 +426,22 @@ export async function createCar(
       const nitro = input.nitro && throttle > 0.05;
       const prevSpeed = speed;
 
-      const topSpeed = nitro ? NITRO_MAX : MAX_SPEED;
+      const topSpeed = nitro ? h.nitroMax : h.maxSpeed;
       if (speed > topSpeed + 0.01) {
         // over the current cap (boost just released) — bleed off smoothly
         speed = Math.max(topSpeed, speed - 14 * dt);
       } else if (throttle > 0.05) {
-        speed = Math.min(topSpeed, speed + (nitro ? NITRO_ACCEL : ACCEL) * throttle * dt);
+        speed = Math.min(topSpeed, speed + (nitro ? h.nitroAccel : h.accel) * throttle * dt);
       } else if (throttle < -0.05) {
-        speed += (speed > 0 ? -BRAKE : ACCEL * throttle) * dt;
+        speed += (speed > 0 ? -h.brake : h.accel * throttle) * dt;
       } else {
-        speed -= Math.sign(speed) * Math.min(Math.abs(speed), DRAG * dt);
+        speed -= Math.sign(speed) * Math.min(Math.abs(speed), h.drag * dt);
       }
       speed = Math.max(-MAX_REVERSE, speed);
 
       // steering authority grows with speed, flips in reverse
       const steerAuthority = Math.max(-1, Math.min(1, speed / 4));
-      const yawRate = steer * STEER_RATE * steerAuthority;
+      const yawRate = steer * h.steer * steerAuthority;
       heading += yawRate * dt;
 
       const fwdX = Math.sin(heading);
@@ -365,21 +459,23 @@ export async function createCar(
         const pushLen = Math.hypot(impact.x, impact.z) || 1;
         // how head-on the hit was: a graze barely costs anything, a wall stops you
         const alignment = Math.max(0, -((impact.x / pushLen) * fwdX + (impact.z / pushLen) * fwdZ) * Math.sign(speed || 1));
-        const force = Math.min(1, (Math.abs(speed) / MAX_SPEED) * alignment);
+        const force = Math.min(1, (Math.abs(speed) / h.maxSpeed) * alignment);
         if (force > 0.06 && t - lastImpactAt > 0.18) {
           lastImpactAt = t;
           audio.thud(force);
-          shake = Math.min(1, shake + force);
-          bobVel -= force * 3.2;
-          pitchVel += force * 2.4 * Math.sign(speed || 1);
+          shake = Math.min(1, shake + force * h.knock);
+          bobVel -= force * 3.2 * h.knock;
+          pitchVel += force * 2.4 * h.knock * Math.sign(speed || 1);
         }
         speed *= 1 - 0.85 * alignment;
       }
 
       // ---------- wheels ----------
-      const roll_ = (speed * dt) / 0.3; // offroad wheel radius after scaling
-      for (const w of rollGroups) w.rotation.x += roll_;
-      for (const pv of frontPivots) pv.rotation.y = steer * 0.45 * Math.max(0, steerAuthority);
+      const roll_ = (speed * dt) / model.wheelRadius;
+      for (const w of model.wheels) {
+        w.roll.rotation.x += roll_;
+        if (w.front) w.pivot.rotation.y = steer * 0.45 * Math.max(0, steerAuthority);
+      }
 
       // ---------- suspension ----------
       const accelLong = (speed - prevSpeed) / Math.max(dt, 1e-4);
@@ -387,17 +483,17 @@ export async function createCar(
       const targetPitch = Math.max(-0.10, Math.min(0.10, -accelLong * 0.010));
       // turning right leans the body left, and vice versa
       const targetRoll = Math.max(-0.13, Math.min(0.13, yawRate * speed * 0.010));
-      pitchVel += ((targetPitch - pitch) * BODY_K - pitchVel * BODY_C) * dt;
+      pitchVel += ((targetPitch - pitch) * h.bodyK - pitchVel * h.bodyC) * dt;
       pitch += pitchVel * dt;
-      rollVel += ((targetRoll - roll) * BODY_K - rollVel * BODY_C) * dt;
+      rollVel += ((targetRoll - roll) * h.bodyK - rollVel * h.bodyC) * dt;
       roll += rollVel * dt;
-      bobVel += ((0 - bob) * BODY_K - bobVel * BODY_C) * dt;
+      bobVel += ((0 - bob) * h.bodyK - bobVel * h.bodyC) * dt;
       bob += bobVel * dt;
 
       // rough ground shakes the whole car a little
       const offRoad = ctx.offRoad(root.position.x, root.position.z);
       if (offRoad && Math.abs(speed) > 1) {
-        const rumble = Math.min(1, Math.abs(speed) / MAX_SPEED) * 0.012;
+        const rumble = Math.min(1, Math.abs(speed) / h.maxSpeed) * 0.012;
         pitch += Math.sin(t * 37) * rumble;
         roll += Math.sin(t * 29 + 1.7) * rumble;
       }
@@ -406,15 +502,15 @@ export async function createCar(
       body.rotation.z = roll;
       body.position.y = bob;
       // keep the contact patches on the ground while the body leans over them
-      for (const p of pivots) p.pivot.position.y = p.baseY + pitch * p.z - roll * p.x;
+      for (const p of model.wheels) p.pivot.position.y = p.baseY + pitch * p.z - roll * p.x;
 
       shake = Math.max(0, shake - dt * 2.4);
       api.shake = shake;
 
       // ---------- slip: how hard the tyres are complaining ----------
       const latA = Math.abs(yawRate * speed);
-      let slip = Math.max(0, latA - GRIP) / GRIP;
-      if (throttle < -0.3 && speed > 4) slip = Math.max(slip, (speed - 4) / MAX_SPEED);
+      let slip = Math.max(0, latA - h.grip) / h.grip;
+      if (throttle < -0.3 && speed > 4) slip = Math.max(slip, (speed - 4) / h.maxSpeed);
       if (nitro && speed < 5 && throttle > 0.5) slip = Math.max(slip, 0.55);
       slip = Math.min(1, slip);
       audio.skid(offRoad ? slip * 0.5 : slip);

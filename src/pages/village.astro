@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Village.astro';
+import { CARS } from '../scripts/village/cars';
 import '@fontsource-variable/inconsolata';
 import '@superjackfruit/vibekit/fonts.css';
 ---
@@ -20,6 +21,20 @@ import '@superjackfruit/vibekit/fonts.css';
 
     <div class="env menu" id="menu" hidden>
       <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
+      <!-- the garage: thumbnails come from the same list the scene drives, see cars.ts -->
+      <span class="menu__label menu__label--wide">Car</span>
+      <div class="menu__cars" id="car-row" role="group" aria-label="Car">
+        {CARS.map((c) => (
+          <button type="button" class="menu__car" data-car={c.id} aria-pressed="false" title={c.name}>
+            <img src={c.thumb} alt="" width="80" height="48" loading="lazy" decoding="async" />
+            <span>{c.name}</span>
+          </button>
+        ))}
+      </div>
+      <span class="menu__label" id="paint-label" hidden>Paint</span>
+      <div class="env__group menu__paints" id="paint-row" role="group" aria-label="Paint" hidden></div>
+      <p class="menu__car-note" id="car-note"></p>
+
       <span class="menu__label">Suite</span>
       <div class="menu__suite">
         <a href="/">see it as a page →</a>
@@ -71,7 +86,7 @@ import '@superjackfruit/vibekit/fonts.css';
       <div class="env__group" id="tilt-row" hidden>
         <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
       </div>
-      <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · car: Han66st (CC-BY, sketchfab) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
+      <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · off-roader: Han66st (CC-BY, sketchfab) · cars: Kenney (CC0) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
     </div>
 
 
@@ -118,6 +133,7 @@ import '@superjackfruit/vibekit/fonts.css';
         <dt>H / R</dt><dd>the lab · back to the start</dd>
         <dt>↵ / P</dt><dd>open the card's first / second link</dd>
         <dt>Space / I</dt><dd>more about it</dd>
+        <dt>C</dt><dd>next car</dd>
         <dt>T</dt><dd>time of day</dd>
         <dt>M</dt><dd>mute</dd>
         <dt>Esc</dt><dd>menu</dd>
@@ -634,6 +650,22 @@ import '@superjackfruit/vibekit/fonts.css';
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
   .menu .env__group { background: rgba(40, 50, 60, 0.05); }
   .env__auto { width: auto !important; padding: 0 0.7rem !important; font: 600 1.05rem 'Figtree Variable', system-ui, sans-serif; }
+  .menu__label--wide, .menu__cars, .menu__car-note { grid-column: 1 / -1; }
+  .menu__cars { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.35rem; width: 100%; }
+  /* .scene .env.menu outranks the round icon-button rules, phone sizes included */
+  .scene .env.menu button.menu__car {
+    width: auto; height: auto; display: grid; justify-items: center; gap: 0.1rem; padding: 0.3rem 0.2rem 0.25rem;
+    border: 1.5px solid rgba(40, 50, 60, 0.12); border-radius: 10px; background: rgba(40, 50, 60, 0.04);
+    font: 600 0.85rem 'Figtree Variable', system-ui, sans-serif; color: #2c2a26;
+  }
+  .menu__car img { width: 100%; max-width: 4.6rem; height: auto; aspect-ratio: 5 / 3; object-fit: contain; }
+  .scene .env.menu button.menu__car:hover { background: rgba(255, 255, 255, 0.9); }
+  .scene .env.menu button.menu__car[aria-pressed='true'] { border-color: #d98a1f; box-shadow: inset 0 0 0 1px #d98a1f; background: rgba(217, 138, 31, 0.1); }
+  /* the swatches are made in script, so they carry no scope attribute: hence :global */
+  .menu__paints { gap: 0.45rem; padding: 0.3rem 0.45rem; }
+  .scene .env.menu :global(button.menu__paint) { width: 1.6rem; display: block; padding: 0; cursor: pointer; height: 1.6rem; border-radius: 50%; border: 2px solid #faf7f0; box-shadow: 0 0 0 1.5px rgba(40, 50, 60, 0.2); }
+  .scene .env.menu :global(button.menu__paint)[aria-pressed='true'] { box-shadow: 0 0 0 2.5px #d98a1f; }
+  .menu__car-note { margin: -0.2rem 0 0.2rem; font-size: 0.95rem; color: rgba(44, 42, 38, 0.65); }
   .menu__credit { grid-column: 1 / -1; margin: 0.3rem 0 0; max-width: 22rem; font-size: 0.95rem; line-height: 1.4; color: rgba(44, 42, 38, 0.55); }
 
   /* the driving legend is for the first few seconds; after that it's clutter */
@@ -678,6 +710,50 @@ import '@superjackfruit/vibekit/fonts.css';
 <script>
   import { initVillageScene } from '../scripts/village-scene';
   import { isTyping } from '../scripts/village/input';
+  import { CARS, carById, type CarChoice } from '../scripts/village/cars';
+
+  // ---------- the garage ----------
+  {
+    const row = document.getElementById('car-row');
+    const paints = document.getElementById('paint-row');
+    const paintLabel = document.getElementById('paint-label');
+    const note = document.getElementById('car-note');
+    let current: CarChoice = { car: CARS[0].id, paint: 0 };
+    const pick = (next: CarChoice) => window.dispatchEvent(new CustomEvent('village:car', { detail: next }));
+    row?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-car]');
+      if (btn && btn.dataset.car !== current.car) pick({ car: btn.dataset.car!, paint: 0 });
+    });
+    paints?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-paint]');
+      if (btn) pick({ car: current.car, paint: Number(btn.dataset.paint) });
+    });
+    // the scene says what's being driven — at start (the remembered car) and after every pick or C
+    window.addEventListener('village:car-chosen', ((e: CustomEvent<CarChoice>) => {
+      current = e.detail;
+      const spec = carById(current.car);
+      row?.querySelectorAll<HTMLButtonElement>('[data-car]').forEach((b) =>
+        b.setAttribute('aria-pressed', String(b.dataset.car === spec.id))
+      );
+      if (note) note.textContent = `${spec.name}: ${spec.note}`;
+      const has = spec.paints.length > 1;
+      if (paints && paintLabel) {
+        paints.hidden = paintLabel.hidden = !has;
+        paints.replaceChildren(
+          ...spec.paints.map((hex, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'menu__paint';
+            b.dataset.paint = String(i);
+            b.style.background = hex;
+            b.setAttribute('aria-label', `Paint ${i + 1}`);
+            b.setAttribute('aria-pressed', String(i === current.paint));
+            return b;
+          })
+        );
+      }
+    }) as EventListener);
+  }
 
   const canvas = document.getElementById('village-canvas');
   if (canvas instanceof HTMLCanvasElement) {
