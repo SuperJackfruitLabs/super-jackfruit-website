@@ -448,8 +448,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
       const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
-      if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, bx, bz, faceRoad);
-      else boards.plank(project, d.accent, bx, bz, faceRoad);
+      // turned 45° toward the street's mouth: the front reads to cars coming in, the back to cars going out
+      const tc = street.curve.getTangentAt(t);
+      const turn = (f: number) => Math.sin(f) * -tc.x + Math.cos(f) * -tc.z;
+      const angled = turn(faceRoad + Math.PI / 4) > turn(faceRoad - Math.PI / 4) ? faceRoad + Math.PI / 4 : faceRoad - Math.PI / 4;
+      if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, bx, bz, angled);
+      else boards.plank(project, d.accent, bx, bz, angled);
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
