@@ -16,7 +16,7 @@ export interface BoardKit {
   projectBoard(project: Project, accent: string, x: number, z: number, facing: number): void;
   suiteBoard(step: number, project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   districtBoard(d: District, gx: number, gz: number, facing: number): void;
-  infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number): void;
+  infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number, big?: { logo?: HTMLImageElement; width: number; scale: number }): void;
   applyNight(nightFactor: number): void;
 }
 
@@ -73,7 +73,9 @@ export function createBoards(
   // suite's step number, an arrow), a title, and a line under it.
   function bigBoard(
     o: { lead?: string; logo?: HTMLImageElement; title: string; sub: string; accent: string; fg?: string },
-    x: number, z: number, facing: number
+    x: number, z: number, facing: number,
+    /** panel width in metres (the canvas widens with it, so the type keeps its shape) and overall scale */
+    size = { width: 4.2, scale: 1 }
   ): void {
     const { lead, logo, title, sub, accent, fg } = o;
     const mat = themedMaterial(
@@ -112,23 +114,24 @@ export function createBoards(
         ctx.fillText(sub, left + 4, 262, w - left - 40);
         ctx.globalAlpha = 1;
       },
-      1024,
+      Math.round((1024 * size.width) / 4.2),
       320
     );
 
     const group = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.31), mat);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(size.width, 1.31), mat);
     panel.position.set(0, 2.9, 0.06);
     panel.castShadow = true;
     const panelBack = panel.clone();
     panelBack.rotation.y = Math.PI;
     panelBack.position.z = -0.06;
-    posts(group, [-1.9, 1.9], 3.6, 0.13, 0);
+    posts(group, [-(size.width / 2 - 0.2), size.width / 2 - 0.2], 3.6, 0.13, 0);
     group.add(panel, panelBack);
     group.position.set(x, 0, z);
     group.rotation.y = facing;
+    group.scale.setScalar(size.scale);
     scene.add(group);
-    addCollider(x, z, 2.1, 0.3, facing);
+    addCollider(x, z, (size.width / 2) * size.scale, 0.3, facing);
   }
 
   return {
@@ -150,8 +153,8 @@ export function createBoards(
       bigBoard({ title: d.name, sub: d.blurb, accent: d.accent }, gx, gz, facing);
     },
 
-    infoBoard(title, sub, accent, x, z, facing): void {
-      bigBoard({ title, sub, accent }, x, z, facing);
+    infoBoard(title, sub, accent, x, z, facing, big): void {
+      bigBoard({ title, sub, accent, logo: big?.logo }, x, z, facing, big ?? undefined);
     },
 
     applyNight(nightFactor: number): void {

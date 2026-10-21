@@ -474,7 +474,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     const hqx = plaza.x + plaza.n.x * 8.5;
     const hqz = plaza.z + plaza.n.z * 8.5;
-    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP);
+    // the lab's own sign: its mark, and wide enough that the name isn't squeezed
+    const mark = await new Promise<HTMLImageElement | undefined>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(undefined);
+      img.src = '/brand/sjl.svg';
+    });
+    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7 });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
