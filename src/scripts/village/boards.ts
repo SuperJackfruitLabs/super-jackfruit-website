@@ -230,11 +230,12 @@ export function createBoards(
     return m;
   };
   /** a painted face, front and back, so a sign reads from both directions */
-  const faces = (mat: T.Material, w: number, h: number, depth: number, geo?: T.BufferGeometry) => {
+  const faces = (mat: T.Material, w: number, h: number, depth: number, geo?: T.BufferGeometry, backMat?: T.Material) => {
     const g = new THREE.Group();
     const front = new THREE.Mesh(geo ?? new THREE.PlaneGeometry(w, h), mat);
     front.position.z = depth / 2 + 0.005;
     const back = front.clone();
+    if (backMat) back.material = backMat;
     back.rotation.y = Math.PI;
     back.position.z = -depth / 2 - 0.005;
     g.add(front, back);
@@ -342,15 +343,15 @@ export function createBoards(
     const backUv = back.getAttribute('uv') as T.BufferAttribute;
     for (let i = 0; i < backUv.count; i++) backUv.setX(i, 1 - backUv.getX(i));
     const g = new THREE.Group();
-    g.add(box(0.12, 7.2, 0.12, steel, 0, 3.6, 0));
+    g.add(box(0.12, 5.4, 0.12, steel, 0, 2.7, 0));
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8), new THREE.MeshLambertMaterial({ color: 0xd9b24a }));
-    ball.position.y = 7.25;
+    ball.position.y = 5.45;
     g.add(ball);
     const fm = new THREE.Mesh(front, mat);
     const bm = new THREE.Mesh(back, mat);
     bm.rotation.y = Math.PI;
     bm.scale.x = -1;
-    for (const m of [fm, bm]) m.position.set(0.06, 6.4, 0);
+    for (const m of [fm, bm]) m.position.set(0.06, 4.7, 0);
     g.add(fm, bm);
     flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28 });
     // a low plinth so the pole stands on something
@@ -539,11 +540,12 @@ export function createBoards(
     const top = 2.2 + arrows.length * 0.62;
     g.add(box(0.16, top + 0.3, 0.16, timber, 0, (top + 0.3) / 2, 0));
     arrows.forEach((a, i) => {
-      const mat = themedMaterial((night) => (ctx, w, h) => {
+      // painted per face: whatever a board points to, a driver reading its back has already passed it
+      const paint = (dir: -1 | 0 | 1, back: boolean) => themedMaterial((night) => (ctx, w, h) => {
         const tip = 70;
-        const left = a.dir === -1;
+        const left = dir === -1;
         ctx.beginPath();
-        if (a.dir === 0) ctx.roundRect(0, 0, w, h, 14);
+        if (dir === 0) ctx.roundRect(0, 0, w, h, 14);
         else if (left) {
           ctx.moveTo(tip, 0); ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(tip, h); ctx.lineTo(0, h / 2); ctx.closePath();
         } else {
@@ -562,12 +564,16 @@ export function createBoards(
         ctx.fillStyle = '#ffffff';
         ctx.font = font(800, 64);
         ctx.textAlign = 'center';
-        const label = a.dir === 0 ? `↑ ${a.text}` : a.text;
-        ctx.fillText(label, w / 2 + (a.dir === 0 ? 0 : left ? tip / 2 : -tip / 2), h / 2 + 22, w - tip - 40);
+        const label = dir === 0 ? `${back ? '↩' : '↑'} ${a.text}` : a.text;
+        ctx.fillText(label, w / 2 + (dir === 0 ? 0 : left ? tip / 2 : -tip / 2), h / 2 + 22, w - tip - 40);
       }, 720, 110);
-      mat.transparent = true;
-      mat.alphaTest = 0.5;
-      const arm = faces(mat, 2.3, 0.36, 0.06);
+      const mat = paint(a.dir, false);
+      const backMat = paint(0, true);
+      for (const m of [mat, backMat]) {
+        m.transparent = true;
+        m.alphaTest = 0.5;
+      }
+      const arm = faces(mat, 2.3, 0.36, 0.06, undefined, backMat);
       arm.add(box(2.3 - 0.25, 0.36, 0.06, timber, (a.dir === 1 ? -1 : a.dir === -1 ? 1 : 0) * 0.12, 0, 0));
       // a straight-on board hangs to one side of the post, so the post doesn't cut its words
       arm.position.set(a.dir === 0 ? 1.25 : a.dir * 1.05, top - 0.3 - i * 0.62, 0);
