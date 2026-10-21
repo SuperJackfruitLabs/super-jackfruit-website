@@ -221,7 +221,14 @@ export async function createRoads(
   // only where the next cell along isn't road (an outside corner), so at a
   // junction mouth the footpaths turn the corner instead of crossing the road.
   {
-    const isRoad = (x: number, z: number) => open.has(key(x, z));
+    // the cell just past an end with a turning circle counts as road, so the footpath stops at
+    // the tile's edge and the circle's ring takes over there instead of a square end poking in
+    const capped = new Set<string>();
+    const beyond = (end: Cell, inner: Cell) => capped.add(key(2 * end[0] - inner[0], 2 * end[1] - inner[1]));
+    if (main.startCulDeSac) beyond(main.cells[0], main.cells[1]);
+    if (main.culDeSac) beyond(main.cells[main.cells.length - 1], main.cells[main.cells.length - 2]);
+    for (const b of branchSpecs) if (b.culDeSac > 0 && b.cells.length > 1) beyond(b.cells[b.cells.length - 1], b.cells[b.cells.length - 2]);
+    const isRoad = (x: number, z: number) => open.has(key(x, z)) || capped.has(key(x, z));
     const strips: Array<{ x: number; z: number; sx: number; sz: number }> = [];
     for (const [k, sides] of open) {
       const [cx, cz] = k.split(',').map(Number);
@@ -262,24 +269,33 @@ export async function createRoads(
   const circles: Array<{ x: number; z: number; r: number }> = [];
   // a turning circle just past a street's open end; `dir` points out of the street
   function turningCircle(tipX: number, tipZ: number, dir: T.Vector3, r: number) {
-    const cx = tipX + dir.x * (r - 1);
-    const cz = tipZ + dir.z * (r - 1);
-    for (const [rr, mat, y] of [[r + 0.5, kerb, TILE_Y - 0.002], [r, asphalt, TILE_Y]] as const) {
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(rr, 48), mat);
-      disc.rotation.x = -Math.PI / 2;
-      disc.position.set(cx, y, cz);
-      disc.receiveShadow = true;
-      scene.add(disc);
-    }
+    // set back so the ring's inner edge meets the tile's kerb lines exactly at the tile's end
+    const inner = r;
+    const back = Math.sqrt(inner * inner - (TILE / 2) ** 2);
+    const cx = tipX + dir.x * back;
+    const cz = tipZ + dir.z * back;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 48), asphalt);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(cx, TILE_Y + 0.004, cz); // just above the tile it overlaps, so the two do not flicker
+    disc.receiveShadow = true;
+    scene.add(disc);
     // the footpath carried round the circle, open where the street comes in
-    const back = Math.atan2(dir.z, -dir.x); // ring angles run in the disc's rotated plane
-    const inner = r + 0.5;
-    const gap = Math.asin(Math.min(1, (TILE / 2 + FOOTPATH) / inner));
+    const facing = Math.atan2(dir.z, -dir.x); // ring angles run in the disc's rotated plane
+    const gap = Math.asin(Math.min(1, TILE / 2 / inner));
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(inner, inner + FOOTPATH, 64, 1, back + gap, Math.PI * 2 - gap * 2),
+      new THREE.RingGeometry(inner, inner + FOOTPATH, 64, 1, facing + gap, Math.PI * 2 - gap * 2),
       new THREE.MeshLambertMaterial({ color: 0xc9ccce })
     );
     ring.rotation.x = -Math.PI / 2;
+    // the kerb's face, carried round from the tile's kerb lines (cylinder angles run from +z toward +x)
+    const toStreet = Math.atan2(-dir.x, -dir.z);
+    const face = new THREE.Mesh(
+      new THREE.CylinderGeometry(inner, inner, KERB_TOP, 64, 1, true, toStreet + gap, Math.PI * 2 - gap * 2),
+      kerb
+    );
+    face.material.side = THREE.DoubleSide;
+    face.position.set(cx, KERB_TOP / 2, cz);
+    scene.add(face);
     ring.position.set(cx, KERB_TOP, cz);
     ring.receiveShadow = true;
     scene.add(ring);

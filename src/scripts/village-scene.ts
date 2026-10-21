@@ -211,8 +211,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const chimneys: Chimney[] = [];
   const gates: Array<{ x: number; z: number }> = [];
 
+  // signs stand on the verge; a house set down later keeps its distance from them too
+  const signSpots: Array<{ x: number; z: number }> = [];
   const clearOfHouses = (x: number, z: number, gap: number): boolean =>
-    !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap);
+    !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap) &&
+    !signSpots.some((s) => Math.hypot(s.x - x, s.z - z) < Math.max(9, gap * 0.75));
 
   // ---------- lit windows ----------
   // The houses share Kenney's palette texture, and their glass is one swatch
@@ -293,6 +296,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
       boards.suiteBoard(i + 1, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
       const ix = c.x + n.x * (half + 4.4) + tan.x * 2.2;
       const iz = c.z + n.z * (half + 4.4) + tan.z * 2.2;
@@ -306,6 +310,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const sx = c.x + n.x * (half + FOOTPATH + 1.2);
     const sz = c.z + n.z * (half + FOOTPATH + 1.2);
     boards.infoBoard('START HERE', 'six tools, one task — drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    signSpots.push({ x: sx, z: sz });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
       info: {
@@ -342,6 +347,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         c.x + n.x * off, c.z + n.z * off, Math.atan2(-tan.x, -tan.z)
       );
       gates.push({ x: c.x + n.x * off, z: c.z + n.z * off });
+      signSpots.push({ x: c.x + n.x * off, z: c.z + n.z * off });
     }
     const items = byDistrict(d.id);
     const half = street.width / 2;
@@ -382,6 +388,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
       boards.projectBoard(project, d.accent, bx, bz, faceRoad);
+      signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
       const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
