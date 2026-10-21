@@ -310,20 +310,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       suiteHouse(road.main, project, 0.07 + i * (22 / road.main.length), i % 2 === 0 ? -1 : 1));
     // the Agent Quarter's houses stand on its outer side, clear of the loop's inside
     const outer = quarter.perp(0.5).x < 0 ? 1 : -1;
+    // alternate sides, like Main Street, so one sign doesn't hide the next
     items.filter((p) => QUARTER.has(p.slug)).forEach((project, i) =>
-      suiteHouse(quarter, project, 0.3 + i * 0.4, outer));
+      suiteHouse(quarter, project, 0.3 + i * 0.4, i % 2 === 0 ? outer : -outer));
 
-    // the crossroads: Agent Quarter straight on, Main Street carrying on round the bend
+    // the crossroads: an arch over the way into the Agent Quarter, as at the square, so it
+    // names the street without standing in front of the signs beyond it
     {
-      const t = 0.02;
-      const c = quarter.curve.getPointAt(t);
-      const tan = quarter.curve.getTangentAt(t);
-      const n = quarter.perp(t).multiplyScalar(outer);
-      const off = half + FOOTPATH + 1.2;
-      const gx = c.x + n.x * off, gz = c.z + n.z * off;
-      boards.infoBoard('↑ Agent Quarter', 'where agents live and work', '#2196f3', gx, gz, Math.atan2(-tan.x, -tan.z));
-      signSpots.push({ x: gx, z: gz });
-      gates.push({ x: gx, z: gz });
+      const c = quarter.curve.getPointAt(0.04);
+      const tan = quarter.curve.getTangentAt(0.04);
+      boards.infoBoard('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
     }
 
     // where the drive starts: what this place is, and how to skip it

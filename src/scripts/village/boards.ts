@@ -141,12 +141,10 @@ export function createBoards(
   }
 
   return {
-    suiteBoard(step, project, x, z, facing, logo): void {
+    suiteBoard(_step, project, x, z, facing, logo): void {
       const stepText = project.tagline.split(' — ')[0].replace(/^\d+ · /, '');
       bigBoard(
-        logo
-          ? { logo, title: project.name, sub: `${step} · ${stepText}`, accent: project.accent ?? '#d98a1f', fg: project.accentFg }
-          : { lead: String(step), title: project.name, sub: stepText, accent: project.accent ?? '#d98a1f', fg: project.accentFg },
+        { logo, title: project.name, sub: stepText, accent: project.accent ?? '#d98a1f', fg: project.accentFg },
         x, z, facing
       );
     },
