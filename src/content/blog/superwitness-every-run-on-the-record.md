@@ -21,11 +21,11 @@ sources:
 
 When an agent finishes a piece of work, three different things are true at once. The agent did a series of things. The system it ran on behaved a certain way while it did them. And the result was either good or it wasn't. Usually those three live in three places: a transcript, a tracing tool and somebody's opinion in a chat thread.
 
-[SuperWitness](/products/superwitness) puts them in one record. It is the last step in [the suite](/): you see proof.
+[SuperWitness](https://superwitness.dev) puts them in one record. It is the last step in [the suite](/): you see proof.
 
 ## One document per run
 
-Ask SuperWitness for a run and it builds a single document at the moment you ask. It brings together the [SuperPipeline](/products/superpipeline) run, each [AgentPod](/products/agentpod) attempt (with a fingerprint of the configuration it ran with), the trace spans and the logs and errors.
+Ask SuperWitness for a run and it builds a single document at the moment you ask. It brings together the [SuperPipeline](https://superpipeline.dev) run, each [AgentPod](https://agentpod.dev) attempt (with a fingerprint of the configuration it ran with), the trace spans and the logs and errors.
 
 It is careful about what it doesn't know. If one of those sources is down, the document says so, and the numbers that depended on it read **unknown**, never zero. A missing measurement and a measurement of nothing are different facts.
 
