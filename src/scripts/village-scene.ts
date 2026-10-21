@@ -205,7 +205,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     else props.placeSeasonalTree(oaks[i % oaks.length], fallOaks[i % fallOaks.length], size * 1.15, x, z, rotY);
   };
 
-  const boards = createBoards(THREE, scene, maxAniso, props.addOrientedCollider);
+  // every solid part of every sign, kept so the audit can prove none of them stands inside a house
+  const signSolids: Array<{ x: number; z: number; hx: number; hz: number }> = [];
+  const boards = createBoards(THREE, scene, maxAniso, (x, z, hx, hz, rotY) => {
+    signSolids.push({ x, z, hx, hz });
+    props.addOrientedCollider(x, z, hx, hz, rotY);
+  });
 
   // ---------- the town ----------
   // Projects live on their district's street, so each district is somewhere you
@@ -256,10 +261,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     });
   }
 
+  const houseBoxes: Array<{ x: number; z: number; facing: number; hx: number; hz: number }> = [];
   function putHouse(x: number, z: number, facing: number, size: number, pick?: (typeof houses)[number]): void {
     const proto = pick ?? houses[Math.floor(rand() * houses.length)];
     props.place(proto, size, x, z, facing, 'box');
     houseCenters.push({ x, z });
+    const dims = props.scaledSize(proto, size);
+    houseBoxes.push({ x, z, facing, hx: dims.x / 2, hz: dims.z / 2 });
     if (chimneys.length < quality.settings.chimneys) {
       const fx = Math.sin(facing);
       const fz = Math.cos(facing);
@@ -413,8 +421,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const items = byDistrict(d.id);
     const half = street.width / 2;
 
+    // the V-board's wings reach this far back from the kerb; the house stands clear behind them
+    const wing = d.id === 'mcp-alley' ? 2.0 : 4.5;
+    const signDepth = FOOTPATH + 0.6 + wing * 0.72 + 1.2;
     let side = 1;
     items.forEach((project, i) => {
+      const proto = houses[Math.floor(rand() * houses.length)];
+      const houseSize = 7.2 + rand() * 1.4;
+      const dims = props.scaledSize(proto, houseSize);
+      const setback = signDepth + dims.z / 2;
       const t = 0.22 + ((i + 0.5) / items.length) * 0.64;
       const c = street.curve.getPointAt(t);
       const tan = street.curve.getTangentAt(t);
@@ -427,8 +442,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         const n = street.perp(t).multiplyScalar(s);
         const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
         const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
-        const hx = c.x + n.x * (half + 7.4 + push);
-        const hz = c.z + n.z * (half + 7.4 + push);
+        const hx = c.x + n.x * (half + setback + push);
+        const hz = c.z + n.z * (half + setback + push);
         if (road.onRibbon(bx, bz, 1.2) || road.onRibbon(hx, hz, 2.5)) return null;
         return { n, push };
       };
@@ -438,9 +453,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const { n, push } = spot;
       const faceRoad = Math.atan2(-n.x, -n.z);
 
-      const hx = c.x + n.x * (half + 7.4 + push);
-      const hz = c.z + n.z * (half + 7.4 + push);
-      putHouse(hx, hz, faceRoad, 7.2 + rand() * 1.4);
+      const hx = c.x + n.x * (half + setback + push);
+      const hz = c.z + n.z * (half + setback + push);
+      putHouse(hx, hz, faceRoad, houseSize, proto);
 
       const dx = c.x + n.x * (half + 2.6 + push);
       const dz = c.z + n.z * (half + 2.6 + push);
@@ -450,7 +465,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
       // a V-board: two faces joined at the back, one turned 45° toward each direction of
       // traffic, so the sign reads to cars coming in and going out alike
-      const w = d.id === 'mcp-alley' ? 2.0 : 4.5;
+      const w = wing;
       const apexX = bx - n.x * 0.6;
       const apexZ = bz - n.z * 0.6;
       for (const a of [faceRoad + Math.PI / 4, faceRoad - Math.PI / 4]) {
@@ -1044,6 +1059,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         boardsOnRoad: onRoad(stations.filter((st) => st.reach === undefined), 0),
         gatesOnRoad: onRoad(gates, 0),
         housesOnRoad: onRoad(houseCenters, 1.5),
+        // any solid part of a sign inside a house's footprint
+        signsInHouses: signSolids.filter((sg) => houseBoxes.some((h) => {
+          const dx = sg.x - h.x, dz = sg.z - h.z;
+          const lx = Math.cos(h.facing) * dx - Math.sin(h.facing) * dz;
+          const lz = Math.sin(h.facing) * dx + Math.cos(h.facing) * dz;
+          const r = Math.max(sg.hx, sg.hz);
+          return Math.abs(lx) < h.hx + r && Math.abs(lz) < h.hz + r;
+        })).map((sg) => ({ x: +sg.x.toFixed(1), z: +sg.z.toFixed(1) })),
         lampsOnRoad: onRoad(lamps.poles(), 0),
         totals: { boards: stations.length, gates: gates.length, houses: houseCenters.length, lamps: lamps.poles().length },
       };
