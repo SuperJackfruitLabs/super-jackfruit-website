@@ -282,26 +282,49 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.onerror = () => resolve(); // a missing logo falls back to the step number
       img.src = p.logo;
     })));
-    items.forEach((project, i) => {
-      const t = 0.07 + i * (12 / road.main.length);
-      const c = road.main.curve.getPointAt(t);
-      const tan = road.main.curve.getTangentAt(t);
-      const n = road.main.perp(t).multiplyScalar(i % 2 === 0 ? -1 : 1);
+    // Main Street holds your work; the agents' two (AgentPod, Salaam) live on the Agent Quarter,
+    // the road that carries straight on at the first bend, as in the frame's street footer
+    const QUARTER = new Set(['agentpod', 'salaam']);
+    const quarter = road.get('straight-on');
+    const suiteHouse = (seg: typeof road.main, project: (typeof items)[number], t: number, side: number): void => {
+      const c = seg.curve.getPointAt(t);
+      const tan = seg.curve.getTangentAt(t);
+      const n = seg.perp(t).multiplyScalar(side);
       const faceRoad = Math.atan2(-n.x, -n.z);
-      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[(i * 3 + 1) % houses.length]);
+      const step = items.indexOf(project) + 1;
+      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[((step - 1) * 3 + 1) % houses.length]);
       const dx = c.x + n.x * (half + 2.6);
       const dz = c.z + n.z * (half + 2.6);
       props.place(driveway, 3.0, dx, dz, faceRoad);
       // the sign stands side-on to the road so it reads as you approach
       const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
-      boards.suiteBoard(i + 1, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      boards.suiteBoard(step, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
       const ix = c.x + n.x * (half + 4.4) + tan.x * 2.2;
       const iz = c.z + n.z * (half + 4.4) + tan.z * 2.2;
       idleSpots.push({ x: ix, z: iz, facing: faceRoad });
-    });
+    };
+    items.filter((p) => !QUARTER.has(p.slug)).forEach((project, i) =>
+      suiteHouse(road.main, project, 0.07 + i * (22 / road.main.length), i % 2 === 0 ? -1 : 1));
+    // the Agent Quarter's houses stand on its outer side, clear of the loop's inside
+    const outer = quarter.perp(0.5).x < 0 ? 1 : -1;
+    items.filter((p) => QUARTER.has(p.slug)).forEach((project, i) =>
+      suiteHouse(quarter, project, 0.3 + i * 0.4, outer));
+
+    // the crossroads: Agent Quarter straight on, Main Street carrying on round the bend
+    {
+      const t = 0.02;
+      const c = quarter.curve.getPointAt(t);
+      const tan = quarter.curve.getTangentAt(t);
+      const n = quarter.perp(t).multiplyScalar(outer);
+      const off = half + FOOTPATH + 1.2;
+      const gx = c.x + n.x * off, gz = c.z + n.z * off;
+      boards.infoBoard('↑ Agent Quarter', 'where agents live and work', '#2196f3', gx, gz, Math.atan2(-tan.x, -tan.z));
+      signSpots.push({ x: gx, z: gz });
+      gates.push({ x: gx, z: gz });
+    }
 
     // where the drive starts: what this place is, and how to skip it
     const c = road.main.curve.getPointAt(startT + 0.02);
@@ -309,7 +332,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const n = road.main.perp(startT + 0.02).multiplyScalar(1);
     const sx = c.x + n.x * (half + FOOTPATH + 1.2);
     const sz = c.z + n.z * (half + FOOTPATH + 1.2);
-    boards.infoBoard('START HERE', 'six tools, one task — drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    boards.infoBoard('START HERE', 'Main Street — your work, drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
     signSpots.push({ x: sx, z: sz });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
@@ -317,7 +340,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         title: 'Super Jackfruit Labs',
         tagline: 'six tools for working with agents',
         lines: [
-          'Drive on: the next six houses are the suite, in the order a task moves through it — you talk, the work is planned, an agent does it, your fleet runs it, it remembers, you see proof.',
+          'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
           'Further down the road are the experiments that taught us what to build.',
         ],
         links: [
