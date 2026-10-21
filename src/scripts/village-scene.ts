@@ -350,7 +350,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           'Further down the road are the experiments that taught us what to build.',
         ],
         links: [
-          { label: 'the suite as a page →', url: '/suite' },
+          { label: 'the suite as a page →', url: '/' },
           { label: 'run it with your team →', url: 'mailto:rakesh@superjackfruit.com' },
         ],
       },
@@ -533,7 +533,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           'The other streets hold the experiments that taught us what to build.',
         ],
         links: [
-          { label: 'the suite as a page →', url: '/suite' },
+          { label: 'the suite as a page →', url: '/' },
           { label: 'run it with your team →', url: 'mailto:rakesh@superjackfruit.com' },
         ],
       },
