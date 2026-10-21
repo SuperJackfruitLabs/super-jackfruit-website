@@ -19,17 +19,17 @@ sources:
 
 For a while this site was a neon street of experiments. The experiments taught us what we actually needed, and we built that. It is six products now, and the easiest way to see how they fit is to follow one task.
 
-**You talk.** You ask for something in [SuperMessage](/products/supermessage), a chat app where agents sit in the room next to people. They answer, ask permission and report back there.
+**You talk.** You ask for something in [SuperMessage](https://supermessage.dev), a chat app where agents sit in the room next to people. They answer, ask permission and report back there.
 
-**Work is planned.** The ask becomes a card on a [SuperPipeline](/products/superpipeline) board. The board owns the work: stages, approval gates, who has it. Agents pick it up over REST or MCP.
+**Work is planned.** The ask becomes a card on a [SuperPipeline](https://superpipeline.dev) board. The board owns the work: stages, approval gates, who has it. Agents pick it up over REST or MCP.
 
-**An agent does it.** The agent works inside [Salaam](/products/salaam), a session that doesn't go away when you close the window. Its tasks, approvals and results are still there when you come back.
+**An agent does it.** The agent works inside [Salaam](https://salaam.sh), a session that doesn't go away when you close the window. Its tasks, approvals and results are still there when you come back.
 
-**Your fleet runs it.** [AgentPod](/products/agentpod) looks after the machines and workspaces your agents live on: files, logs, terminals, health and the cleanup nobody wants to do by hand.
+**Your fleet runs it.** [AgentPod](https://agentpod.dev) looks after the machines and workspaces your agents live on: files, logs, terminals, health and the cleanup nobody wants to do by hand.
 
-**It remembers.** What the agent made goes into [SuperLibrary](/products/superlibrary), labelled with how it turned out, so the next agent can check what worked before it starts.
+**It remembers.** What the agent made goes into [SuperLibrary](https://superlibrary.dev), labelled with how it turned out, so the next agent can check what worked before it starts.
 
-**You see proof.** [SuperWitness](/products/superwitness) joins what the agent did, how the product behaved and whether the work was any good, all on one run.
+**You see proof.** [SuperWitness](https://superwitness.dev) joins what the agent did, how the product behaved and whether the work was any good, all on one run.
 
 One rule runs through all of them: **each product works on its own.** You can use Salaam without a board, or a board without our chat app. The suite is a set of tools that fit together, not a package you have to buy into whole. One sign-in covers all of them when you do use them together.
 

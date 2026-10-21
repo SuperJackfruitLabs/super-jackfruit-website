@@ -1,0 +1,15 @@
+# The product pages moved to each product's own site.
+/products/supermessage/* https://supermessage.dev/ 301
+/products/supermessage https://supermessage.dev/ 301
+/products/superpipeline/* https://superpipeline.dev/ 301
+/products/superpipeline https://superpipeline.dev/ 301
+/products/salaam/* https://salaam.sh/ 301
+/products/salaam https://salaam.sh/ 301
+/products/agentpod/* https://agentpod.dev/ 301
+/products/agentpod https://agentpod.dev/ 301
+/products/superlibrary/* https://superlibrary.dev/ 301
+/products/superlibrary https://superlibrary.dev/ 301
+/products/superwitness/* https://superwitness.dev/ 301
+/products/superwitness https://superwitness.dev/ 301
+/products/* / 301
+/products / 301

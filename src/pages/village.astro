@@ -795,6 +795,7 @@ import '@superjackfruit/vibekit/fonts.css';
       status: string;
       github: string;
       demo?: string;
+      district?: string;
       next?: string;
       logo?: string;
     };
@@ -969,11 +970,10 @@ import '@superjackfruit/vibekit/fonts.css';
     statusEl.textContent = STATUS_COPY[project.status] ?? project.status;
     descEl.textContent = project.next ? `${project.description} Next stop: ${project.next}.` : project.description;
     tagsEl.textContent = project.tags.join(' · ');
-    // a suite product's main link is its own website (or its page here when it
-    // has none); anything else is an experiment, whose link is its source
+    // a suite product's main link is its own website and its second is its docs;
+    // anything else is an experiment, whose link is its source
     const internal = project.github.startsWith('/');
-    // a suite product has its page here as its second link, whatever its status
-    const suite = project.demo?.startsWith('/products/') ?? false;
+    const suite = project.district === 'agent-works';
     githubEl.textContent = internal
       ? 'open the product page →'
       : suite
@@ -984,7 +984,7 @@ import '@superjackfruit/vibekit/fonts.css';
     else githubEl.target = '_blank';
     if (project.demo) {
       const page = project.demo.startsWith('/');
-      demoEl.textContent = page ? 'about it here →' : 'live demo →';
+      demoEl.textContent = page ? 'about it here →' : suite ? 'read the docs →' : 'live demo →';
       demoEl.href = project.demo;
       if (page) demoEl.removeAttribute('target');
       else demoEl.target = '_blank';

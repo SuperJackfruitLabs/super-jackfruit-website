@@ -21,7 +21,7 @@ sources:
 
 An agent is easy to start and hard to look after. It runs on a machine somewhere, in a workspace full of files it changed, with logs, a configuration, a version of its harness and a habit of stopping when you aren't looking. Once there are a few of them, on a few machines, the question stops being "can the agent do the task?" and becomes "where is everything, and is it all right?"
 
-[AgentPod](/products/agentpod) is the lab's answer to that second question. It is a console for the machines and workspaces your agents live on, step four in [the suite](/): your fleet runs it.
+[AgentPod](https://agentpod.dev) is the lab's answer to that second question. It is a console for the machines and workspaces your agents live on, step four in [the suite](/): your fleet runs it.
 
 ## Attach first
 

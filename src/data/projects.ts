@@ -48,7 +48,7 @@ export const archiveByDistrict = (id: DistrictId): Project[] =>
 
 /**
  * What the village shows: the suite on the first street, in flow order, and the older experiments
- * on the other two. A suite house links to its product page rather than to source.
+ * on the other two. A suite house links to its product's website rather than to source.
  */
 export const projects: Project[] = [
   ...suite.map((p, i): Project => ({
@@ -63,9 +63,9 @@ export const projects: Project[] = [
     accentFg: p.fg,
     logo: `/brand/${p.slug}.svg`,
     next: suite[i + 1]?.name,
-    // the card's main link: the product's own website, or its page here if it has none
-    github: p.site ?? `/products/${p.slug}`,
-    demo: p.site ? `/products/${p.slug}` : undefined,
+    // the card's main link is the product's own website; the second is its docs
+    github: p.site,
+    demo: p.links.find((l) => l.label === 'Docs')?.href,
     district: 'agent-works',
     order: i + 1,
   })),
