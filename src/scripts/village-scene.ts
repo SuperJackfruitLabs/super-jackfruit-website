@@ -23,6 +23,7 @@ import { createBoards } from './village/boards';
 import { createLamps } from './village/lamps';
 import { createCar } from './village/car';
 import { CARS, loadChoice, saveChoice, type CarChoice } from './village/cars';
+import { createTour, type TourSpot } from './village/tour';
 import { createAudio } from './village/audio';
 import { createInput, isTyping } from './village/input';
 import { createFx } from './village/fx';
@@ -273,6 +274,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const startT = 0.012;
   // keyboard jumps (1–6, H, R): a spot on the road a little before each place, facing it
   const jumps = new Map<string, { x: number; z: number; h: number }>();
+  // where Captain Jack's tour says each line: the place it describes, by line id
+  const tourSpots = new Map<string, TourSpot>();
   const before = (seg: typeof road.main, t: number, metres: number) => {
     const at = Math.max(0, t - metres / seg.length);
     const p = seg.curve.getPointAt(at);
@@ -301,6 +304,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const n = seg.perp(t).multiplyScalar(side);
       const faceRoad = Math.atan2(-n.x, -n.z);
       jumps.set(project.slug, before(seg, t, 14));
+      tourSpots.set(project.slug, { x: c.x, z: c.z });
       const step = items.indexOf(project) + 1;
       putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[((step - 1) * 3 + 1) % houses.length]);
       const dx = c.x + n.x * (half + 2.6);
@@ -329,6 +333,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     {
       const c = quarter.curve.getPointAt(0.04);
       const tan = quarter.curve.getTangentAt(0.04);
+      tourSpots.set('quarter-gate', { x: c.x, z: c.z });
       boards.infoBoard('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
     }
 
@@ -369,6 +374,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const c = street.curve.getPointAt(at);
       const tan = street.curve.getTangentAt(at);
       boards.infoBoard(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+      tourSpots.set(d.id === 'mcp-alley' ? 'mcp-gate' : 'odd-gate', { x: c.x, z: c.z });
     }
     // a turning's arch is edge-on until you reach it, so a small, low pointer on the main road
     // says it's coming; low enough that the signs beyond it stay in view
@@ -429,6 +435,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       boards.projectBoard(project, d.accent, bx, bz, faceRoad);
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
+      tourSpots.set(project.slug, { x: c.x, z: c.z });
 
       const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
       const iz = c.z + n.z * (half + 4.4 + push) - tan.z * 2.2;
@@ -515,6 +522,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const hqx = plaza.c.x;
     jumps.set('hq', before(road.main, 1, 16));
     const hqz = plaza.c.z;
+    tourSpots.set('hq', { x: hqx, z: hqz });
     // the lab's own sign: its mark, and wide enough that the name isn't squeezed
     const mark = await new Promise<HTMLImageElement | undefined>((resolve) => {
       const img = new Image();
@@ -543,6 +551,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const kx = plaza.x - plaza.n.z * 9.5;
     const kz = plaza.z + plaza.n.x * 9.5;
     const faceK = Math.atan2(plaza.x - kx, plaza.z - kz);
+    tourSpots.set('say-hi', { x: kx, z: kz });
     boards.infoBoard('say hi', 'the lab is always open', '#3f9e3f', kx, kz, faceK);
     stations.push({
       kind: 'info', accent: '#3f9e3f', x: kx, z: kz,
@@ -703,6 +712,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: carChoice }));
   const fx = createFx(THREE, scene);
 
+  // ---------- Captain Jack's tour: only from the button, and any key hands the wheel back ----------
+  const tour = createTour(road, tourSpots, { x: plaza.x, z: plaza.z, r: PLAZA_R });
+  window.addEventListener('village:tour', ((e: CustomEvent<'start' | 'stop' | 'skip'>) => {
+    if (e.detail === 'start') {
+      // he always sets off from the start of Main Street
+      car.teleport(startJump.x, startJump.z, startJump.h);
+      tour.start();
+    } else if (e.detail === 'skip') tour.skip();
+    else tour.stop();
+  }) as EventListener);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && tour.active) tour.stop();
+  });
+
   // ---------- page wiring ----------
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'm') audio.toggleMute();
@@ -809,7 +832,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     quality.monitor(dt, applyQuality);
 
-    const state = input.read();
+    // on the tour Captain Jack drives, through the same controls a visitor uses
+    const own = input.read();
+    const state = tour.drive(dt, car.root.position, car.heading, car.speed, own) ?? own;
     car.update(dt, t, state, carCtx, audio);
 
     const nitro = state.nitro && -state.iz > 0.05;
