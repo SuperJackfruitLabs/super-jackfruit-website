@@ -8,6 +8,8 @@ import { frame } from '../data/frame';
  * header, street footer) sits around the scene, so the page scrolls past it to the footer.
  */
 interface Props {
+  /** false on pages with their own welcome (the village), so Captain Jack's hello doesn't cover it. */
+  greet?: boolean;
   title: string;
   /**
    * Page-specific meta description. Omitted keeps the lab's own, which is right for the village
@@ -19,7 +21,7 @@ interface Props {
 const SITE_DESCRIPTION =
   'Super Jackfruit Labs builds six tools for working with agents. Drive through the village to meet them, from asking for work to proving it was done.';
 
-const { title, description = SITE_DESCRIPTION } = Astro.props;
+const { title, description = SITE_DESCRIPTION, greet = true } = Astro.props;
 ---
 
 <!doctype html>
@@ -71,7 +73,7 @@ const { title, description = SITE_DESCRIPTION } = Astro.props;
     </script>
   </head>
   <body>
-    <Frame product="lab" {...frame}>
+    <Frame product="lab" {...frame} greet={greet}>
       <slot />
     </Frame>
   </body>
