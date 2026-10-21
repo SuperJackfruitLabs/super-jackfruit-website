@@ -1,0 +1,35 @@
+# Super Jackfruit Labs
+
+> Super Jackfruit Labs builds six tools for working with agents, which together carry a task from ask to proof.
+
+Talk, plan, do, run, remember, prove: each tool owns one step. Each one has its own website, docs and llms.txt.
+
+## Products
+
+- [SuperMessage](https://supermessage.dev): Chat where your agents are in the room. ([llms.txt](https://supermessage.dev/llms.txt))
+- [SuperPipeline](https://superpipeline.dev): Agents do the work. A person approves it. ([llms.txt](https://superpipeline.dev/llms.txt))
+- [SuperLibrary](https://superlibrary.dev): Find what agents made, and whether it worked. ([llms.txt](https://superlibrary.dev/llms.txt))
+- [SuperWitness](https://superwitness.dev): Every run, on the record. ([llms.txt](https://superwitness.dev/llms.txt))
+- [Salaam](https://salaam.sh): Agent coding sessions that outlast your terminal. ([llms.txt](https://salaam.sh/llms.txt))
+- [AgentPod](https://agentpod.dev): The console for the machines your agents live on. ([llms.txt](https://agentpod.dev/llms.txt))
+
+## Docs
+
+- [SuperMessage docs](https://docs.supermessage.dev): documentation for SuperMessage
+- [SuperPipeline docs](https://docs.superpipeline.dev): documentation for SuperPipeline
+- [SuperLibrary docs](https://docs.superlibrary.dev): documentation for SuperLibrary
+- [SuperWitness docs](https://docs.superwitness.dev): documentation for SuperWitness
+- [Salaam docs](https://docs.salaam.sh): documentation for Salaam
+- [AgentPod docs](https://docs.agentpod.dev): documentation for AgentPod
+
+## Links
+
+- [Home](https://superjackfruit.com/)
+- [The village](https://superjackfruit.com/village): drive through the village to meet the six tools
+- [Lab notes](https://superjackfruit.com/blog)
+- [Source](https://github.com/SuperJackfruitLabs): the Super Jackfruit Labs GitHub organization
+
+## Optional
+
+- [Archive](https://superjackfruit.com/archive)
+- [RSS feed](https://superjackfruit.com/rss.xml)

@@ -1,4 +1,5 @@
 ---
+import Seo from '../components/Seo.astro';
 import SuiteHead from '@superjackfruit/frontdoor/components/SuiteHead.astro';
 import Frame from '@superjackfruit/frontdoor/components/Frame.astro';
 import { frame } from '../data/frame';
@@ -32,6 +33,7 @@ const { title, description = SITE_DESCRIPTION } = Astro.props;
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    <Seo {title} {description} noindex />
     <link rel="alternate" type="application/rss+xml" title="Super Jackfruit Labs" href="/rss.xml" />
     <slot name="head" />
     <SuiteHead product="lab" />

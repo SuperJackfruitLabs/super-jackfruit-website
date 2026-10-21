@@ -7,9 +7,24 @@ const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 
 const QUARTER = new Set(['salaam', 'agentpod']);
 const cards = ORDER.map((slug) => suite.find((p) => p.slug === slug)!);
 const docs = (p: (typeof suite)[number]) => p.links.find((l) => l.label === 'Docs')!.href;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Super Jackfruit Labs',
+      url: 'https://superjackfruit.com',
+      logo: 'https://superjackfruit.com/brand/sjl-facet.svg',
+      sameAs: ['https://github.com/SuperJackfruitLabs'],
+    },
+    { '@type': 'WebSite', name: 'Super Jackfruit Labs', url: 'https://superjackfruit.com' },
+  ],
+};
 ---
 
 <Site title="Super Jackfruit Labs — agent-native tools">
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <section class="hero">
     <div class="hero__text">
       <h1>Six tools for working with agents.</h1>

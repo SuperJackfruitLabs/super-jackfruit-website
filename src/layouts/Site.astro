@@ -1,4 +1,5 @@
 ---
+import Seo from '../components/Seo.astro';
 import '@superjackfruit/vibekit/fonts.css';
 import '@superjackfruit/vibekit/vibekit.css';
 import SuiteHead from '@superjackfruit/frontdoor/components/SuiteHead.astro';
@@ -23,6 +24,8 @@ const { title, description = 'Super Jackfruit Labs builds six tools for working 
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="alternate" type="application/rss+xml" title="Super Jackfruit Labs" href="/rss.xml" />
     <title>{title}</title>
+    <Seo {title} {description} />
+    <slot name="head" />
     <SuiteHead product="lab" />
   </head>
   <body>
