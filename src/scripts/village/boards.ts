@@ -16,7 +16,7 @@ export interface BoardKit {
   projectBoard(project: Project, accent: string, x: number, z: number, facing: number): void;
   suiteBoard(step: number, project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   districtBoard(d: District, gx: number, gz: number, facing: number): void;
-  infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number, big?: { logo?: HTMLImageElement; width: number; scale: number; gate?: boolean }): void;
+  infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number, big?: { logo?: HTMLImageElement; width: number; scale: number; gate?: boolean; backTitle?: string }): void;
   applyNight(nightFactor: number): void;
 }
 
@@ -94,13 +94,14 @@ export function createBoards(
     o: { lead?: string; logo?: HTMLImageElement; title: string; sub: string; accent: string; fg?: string },
     x: number, z: number, facing: number,
     /** panel width in metres (the canvas widens with it, so the type keeps its shape) and overall scale */
-    size: { width: number; scale: number; gate?: boolean } = { width: 4.2, scale: 1 }
+    size: { width: number; scale: number; gate?: boolean; backTitle?: string } = { width: 4.2, scale: 1 }
   ): void {
     const { lead, logo, title, sub, accent, fg } = o;
     // a gate with a mark is taller, so the mark can sit above the name
     const tall = size.gate && logo ? 486 : 320;
     const panelH = (1.31 * tall) / 320;
-    const mat = themedMaterial(
+    // painted once per face that needs its own words (a pointer's arrow flips on the back)
+    const paint = (title: string) => themedMaterial(
       (night) => (ctx, w, h) => {
         ctx.fillStyle = night ? '#131828' : accent;
         ctx.fillRect(0, 0, w, h);
@@ -119,7 +120,7 @@ export function createBoards(
           ctx.textAlign = 'center';
           let y = 0;
           if (logo) {
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = night ? '#252c42' : '#ffffff';
             ctx.beginPath();
             ctx.roundRect(w / 2 - 78, 38, 156, 156, 30);
             ctx.fill();
@@ -138,8 +139,9 @@ export function createBoards(
         ctx.textAlign = 'left';
         let left = 56;
         if (logo) {
-          // the mark sits on its own white tile, so a yellow logo still reads on an olive board
-          ctx.fillStyle = '#ffffff';
+          // the mark sits on its own white tile, so a yellow logo still reads on an olive board;
+          // after dark a white tile would glare, so it's a lifted shade of the ink instead
+          ctx.fillStyle = night ? '#252c42' : '#ffffff';
           ctx.beginPath();
           ctx.roundRect(36, 40, 240, 240, 36);
           ctx.fill();
@@ -161,6 +163,7 @@ export function createBoards(
       Math.round((1024 * size.width) / 4.2),
       tall
     );
+    const mat = paint(title);
 
     const group = new THREE.Group();
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(size.width, panelH), mat);
@@ -169,6 +172,7 @@ export function createBoards(
     panel.position.set(0, 2.9 + lift + (panelH - 1.31) / 2, 0.06);
     panel.castShadow = true;
     const panelBack = panel.clone();
+    if (size.backTitle) panelBack.material = paint(size.backTitle);
     panelBack.rotation.y = Math.PI;
     panelBack.position.z = -0.06;
     posts(group, [-(size.width / 2 - 0.2), size.width / 2 - 0.2], 3.6 + lift + (panelH - 1.31), 0.13, 0);

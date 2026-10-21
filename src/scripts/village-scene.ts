@@ -42,7 +42,7 @@ interface Station {
   accent: string;
   x: number;
   z: number;
-  info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
+  info?: { title: string; tagline: string; logo?: string; lines: string[]; links: Array<{ label: string; url: string }> };
 }
 
 export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boolean> {
@@ -334,6 +334,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
       info: {
         title: 'Super Jackfruit Labs',
+        logo: '/brand/sjl-facet.jpg',
         tagline: 'six tools for working with agents',
         lines: [
           'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
@@ -369,7 +370,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const n = road.main.perp(at).multiplyScalar(spec.side);
       const off = road.main.width / 2 + FOOTPATH + 0.8;
       const px = c.x + n.x * off, pz = c.z + n.z * off;
-      boards.infoBoard(spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent, px, pz, Math.atan2(-tan.x, -tan.z), { width: 4.2, scale: 0.55 });
+      boards.infoBoard(spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent, px, pz, Math.atan2(-tan.x, -tan.z), {
+        width: 4.2,
+        scale: 0.55,
+        // seen from the other carriageway the turning is on the other hand
+        backTitle: spec.side === 1 ? `← ${d.name}` : `${d.name} →`,
+      });
       signSpots.push({ x: px, z: pz });
     }
     const items = byDistrict(d.id);
@@ -510,6 +516,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
         title: 'Super Jackfruit Labs',
+        logo: '/brand/sjl-facet.jpg',
         tagline: 'agent-native tools, built in the open',
         lines: [
           'The first street is the suite: six tools that carry a task from ask to proof.',
@@ -754,6 +761,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   const timer = new THREE.Timer();
   let framesTimed = 0;
+  const sceneEl = canvas.closest<HTMLElement>('.scene');
   renderer.setAnimationLoop((now) => {
     const frameStart = performance.now();
     timer.update(now);
@@ -778,6 +786,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
+    // the page's own chrome (the station card) goes dark with the village
+    const night = sceneEl?.dataset.night === 'true' ? nightFactor > 0.45 : nightFactor > 0.55;
+    if (sceneEl && String(night) !== sceneEl.dataset.night) sceneEl.dataset.night = String(night);
     for (const m of windowMats) m.emissiveIntensity = nightFactor * 1.6;
     car.applyNight(nightFactor);
 
