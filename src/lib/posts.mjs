@@ -22,7 +22,12 @@ export function publishedPosts(entries) {
       .filter((entry) => !entry.data.draft)
       // Safe only because `filter` already returned a new array: `getCollection` hands back one the
       // caller may use again, and `sort` on the original would reorder it under them.
-      .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+      // Same-day posts tie on date; `getCollection`'s order is unspecified (it changed between
+      // Astro 4 and 5), so break ties by slug to keep the page and the feed deterministic.
+      .sort(
+        (a, b) =>
+          b.data.date.valueOf() - a.data.date.valueOf() || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0),
+      )
   );
 }
 
