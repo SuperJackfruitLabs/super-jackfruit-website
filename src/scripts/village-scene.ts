@@ -606,6 +606,21 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   mark('scatter');
   // everything scattered so far becomes a handful of instanced meshes
+  const bounds = { minX: -130, maxX: 130, minZ: Z_END + 4, maxZ: Z_START - 2 };
+  // a hedge just past the edge of the drivable area, so the car stops against something
+  {
+    const out = 1.8, step = 1.9;
+    const hedge = (x: number, z: number) =>
+      props.place(bushes[1], 2.2 + rand() * 0.5, x, z, rand() * 6.28, false, 0.015);
+    for (let x = bounds.minX - out; x <= bounds.maxX + out; x += step) {
+      hedge(x, bounds.minZ - out);
+      hedge(x, bounds.maxZ + out);
+    }
+    for (let z = bounds.minZ - out + step; z < bounds.maxZ + out; z += step) {
+      hedge(bounds.minX - out, z);
+      hedge(bounds.maxX + out, z);
+    }
+  }
   props.commit();
   mark('commit-instances');
   // the instanced copies of the house materials, whose glow follows the night
@@ -715,7 +730,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const carCtx = {
     resolve: props.resolve,
     offRoad,
-    bounds: { minX: -130, maxX: 130, minZ: Z_END + 4, maxZ: Z_START - 2 },
+    bounds,
   };
 
   // ---------- loop ----------
