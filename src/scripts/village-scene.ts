@@ -341,15 +341,6 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     };
     items.filter((p) => !QUARTER.has(p.slug)).forEach((project, i) =>
       suiteHouse(road.main, project, 0.07 + i * (22 / road.main.length), i % 2 === 0 ? -1 : 1));
-    // bunting in the suite's colours strung across Main Street, between the houses
-    const colours = items.map((p) => p.accent ?? '#d98a1f');
-    for (let k = 0; k < 4; k++) {
-      const t = 0.07 + (k + 0.5) * (22 / road.main.length);
-      const c = road.main.curve.getPointAt(t);
-      const n = road.main.perp(t);
-      const w = half + FOOTPATH + 0.4;
-      boards.bunting(c.x + n.x * w, c.z + n.z * w, c.x - n.x * w, c.z - n.z * w, colours);
-    }
     // the Agent Quarter's houses stand on its outer side, clear of the loop's inside
     const outer = quarter.perp(0.5).x < 0 ? 1 : -1;
     // alternate sides, like Main Street, so one sign doesn't hide the next
@@ -361,7 +352,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     {
       const c = quarter.curve.getPointAt(0.04);
       const tan = quarter.curve.getTangentAt(0.04);
-      boards.infoBoard('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+      boards.streetArch('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), 11.2);
     }
 
     // where the drive starts: what this place is, and how to skip it
@@ -406,7 +397,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const at = 4 / street.length;
       const c = street.curve.getPointAt(at);
       const tan = street.curve.getTangentAt(at);
-      boards.infoBoard(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+      boards.streetArch(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), 11.2);
     }
     // a turning's arch is edge-on until you reach it, so a small, low pointer on the main road
     // says it's coming; low enough that the signs beyond it stay in view
@@ -639,6 +630,27 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         if (rand() < quality.settings.flowerChance && !road.onRibbon(fx, fz, 0.15)) {
           props.place(flowers[Math.floor(rand() * flowers.length)], 0.55 + rand() * 0.3, fx, fz, rand() * 6.28, false, 0.05);
         }
+      }
+    }
+  }
+
+  // ---------- bunting: strings of the suite's colours across every street, well spaced ----------
+  {
+    const colours = byDistrict('agent-works').map((p) => p.accent ?? '#d98a1f');
+    const gap = 46;
+    for (const seg of road.all) {
+      const half = seg.width / 2;
+      for (let d = 30; d < seg.length - 12; d += gap) {
+        const t = d / seg.length;
+        const c = seg.curve.getPointAt(t);
+        const n = seg.perp(t);
+        const w = half + FOOTPATH + 0.4;
+        const a = { x: c.x + n.x * w, z: c.z + n.z * w };
+        const b = { x: c.x - n.x * w, z: c.z - n.z * w };
+        // keep the poles off junctions, signs and houses
+        if (road.onRibbon(a.x, a.z, 0.2) || road.onRibbon(b.x, b.z, 0.2)) continue;
+        if (!clearOfHouses(a.x, a.z, 4.5) || !clearOfHouses(b.x, b.z, 4.5)) continue;
+        boards.bunting(a.x, a.z, b.x, b.z, colours);
       }
     }
   }

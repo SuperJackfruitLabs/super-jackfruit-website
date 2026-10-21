@@ -33,6 +33,8 @@ export interface BoardKit {
   fingerpost(arrows: Array<{ text: string; accent: string; dir: -1 | 0 | 1 }>, x: number, z: number, facing: number): void;
   /** a chalk A-board on the pavement */
   chalkboard(title: string, lines: string[], x: number, z: number, facing: number): void;
+  /** over a street's mouth: stone pillars, a beam, and a name board hung from it */
+  streetArch(title: string, sub: string, accent: string, x: number, z: number, facing: number, span: number): void;
   /** a string of flags in the suite's colours, across the road between two poles */
   bunting(ax: number, az: number, bx: number, bz: number, colours: string[]): void;
   applyNight(nightFactor: number): void;
@@ -597,19 +599,76 @@ export function createBoards(
       lines.forEach((l, i) => ctx.fillText(l, w / 2, 260 + i * 66, w - 70));
     }, 600, 760);
     const g = new THREE.Group();
+    // two leaves hinged together at the top, feet apart: an A seen from the side
     for (const side of [-1, 1]) {
+      const hinge = new THREE.Group();
+      hinge.position.y = 1.62;
+      hinge.rotation.x = side * 0.24;
       const leaf = new THREE.Group();
+      leaf.position.set(0, -0.8, side * 0.04);
       leaf.add(box(1.25, 1.6, 0.06, timber, 0, 0, 0));
       const face = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 1.4), mat);
-      face.position.z = 0.035;
+      // each leaf's chalk faces outward
+      face.position.z = side * 0.035;
+      if (side === -1) face.rotation.y = Math.PI;
       leaf.add(face);
-      leaf.position.set(0, 0.78, side * 0.32);
-      leaf.rotation.y = side === 1 ? 0 : Math.PI;
-      leaf.rotation.x = -0.22;
-      g.add(leaf);
+      hinge.add(leaf);
+      g.add(hinge);
     }
     place(g, x, z, facing, 1.4);
     addCollider(x, z, 0.9, 0.6, facing);
+  }
+
+  // --- street arch: stone pillars, a timber beam, and a name board hung beneath it ---
+  function streetArch(title: string, sub: string, accent: string, x: number, z: number, facing: number, span: number): void {
+    const mat = themedMaterial((night) => (ctx, w, h) => {
+      ctx.fillStyle = night ? '#1a140d' : '#c79a62';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = night ? 'rgba(255,200,140,0.08)' : 'rgba(90,55,25,0.3)';
+      ctx.lineWidth = 3;
+      for (let yy = 16; yy < h; yy += 24) {
+        ctx.beginPath();
+        ctx.moveTo(0, yy);
+        for (let xx = 0; xx <= w; xx += 90) ctx.lineTo(xx, yy + Math.sin(xx * 0.01 + yy) * 4);
+        ctx.stroke();
+      }
+      ctx.fillStyle = accent;
+      ctx.fillRect(0, 0, w, 18);
+      ctx.fillRect(0, h - 18, w, 18);
+      if (night) neon(ctx, w, h, accent);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = night ? '#ffffff' : '#2e1d0c';
+      ctx.font = font(800, 120);
+      ctx.fillText(title, w / 2, 170, w - 80);
+      ctx.globalAlpha = 0.85;
+      ctx.font = font(600, 50, '"Figtree Variable", sans-serif');
+      ctx.fillText(sub, w / 2, 245, w - 100);
+      ctx.globalAlpha = 1;
+    }, 1200, 300);
+    const g = new THREE.Group();
+    const half = span / 2;
+    for (const px of [-half, half]) {
+      g.add(box(0.9, 0.5, 0.9, stoneDark, px, 0.25, 0));
+      g.add(box(0.7, 6.4, 0.7, stone, px, 3.45, 0));
+      g.add(box(0.9, 0.3, 0.9, stoneDark, px, 6.8, 0));
+      // a lantern on each pillar, lit with the boards
+      const lantern = new THREE.Mesh(capGeo, lampMat);
+      lantern.scale.setScalar(0.22);
+      lantern.position.set(px, 7.15, 0);
+      g.add(lantern);
+    }
+    g.add(box(span + 1.2, 0.36, 0.42, timber, 0, 6.55, 0));
+    const bw = Math.min(span * 0.62, 7);
+    const bh = (bw * 300) / 1200;
+    for (const cx of [-bw / 2 + 0.3, bw / 2 - 0.3]) g.add(box(0.04, 0.5, 0.04, iron, cx, 6.13, 0));
+    const board = new THREE.Group();
+    board.add(box(bw, bh, 0.1, timber, 0, 0, 0));
+    board.add(faces(mat, bw, bh, 0.1));
+    board.position.y = 5.88 - bh / 2;
+    g.add(board);
+    swingers.push({ o: board, phase: Math.random() * 6.28, amp: 0.025 });
+    place(g, x, z, facing);
+    for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * half * k, z - Math.sin(facing) * half * k, 0.5, 0.5, facing);
   }
 
   // --- bunting ---
@@ -654,6 +713,7 @@ export function createBoards(
   }
 
   return {
+    streetArch,
     hangingSign,
     mural,
     flag,
