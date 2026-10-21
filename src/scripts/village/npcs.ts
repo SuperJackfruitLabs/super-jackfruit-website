@@ -19,6 +19,11 @@ const WALK_SPEED = 1.15;
 const YIELD_RADIUS = 5.5;
 /** past this, a villager keeps its place but stops animating */
 const ANIMATE_RADIUS = 70;
+/** closer than this and a villager hops out of the car's way */
+const DODGE_RADIUS = 2.6;
+/** how far they hop, and how long the hop lasts */
+const DODGE_STEP = 2;
+const HOP_TIME = 0.4;
 
 export { NPC_MODELS } from '../../data/village-models';
 import { NPC_MODELS } from '../../data/village-models';
@@ -55,6 +60,10 @@ interface Villager {
   speed: number;
   yielding: boolean;
   isWalker: boolean;
+  /** where an idler stands; walkers take theirs from the road */
+  home: { x: number; y: number; z: number };
+  /** the sidestep from the car, eased in and back out, and the hop that goes with it */
+  dodge: { x: number; z: number; tx: number; tz: number; hop: number };
 }
 
 export async function createNpcs(
@@ -140,6 +149,8 @@ export async function createNpcs(
       speed: WALK_SPEED * (0.82 + rand() * 0.36),
       yielding: false,
       isWalker,
+      home: { x: 0, y: 0, z: 0 },
+      dodge: { x: 0, z: 0, tx: 0, tz: 0, hop: 0 },
     };
   }
 
@@ -159,6 +170,7 @@ export async function createNpcs(
     const v = spawn(false, i + counts.walkers);
     const spot = spots.splice(Math.floor(rand() * spots.length), 1)[0];
     v.root.position.set(spot.x, 0, spot.z);
+    v.home = { x: spot.x, y: 0, z: spot.z };
     v.root.rotation.y = spot.facing;
     villagers.push(v);
   }
@@ -186,9 +198,14 @@ export async function createNpcs(
             v.yielding = near;
             if (v.walk) {
               // half a second is long enough to read as stopping, short enough
-              // not to look like a stutter at speed
-              v.walk.crossFadeTo(v.idle, 0.35, false);
-              if (!near) v.idle.crossFadeTo(v.walk, 0.35, false);
+              // not to look like a stutter at speed. Fade one way only, and wake the
+              // action being faded in: fading both ways at once could leave the walk
+              // at zero weight while the walker kept moving, so it glided.
+              const [from, to] = near ? [v.walk, v.idle] : [v.idle, v.walk];
+              to.enabled = true;
+              to.setEffectiveTimeScale(1);
+              to.setEffectiveWeight(1);
+              from.crossFadeTo(to, 0.35, false);
             }
           }
           if (!v.yielding) {
@@ -208,14 +225,30 @@ export async function createNpcs(
           const n = v.seg.perp(v.t);
           // the middle of the footpath, standing on it rather than in the road
           const pavement = v.seg.width / 2 + FOOTPATH / 2;
-          v.root.position.set(
-            point.x + n.x * pavement * v.side,
-            KERB_TOP,
-            point.z + n.z * pavement * v.side
-          );
+          v.home = { x: point.x + n.x * pavement * v.side, y: KERB_TOP, z: point.z + n.z * pavement * v.side };
           v.seg.curve.getTangentAt(v.t, tangent);
           v.root.rotation.y = Math.atan2(tangent.x * v.dir, tangent.z * v.dir);
         }
+
+        // in the car's way: hop aside, away from it, then drift home once it has gone
+        const d = v.dodge;
+        const ax = v.home.x + d.x - carX, az = v.home.z + d.z - carZ;
+        const dist = Math.hypot(ax, az);
+        if (dist < DODGE_RADIUS && d.hop <= 0) {
+          const k = DODGE_STEP / Math.max(dist, 0.01);
+          d.tx = d.x + ax * k;
+          d.tz = d.z + az * k;
+          d.hop = HOP_TIME;
+        } else if (dist > DODGE_RADIUS * 2.5) {
+          d.tx = 0;
+          d.tz = 0;
+        }
+        const ease = Math.min(1, dt * (d.hop > 0 ? 14 : 1.5));
+        d.x += (d.tx - d.x) * ease;
+        d.z += (d.tz - d.z) * ease;
+        d.hop = Math.max(0, d.hop - dt);
+        const lift = d.hop > 0 ? Math.sin((1 - d.hop / HOP_TIME) * Math.PI) * 0.45 : 0;
+        v.root.position.set(v.home.x + d.x, v.home.y + lift, v.home.z + d.z);
 
         if (Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < ANIMATE_RADIUS) {
           v.mixer.update(dt);

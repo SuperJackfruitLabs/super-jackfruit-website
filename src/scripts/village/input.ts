@@ -39,6 +39,7 @@ export function createInput(canvas: HTMLCanvasElement, onFirstGesture: () => voi
   const triggerAxes = new Set<number>();
 
   window.addEventListener('keydown', (e) => {
+    if (isTyping(e)) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
     keys.add(e.key.toLowerCase());
     onFirstGesture();
@@ -109,4 +110,14 @@ export function createInput(canvas: HTMLCanvasElement, onFirstGesture: () => voi
       return state;
     },
   };
+}
+
+/**
+ * A key pressed in a text field (the frame's Captain Jack field among them, inside its shadow
+ * root) is typing, not driving.
+ */
+export function isTyping(e: KeyboardEvent): boolean {
+  const el = e.composedPath()[0];
+  if (!(el instanceof HTMLElement)) return false;
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }

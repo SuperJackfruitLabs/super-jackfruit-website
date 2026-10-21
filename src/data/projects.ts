@@ -54,10 +54,11 @@ export const projects: Project[] = [
   ...suite.map((p, i): Project => ({
     name: p.name,
     slug: p.slug,
-    tagline: `${i + 1} · ${p.step.toLowerCase()} — ${p.blurb}`,
+    tagline: `${p.step.toLowerCase()} — ${p.blurb}`,
     description: p.summary,
     tags: p.version ? [p.version] : [],
-    status: p.version ? 'released' : 'live',
+    // a product its own site calls in development isn't 'ready to use', whatever its version
+    status: p.status === 'In development' ? 'wip' : p.version ? 'released' : 'live',
     accent: p.hex,
     accentFg: p.fg,
     logo: `/brand/${p.slug}.svg`,

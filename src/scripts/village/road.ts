@@ -37,6 +37,8 @@ export interface StreetSpec {
   culDeSac: number;
   /** radius of one before the first cell, 0 or absent for none */
   startCulDeSac?: number;
+  /** a branch whose far end runs back into the spine instead of stopping */
+  rejoins?: boolean;
 }
 
 export interface RoadSegment {
@@ -106,11 +108,11 @@ export async function createRoads(
 
   // A street's path: straight across each cell, a bezier through a corner
   // cell, entering and leaving at the cell edges.
-  function path(cells: Cell[], from?: Cell): T.CurvePath<T.Vector3> {
+  function path(cells: Cell[], from?: Cell, to?: Cell): T.CurvePath<T.Vector3> {
     const p = new THREE.CurvePath<T.Vector3>();
-    const seq = from ? [from, ...cells] : cells;
+    const seq = [...(from ? [from] : []), ...cells, ...(to ? [to] : [])];
     const start = from ? 1 : 0;
-    for (let i = start; i < seq.length; i++) {
+    for (let i = start; i < seq.length - (to ? 1 : 0); i++) {
       const c = centre(seq[i]);
       const prev = seq[i - 1];
       const next = seq[i + 1];
@@ -163,9 +165,12 @@ export async function createRoads(
   const branches = branchSpecs.map((spec) => {
     const first = spec.cells[0];
     // the spine cell this street leaves from is its neighbour on the spine
-    const from = main.cells.find((m) => Math.abs(m[0] - first[0]) + Math.abs(m[1] - first[1]) === 1)!;
-    chain([from, ...spec.cells]);
-    const seg = segment(spec.id, path(spec.cells, from), spec.culDeSac);
+    const near = (c: Cell) => (m: Cell) => Math.abs(m[0] - c[0]) + Math.abs(m[1] - c[1]) === 1;
+    const from = main.cells.find(near(first))!;
+    const last = spec.cells[spec.cells.length - 1];
+    const to = spec.rejoins ? main.cells.find((m) => m !== from && near(last)(m)) : undefined;
+    chain([from, ...spec.cells, ...(to ? [to] : [])]);
+    const seg = segment(spec.id, path(spec.cells, from, to), spec.culDeSac);
     const idx = main.cells.indexOf(from);
     const t = Math.min(1, Math.max(0, ((idx + 0.5) * TILE) / mainSeg.length));
     const out = centre(first).sub(centre(from));
@@ -216,7 +221,14 @@ export async function createRoads(
   // only where the next cell along isn't road (an outside corner), so at a
   // junction mouth the footpaths turn the corner instead of crossing the road.
   {
-    const isRoad = (x: number, z: number) => open.has(key(x, z));
+    // the cell just past an end with a turning circle counts as road, so the footpath stops at
+    // the tile's edge and the circle's ring takes over there instead of a square end poking in
+    const capped = new Set<string>();
+    const beyond = (end: Cell, inner: Cell) => capped.add(key(2 * end[0] - inner[0], 2 * end[1] - inner[1]));
+    if (main.startCulDeSac) beyond(main.cells[0], main.cells[1]);
+    if (main.culDeSac) beyond(main.cells[main.cells.length - 1], main.cells[main.cells.length - 2]);
+    for (const b of branchSpecs) if (b.culDeSac > 0 && b.cells.length > 1) beyond(b.cells[b.cells.length - 1], b.cells[b.cells.length - 2]);
+    const isRoad = (x: number, z: number) => open.has(key(x, z)) || capped.has(key(x, z));
     const strips: Array<{ x: number; z: number; sx: number; sz: number }> = [];
     for (const [k, sides] of open) {
       const [cx, cz] = k.split(',').map(Number);
@@ -257,24 +269,33 @@ export async function createRoads(
   const circles: Array<{ x: number; z: number; r: number }> = [];
   // a turning circle just past a street's open end; `dir` points out of the street
   function turningCircle(tipX: number, tipZ: number, dir: T.Vector3, r: number) {
-    const cx = tipX + dir.x * (r - 1);
-    const cz = tipZ + dir.z * (r - 1);
-    for (const [rr, mat, y] of [[r + 0.5, kerb, TILE_Y - 0.002], [r, asphalt, TILE_Y]] as const) {
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(rr, 48), mat);
-      disc.rotation.x = -Math.PI / 2;
-      disc.position.set(cx, y, cz);
-      disc.receiveShadow = true;
-      scene.add(disc);
-    }
+    // set back so the ring's inner edge meets the tile's kerb lines exactly at the tile's end
+    const inner = r;
+    const back = Math.sqrt(inner * inner - (TILE / 2) ** 2);
+    const cx = tipX + dir.x * back;
+    const cz = tipZ + dir.z * back;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 48), asphalt);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(cx, TILE_Y + 0.004, cz); // just above the tile it overlaps, so the two do not flicker
+    disc.receiveShadow = true;
+    scene.add(disc);
     // the footpath carried round the circle, open where the street comes in
-    const back = Math.atan2(dir.z, -dir.x); // ring angles run in the disc's rotated plane
-    const inner = r + 0.5;
-    const gap = Math.asin(Math.min(1, (TILE / 2 + FOOTPATH) / inner));
+    const facing = Math.atan2(dir.z, -dir.x); // ring angles run in the disc's rotated plane
+    const gap = Math.asin(Math.min(1, TILE / 2 / inner));
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(inner, inner + FOOTPATH, 64, 1, back + gap, Math.PI * 2 - gap * 2),
+      new THREE.RingGeometry(inner, inner + FOOTPATH, 64, 1, facing + gap, Math.PI * 2 - gap * 2),
       new THREE.MeshLambertMaterial({ color: 0xc9ccce })
     );
     ring.rotation.x = -Math.PI / 2;
+    // the kerb's face, carried round from the tile's kerb lines (cylinder angles run from +z toward +x)
+    const toStreet = Math.atan2(-dir.x, -dir.z);
+    const face = new THREE.Mesh(
+      new THREE.CylinderGeometry(inner, inner, KERB_TOP, 64, 1, true, toStreet + gap, Math.PI * 2 - gap * 2),
+      kerb
+    );
+    face.material.side = THREE.DoubleSide;
+    face.position.set(cx, KERB_TOP / 2, cz);
+    scene.add(face);
     ring.position.set(cx, KERB_TOP, cz);
     ring.receiveShadow = true;
     scene.add(ring);
@@ -285,6 +306,10 @@ export async function createRoads(
     if (seg.end.r <= 0) continue;
     const c = turningCircle(seg.end.x, seg.end.z, seg.curve.getTangentAt(1), seg.end.r);
     seg.end = { x: c.x, z: c.z, r: seg.end.r };
+  }
+  if (main.culDeSac > 0) {
+    const c = turningCircle(mainSeg.end.x, mainSeg.end.z, mainSeg.curve.getTangentAt(1), main.culDeSac);
+    mainSeg.end = { x: c.x, z: c.z, r: main.culDeSac };
   }
   if (main.startCulDeSac) {
     const p0 = mainSeg.curve.getPointAt(0);

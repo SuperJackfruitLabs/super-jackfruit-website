@@ -1,5 +1,5 @@
 ---
-import Layout from '../layouts/Layout.astro';
+import Layout from '../layouts/Village.astro';
 import '@fontsource-variable/inconsolata';
 import '@superjackfruit/vibekit/fonts.css';
 ---
@@ -7,8 +7,7 @@ import '@superjackfruit/vibekit/fonts.css';
 <Layout title="Super Jackfruit Labs — agent-native tools">
   <div class="scene">
     <canvas id="village-canvas"></canvas>
-    <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute</p>
-    <p class="tag"><a href="/suite">the suite as a page →</a></p>
+    <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute · ? keys</p>
     <!-- the only controls always on screen: sound, and the menu with everything else -->
     <div class="hud">
       <button type="button" id="sound-toggle" class="hud__btn" aria-pressed="true" aria-label="Sound on. Mute" title="Sound (m)">
@@ -20,6 +19,12 @@ import '@superjackfruit/vibekit/fonts.css';
     </div>
 
     <div class="env menu" id="menu" hidden>
+      <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
+      <span class="menu__label">Suite</span>
+      <div class="menu__suite">
+        <a href="/suite">see it as a page →</a>
+        <span class="visited" id="visited-chip" hidden>visited <span id="visited-count">0/6</span></span>
+      </div>
       <span class="menu__label">Time</span>
       <!-- time reads as one track the day moves along, not four loose buttons -->
       <div class="env__group env__group--track" id="time-row" role="group" aria-label="Time of day">
@@ -62,10 +67,13 @@ import '@superjackfruit/vibekit/fonts.css';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.5 5.3 10a2 2 0 0 1 1.9-1.4h9.6A2 2 0 0 1 18.7 10l1.8 5.5v2.6h-2.1M5.6 18.1H3.5v-2.6M3.5 15.5h17"/><circle cx="7.8" cy="18.1" r="1.7"/><circle cx="16.2" cy="18.1" r="1.7"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
         </button>
       </div>
+      <span class="menu__label" id="tilt-label" hidden>Steering</span>
+      <div class="env__group" id="tilt-row" hidden>
+        <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
+      </div>
       <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · car: Han66st (CC-BY, sketchfab) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
     </div>
 
-    <p class="visited" id="visited-chip" hidden>suite visited <span id="visited-count">0/6</span></p>
 
     <div class="welcome" id="welcome" data-open="true">
       <div class="welcome__card">
@@ -100,16 +108,34 @@ import '@superjackfruit/vibekit/fonts.css';
       </div>
     </div>
 
+    <!-- every desktop shortcut in one place; ? opens it, Esc or ? closes it -->
+    <div class="keys" id="keys" role="dialog" aria-label="Keyboard shortcuts" hidden>
+      <h2>Keys</h2>
+      <dl>
+        <dt>W A S D / arrows</dt><dd>drive · steer · brake &amp; reverse</dd>
+        <dt>Shift</dt><dd>nitro</dd>
+        <dt>1–6</dt><dd>SuperMessage · SuperPipeline · SuperLibrary · SuperWitness · Salaam · AgentPod</dd>
+        <dt>H / R</dt><dd>the lab · back to the start</dd>
+        <dt>↵ / P</dt><dd>open the card's first / second link</dd>
+        <dt>Space / I</dt><dd>more about it</dd>
+        <dt>T</dt><dd>time of day</dd>
+        <dt>M</dt><dd>mute</dd>
+        <dt>Esc</dt><dd>menu</dd>
+        <dt>?</dt><dd>this list</dd>
+      </dl>
+    </div>
+
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
       <img id="card-logo" class="card__logo" alt="" width="48" height="48" hidden />
       <h2 id="card-name"></h2>
       <p class="card__tagline" id="card-tagline"></p>
       <p class="card__status" id="card-status"></p>
       <p class="card__desc" id="card-desc"></p>
+      <button type="button" class="card__more" id="card-more" aria-expanded="false" aria-controls="card-desc">more ▾</button>
       <p class="card__tags" id="card-tags"></p>
       <div class="card__actions">
-        <a id="card-github" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
-        <a id="card-demo" href="#" target="_blank" rel="noopener noreferrer" hidden>live demo →</a>
+        <a id="card-github" data-key="↵" href="#" target="_blank" rel="noopener noreferrer">view source →</a>
+        <a id="card-demo" data-key="P" href="#" target="_blank" rel="noopener noreferrer" hidden>live demo →</a>
       </div>
     </aside>
   </div>
@@ -133,8 +159,7 @@ import '@superjackfruit/vibekit/fonts.css';
     touch-action: none;
   }
 
-  .hint,
-  .tag {
+  .hint {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -147,14 +172,6 @@ import '@superjackfruit/vibekit/fonts.css';
     bottom: 2.2rem;
     font-size: 1.5rem;
     color: rgba(40, 50, 60, 0.85);
-  }
-
-  .tag {
-    top: 1.6rem;
-    font-size: 1.2rem;
-    letter-spacing: 0.08em;
-    color: rgba(40, 50, 60, 0.55);
-    pointer-events: auto;
   }
 
   .env {
@@ -254,22 +271,32 @@ import '@superjackfruit/vibekit/fonts.css';
     pointer-events: none;
   }
 
-  /* the project card — warm paper, day theme */
+  /* the project card — warm paper by day, ink after dark. Dark is the village's own
+     night (the scene sets data-night), not the visitor's system theme. */
   .card {
+    --card-bg: #f6f0e2;
+    --card-fg: #2c2a26;
+    --card-muted: rgba(44, 42, 38, 0.68);
+    --card-link: #2c2a26;
+    --card-shadow: rgba(40, 50, 60, 0.25);
     position: absolute;
-    left: 2.4rem;
-    bottom: 2.4rem;
-    width: min(28rem, calc(100vw - 4.8rem));
-    background: #f6f0e2;
-    color: #2c2a26;
-    border: 3px solid var(--accent, #d98a1f);
+    left: 1.2rem;
+    bottom: 1.2rem;
+    width: min(21.25rem, calc(100vw - 2.4rem));
+    background: var(--card-bg);
+    color: var(--card-fg);
+    border: 2px solid var(--accent, #d98a1f);
     border-radius: 12px;
-    padding: 1.3rem 1.5rem;
-    box-shadow: 0 10px 30px rgba(40, 50, 60, 0.25);
+    padding: 0.65rem 0.85rem;
+    box-shadow: 0 8px 24px var(--card-shadow);
     opacity: 0;
     transform: translateY(12px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease, background-color 0.4s ease, color 0.4s ease;
     pointer-events: none;
+  }
+  .scene[data-night='true'] .card {
+    --card-bg: #161b2b; --card-fg: #f1ece0; --card-muted: rgba(241, 236, 224, 0.7);
+    --card-link: #f1ece0; --card-shadow: rgba(0, 0, 0, 0.5);
   }
 
   .card[data-open='true'] {
@@ -278,61 +305,123 @@ import '@superjackfruit/vibekit/fonts.css';
     pointer-events: auto;
   }
 
-  .card__logo { width: 3.6rem; height: 3.6rem; float: right; margin: -0.2rem -0.2rem 0 0.8rem; }
+  .card__logo { width: 2.1rem; height: 2.1rem; float: right; margin: 0 0 0 0.5rem; border-radius: 8px; }
   .card h2 {
-    margin: 0 0 0.1rem;
-    font-size: 1.9rem;
+    margin: 0;
+    font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: 0.02em;
+    line-height: 1.2;
   }
 
-  .card__tagline {
-    margin: 0 0 0.6rem;
-    font-size: 1.2rem;
-    color: rgba(44, 42, 38, 0.75);
+  .card__tagline, .card__status {
+    margin: 0.05rem 0 0;
+    font-size: 0.8rem;
+    color: var(--card-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+  .card__status { letter-spacing: 0.04em; }
 
-  .card__status {
-    margin: 0 0 0.6rem;
-    font-size: 1.15rem;
-    letter-spacing: 0.05em;
-    color: rgba(44, 42, 38, 0.6);
-  }
-
+  /* a light ring keeps the dot visible on the dark surface too */
   .card__status::before {
-    content: '● ';
-    color: var(--status-color, #3f9e3f);
+    content: '';
+    display: inline-block;
+    width: 0.5rem; height: 0.5rem;
+    margin-right: 0.35rem;
+    border-radius: 50%;
+    vertical-align: 0.05em;
+    background: var(--status-color, #3f9e3f);
+    box-shadow: 0 0 0 1.5px var(--card-bg), 0 0 0 2.5px var(--status-color, #3f9e3f);
   }
 
   /* two lines are enough to say what it is; the product page has the rest */
   .card__desc {
-    margin: 0 0 0.7rem;
-    font-size: 1.15rem;
-    line-height: 1.45;
+    clear: both;
+    margin: 0.35rem 0 0.45rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  .card__tags {
-    margin: 0 0 1.4rem;
-    font-size: 1.15rem;
-    color: rgba(44, 42, 38, 0.6);
+  .card__tags { display: none; }
+
+  /* desktop key hints in front of the card's links */
+  .scene:not([data-touch='true']) .card__actions a::before {
+    content: attr(data-key);
+    display: inline-block;
+    min-width: 1.1em;
+    margin-right: 0.35rem;
+    padding: 0 0.25rem;
+    border: 1px solid var(--card-muted);
+    border-radius: 4px;
+    font: 600 0.7rem 'Inconsolata Variable', monospace;
+    text-align: center;
+    color: var(--card-muted);
+    vertical-align: 0.1em;
   }
+
+  .keys {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    width: min(26rem, calc(100vw - 2.4rem));
+    padding: 1rem 1.2rem;
+    border-radius: 14px;
+    background: rgba(250, 247, 240, 0.97);
+    color: #2c2a26;
+    box-shadow: 0 10px 30px rgba(40, 50, 60, 0.25);
+  }
+  .keys[hidden] { display: none; }
+  .keys h2 { margin: 0 0 0.6rem; font-size: 1.1rem; }
+  .keys dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; font-size: 0.85rem; }
+  .keys dt { font: 600 0.82rem 'Inconsolata Variable', monospace; white-space: nowrap; }
+  .keys dd { margin: 0; color: rgba(44, 42, 38, 0.75); }
+
+  .card[data-expanded='true'] .card__desc {
+    display: block;
+    -webkit-line-clamp: unset;
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+  .card__more {
+    display: block;
+    margin: -0.25rem 0 0.45rem;
+    padding: 0.35rem 0;
+    min-height: 2rem;
+    border: 0;
+    background: none;
+    font: 600 0.78rem 'Figtree Variable', system-ui, sans-serif;
+    color: var(--card-muted);
+    cursor: pointer;
+  }
+  .card__more:hover, .card__more:focus-visible { color: var(--card-fg); text-decoration: underline; outline: none; }
+  .card__more[hidden] { display: none; }
+
+  /* tilt steers, so the pad stands down; the pedals keep their corner */
+  .touch[data-tilt='true'] .touch__wheel { display: none; }
+  .touch[data-tilt='true'] .touch__pedals { margin-left: auto; }
 
   .card__actions {
     display: flex;
-    gap: 1.4rem;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.9rem;
   }
 
   .card__actions a {
-    font-size: 1.3rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    color: #2c2a26;
+    color: var(--card-link);
     text-decoration: none;
     border-bottom: 2px solid var(--accent, #d98a1f);
-    padding-bottom: 0.1rem;
+    padding-bottom: 0.05rem;
+    min-width: 0;
+    overflow-wrap: anywhere; /* a long URL label wraps inside the card */
   }
 
   .card__actions a:hover,
@@ -340,19 +429,18 @@ import '@superjackfruit/vibekit/fonts.css';
     color: var(--accent, #d98a1f);
     outline: none;
   }
+  /* some accents are too dark to read on ink; the underline carries them instead */
+  .scene[data-night='true'] .card__actions a:hover,
+  .scene[data-night='true'] .card__actions a:focus-visible { color: var(--card-fg); text-decoration: underline; }
 
+  .menu__suite { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 1.05rem; }
+  .menu__suite a { color: #2c2a26; font-weight: 600; }
   .visited {
-    position: absolute;
-    left: 1.4rem;
-    top: 1.4rem;
-    margin: 0;
-    font-size: 1.1rem;
-    letter-spacing: 0.04em;
-    color: rgba(40, 50, 60, 0.7);
-    background: rgba(255, 255, 255, 0.55);
+    font-size: 0.95rem;
+    color: rgba(40, 50, 60, 0.75);
+    background: rgba(40, 50, 60, 0.07);
     border-radius: 999px;
-    padding: 0.35rem 0.95rem;
-    pointer-events: none;
+    padding: 0.15rem 0.6rem;
   }
 
   .visited.done { background: rgba(63, 158, 63, 0.85); color: #f6f0e2; }
@@ -514,7 +602,8 @@ import '@superjackfruit/vibekit/fonts.css';
     right: auto;
     font-size: 0.75rem;
   }
-  .scene[data-touch='true'] .card { bottom: 9.5rem; }
+  /* above the wheel and pedals (measured: their tops sit ~9.6rem up), never under them */
+  .scene[data-touch='true'] .card { bottom: calc(10.2rem + env(safe-area-inset-bottom)); }
 
   /* ---------- the two always-on controls, and the menu behind one of them ---------- */
   .hud { position: absolute; top: 1.4rem; right: 1.4rem; display: flex; gap: 0.5rem; }
@@ -535,7 +624,9 @@ import '@superjackfruit/vibekit/fonts.css';
     gap: 0.6rem 1rem; padding: 1rem 1.1rem; border-radius: 14px;
     background: rgba(250, 247, 240, 0.94); box-shadow: 0 10px 30px rgba(40, 50, 60, 0.2); backdrop-filter: blur(6px);
   }
-  .env.menu[hidden] { display: none; }
+  .env.menu[hidden], .env__group[hidden], .visited[hidden] { display: none; }
+  /* the menu and the card share the top of a phone; while the menu is open it has the room */
+  .scene:has(#menu:not([hidden])) .card { visibility: hidden; }
   @media (max-width: 640px) {
     .hud { top: 0.8rem; right: 0.8rem; }
     .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
@@ -554,28 +645,39 @@ import '@superjackfruit/vibekit/fonts.css';
 
   /* a phone has room for the controls and the card, not for the chrome around them */
   @media (max-width: 640px) {
-    .credit, .tag { display: none; }
-    .visited { top: auto; bottom: 1.2rem; left: 1.2rem; font-size: 0.95rem; }
+    .credit { display: none; }
     .env { top: 0.8rem; right: 0.8rem; left: 0.8rem; justify-content: center; }
-    .visited { display: none; }
     .env { gap: 0.25rem; flex-wrap: nowrap; }
     .scene[data-touch='true'] .env button { width: 2.35rem; height: 2.35rem; }
     .scene[data-touch='true'] .env button svg { width: 1.2rem; height: 1.2rem; }
-    /* the road has to stay visible: name, step, status and the link are enough */
-    .card__desc, .card__tags { display: none; }
-    .card { top: auto; max-height: 42vh; overflow: auto; }
-    .card h2 { font-size: 2rem; }
-    .card {
-      left: 1.2rem;
-      bottom: 5.4rem;
-      padding: 1.4rem 1.6rem;
-    }
+  }
+  /* a phone: a short sheet across the width, and the description waits for a tap */
+  @media (max-width: 520px) {
+    .card { left: 0.8rem; right: 0.8rem; width: auto; padding: 0.55rem 0.8rem; }
+    .card__logo { width: 1.9rem; height: 1.9rem; }
+    .card__desc { display: none; }
+    .card[data-expanded='true'] .card__desc { display: block; }
+    /* the car sits centre-bottom and the pedals take the corners, so on a phone
+       the card is a strip at the top, just under the sound/menu buttons */
+    .card, .scene[data-touch='true'] .card { top: calc(3.9rem + env(safe-area-inset-top)); bottom: auto; }
+    .card { transform: translateY(-12px); }
+    /* the pedals, a third smaller: still >= 44px to hit, and clear of Safari's bottom bar */
+    .touch { padding: 0 0.8rem calc(0.8rem + env(safe-area-inset-bottom)); }
+    .touch__wheel { width: min(10rem, 38vw); height: 3.2rem; }
+    .touch__knob { width: 2.4rem; height: 2.4rem; }
+    .touch__wheel-label { transform: translateY(2.2rem); font-size: 0.7rem; }
+    .touch__pedals { gap: 0.4rem; }
+    .touch__btn--gas { width: 3.9rem; height: 3.9rem; font-size: 1.4rem; }
+    .touch__btn--brake, .touch__btn--nitro { width: 2.85rem; height: 2.85rem; font-size: 1rem; }
+  }
+  @media (max-width: 640px) {
     .hint { font-size: 1.2rem; bottom: 1.2rem; }
   }
 </style>
 
 <script>
   import { initVillageScene } from '../scripts/village-scene';
+  import { isTyping } from '../scripts/village/input';
 
   const canvas = document.getElementById('village-canvas');
   if (canvas instanceof HTMLCanvasElement) {
@@ -620,7 +722,7 @@ import '@superjackfruit/vibekit/fonts.css';
       next?: string;
       logo?: string;
     };
-    info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
+    info?: { title: string; tagline: string; logo?: string; lines: string[]; links: Array<{ label: string; url: string }> };
     accent: string;
   }
 
@@ -670,9 +772,31 @@ import '@superjackfruit/vibekit/fonts.css';
   document.addEventListener('pointerdown', (e) => {
     if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn && !menuBtn.contains(e.target as Node)) setMenu(false);
   });
+  // Esc toggles it; opened from the keyboard, focus goes to its first control and
+  // the arrow keys walk the controls; closing hands focus back to the menu button
+  const menuItems = () => [...menu.querySelectorAll<HTMLElement>('button, a')].filter((el) => el.offsetParent !== null);
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') setMenu(false);
-  });
+    if (e.key === 'Escape') {
+      if (!keysPanel.hidden) return;
+      if (menu.hidden) {
+        if (isTyping(e)) return;
+        setMenu(true);
+        menuItems()[0]?.focus();
+      } else {
+        setMenu(false);
+        menuBtn.focus();
+      }
+      return;
+    }
+    if (menu.hidden || !menu.contains(document.activeElement)) return;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    e.stopImmediatePropagation(); // walking the menu isn't driving
+    const items = menuItems();
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    items[(i + step + items.length) % items.length]?.focus();
+  }, { capture: true });
 
   // sound: the one switch that's always to hand, the same as pressing m
   const soundBtn = document.getElementById('sound-toggle')!;
@@ -730,11 +854,15 @@ import '@superjackfruit/vibekit/fonts.css';
       card.dataset.open = 'false';
       return;
     }
+    setExpanded(false);
     const { accent } = e.detail;
     card.style.setProperty('--accent', accent);
     if (e.detail.kind === 'info' && e.detail.info) {
-      logoEl.hidden = true;
       const info = e.detail.info;
+      if (info.logo) {
+        logoEl.src = info.logo;
+        logoEl.hidden = false;
+      } else logoEl.hidden = true;
       nameEl.textContent = info.title;
       taglineEl.textContent = info.tagline;
       statusEl.textContent = '';
@@ -751,6 +879,7 @@ import '@superjackfruit/vibekit/fonts.css';
         demoEl.hidden = true;
       }
       card.dataset.open = 'true';
+      showMore();
       return;
     }
     const project = e.detail.project!;
@@ -767,7 +896,8 @@ import '@superjackfruit/vibekit/fonts.css';
     // a suite product's main link is its own website (or its page here when it
     // has none); anything else is an experiment, whose link is its source
     const internal = project.github.startsWith('/');
-    const suite = project.status === 'released' || project.status === 'live';
+    // a suite product has its page here as its second link, whatever its status
+    const suite = project.demo?.startsWith('/products/') ?? false;
     githubEl.textContent = internal
       ? 'open the product page →'
       : suite
@@ -788,7 +918,22 @@ import '@superjackfruit/vibekit/fonts.css';
     }
     card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
     card.dataset.open = 'true';
+    showMore();
   }) as EventListener);
+
+  // "more" opens the whole description (scrolling inside the card if it's long), and closes it again
+  const moreBtn = document.getElementById('card-more')!;
+  const setExpanded = (open: boolean) => {
+    card.dataset.expanded = String(open);
+    moreBtn.setAttribute('aria-expanded', String(open));
+    moreBtn.textContent = open ? 'less ▴' : 'more ▾';
+  };
+  // only offered when there's more to read than the card already shows
+  const showMore = () => {
+    const phone = getComputedStyle(descEl).display === 'none';
+    moreBtn.hidden = !descEl.textContent || (!phone && descEl.scrollHeight <= descEl.clientHeight + 1);
+  };
+  moreBtn.addEventListener('click', () => setExpanded(card.dataset.expanded !== 'true'));
 
   // visited counter
   const visitedChip = document.getElementById('visited-chip')!;
@@ -839,7 +984,14 @@ import '@superjackfruit/vibekit/fonts.css';
     panel.hidden = false;
 
     const touchState = { steer: 0, throttle: 0, nitro: false };
-    const push = () => window.dispatchEvent(new CustomEvent('village:touch', { detail: { ...touchState } }));
+    // the wheel wins while a thumb is on it; otherwise a tilted phone steers
+    let tiltSteer = 0;
+    const push = () =>
+      window.dispatchEvent(
+        new CustomEvent('village:touch', {
+          detail: { ...touchState, steer: steerPointer === null && tiltOn ? tiltSteer : touchState.steer },
+        })
+      );
 
     const wheel = document.getElementById('touch-steer')!;
     const knob = document.getElementById('touch-knob')!;
@@ -887,7 +1039,85 @@ import '@superjackfruit/vibekit/fonts.css';
     };
     hold(document.getElementById('touch-gas')!, () => (touchState.throttle = 1), () => (touchState.throttle = 0));
     hold(document.getElementById('touch-brake')!, () => (touchState.throttle = -1), () => (touchState.throttle = 0));
+    // ---------- tilt to steer (opt-in, remembered) ----------
+    let tiltOn = false;
+    const Orientation = (window as any).DeviceOrientationEvent as
+      | (typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> })
+      | undefined;
+    // desktop browsers expose the event too; tilt is for devices held in the hand
+    if (Orientation && matchMedia('(pointer: coarse)').matches) {
+      const tiltBtn = document.getElementById('tilt-toggle')!;
+      document.getElementById('tilt-row')!.hidden = false;
+      document.getElementById('tilt-label')!.hidden = false;
+      const store = (on: boolean) => {
+        try { localStorage.setItem('village:tilt', on ? '1' : '0'); } catch { /* private mode */ }
+      };
+      const setTilt = (on: boolean) => {
+        tiltOn = on;
+        tiltBtn.setAttribute('aria-pressed', String(on));
+        tiltBtn.dataset.active = String(on);
+        if (!on) tiltSteer = 0;
+        panel.dataset.tilt = String(on);
+        push();
+      };
+      // NB: iOS Safari only delivers orientation events over HTTPS, so this path
+      // is unverified on a real iPhone until it's deployed (localhost http won't fire)
+      // roll, whichever way up the phone is held: gamma in portrait, beta on its side
+      let smooth = 0;
+      window.addEventListener('deviceorientation', (e) => {
+        if (!tiltOn) return;
+        const angle = screen.orientation?.angle ?? (window as any).orientation ?? 0;
+        const roll = angle === 90 ? (e.beta ?? 0) : angle === -90 || angle === 270 ? -(e.beta ?? 0) : (e.gamma ?? 0);
+        // ~4° of dead zone so a resting hand drives straight; full lock by ~25°
+        const mag = Math.max(0, Math.min(1, (Math.abs(roll) - 4) / 21));
+        smooth += (Math.sign(roll) * mag - smooth) * 0.3;
+        tiltSteer = Math.abs(smooth) < 0.01 ? 0 : smooth;
+        push();
+      });
+      tiltBtn.addEventListener('click', async () => {
+        if (tiltOn) return (setTilt(false), store(false));
+        // iOS asks once, and only from inside a tap
+        if (typeof Orientation.requestPermission === 'function') {
+          try {
+            if ((await Orientation.requestPermission()) !== 'granted') return;
+          } catch {
+            return;
+          }
+        }
+        setTilt(true);
+        store(true);
+      });
+      let saved = false;
+      try { saved = localStorage.getItem('village:tilt') === '1'; } catch { /* private mode */ }
+      // iOS forgets the grant between visits, so a remembered "on" there waits for the next tap
+      if (saved && typeof Orientation.requestPermission !== 'function') setTilt(true);
+    }
+
     hold(document.getElementById('touch-nitro')!, () => (touchState.nitro = true), () => (touchState.nitro = false));
+  }
+
+  // ---------- desktop shortcuts: the card, the clock and the key list ----------
+  const keysPanel = document.getElementById('keys')!;
+  if (!window.matchMedia('(pointer: coarse)').matches) {
+    const TIMES = ['auto', 'dawn', 'day', 'dusk', 'night'];
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === '?' || (e.key === 'Escape' && !keysPanel.hidden)) {
+        keysPanel.hidden = e.key === 'Escape' ? true : !keysPanel.hidden;
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 't') {
+        const now = timeRow.querySelector<HTMLElement>('[data-active="true"]')?.dataset.time ?? 'auto';
+        timeRow.querySelector<HTMLElement>(`[data-time="${TIMES[(TIMES.indexOf(now) + 1) % TIMES.length]}"]`)?.click();
+        return;
+      }
+      // a focused button or link already answers Enter and Space itself
+      if (card.dataset.open !== 'true' || (document.activeElement as HTMLElement)?.closest?.('button, a')) return;
+      if (e.key === 'Enter') githubEl.click();
+      else if (k === 'p' && !demoEl.hidden) demoEl.click();
+      else if ((k === ' ' || k === 'i') && !moreBtn.hidden) setExpanded(card.dataset.expanded !== 'true');
+    });
   }
 
   // separate audio toggles

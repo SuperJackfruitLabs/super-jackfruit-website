@@ -23,7 +23,7 @@ import { createBoards } from './village/boards';
 import { createLamps } from './village/lamps';
 import { createCar } from './village/car';
 import { createAudio } from './village/audio';
-import { createInput } from './village/input';
+import { createInput, isTyping } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
@@ -42,7 +42,7 @@ interface Station {
   accent: string;
   x: number;
   z: number;
-  info?: { title: string; tagline: string; lines: string[]; links: Array<{ label: string; url: string }> };
+  info?: { title: string; tagline: string; logo?: string; lines: string[]; links: Array<{ label: string; url: string }> };
 }
 
 export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boolean> {
@@ -129,8 +129,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   ];
   const road = await createRoads(
     THREE, scene, props.loadAsset,
-    { id: 'main', cells: MAIN_CELLS, culDeSac: 0, startCulDeSac: 9 },
+    { id: 'main', cells: MAIN_CELLS, culDeSac: 13, startCulDeSac: 9 } /* the far end is the village square */,
     [
+      // straight on at the first bend, back into the main street where it returns
+      { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
       { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
       { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
     ],
@@ -209,8 +211,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const chimneys: Chimney[] = [];
   const gates: Array<{ x: number; z: number }> = [];
 
+  // signs stand on the verge; a house set down later keeps its distance from them too
+  const signSpots: Array<{ x: number; z: number }> = [];
   const clearOfHouses = (x: number, z: number, gap: number): boolean =>
-    !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap);
+    !houseCenters.some((h) => Math.hypot(h.x - x, h.z - z) < gap) &&
+    !signSpots.some((s) => Math.hypot(s.x - x, s.z - z) < Math.max(9, gap * 0.75));
 
   // ---------- lit windows ----------
   // The houses share Kenney's palette texture, and their glass is one swatch
@@ -265,6 +270,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // A visitor meets the suite before anything else, one step after another,
   // alternating sides so each house gets its own frontage.
   const startT = 0.012;
+  // keyboard jumps (1–6, H, R): a spot on the road a little before each place, facing it
+  const jumps = new Map<string, { x: number; z: number; h: number }>();
+  const before = (seg: typeof road.main, t: number, metres: number) => {
+    const at = Math.max(0, t - metres / seg.length);
+    const p = seg.curve.getPointAt(at);
+    const tan = seg.curve.getTangentAt(at);
+    return { x: p.x, z: p.z, h: Math.atan2(tan.x, tan.z) };
+  };
   {
     const half = road.main.width / 2;
     const items = byDistrict('agent-works');
@@ -277,25 +290,46 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.onerror = () => resolve(); // a missing logo falls back to the step number
       img.src = p.logo;
     })));
-    items.forEach((project, i) => {
-      const t = 0.07 + i * (12 / road.main.length);
-      const c = road.main.curve.getPointAt(t);
-      const tan = road.main.curve.getTangentAt(t);
-      const n = road.main.perp(t).multiplyScalar(i % 2 === 0 ? -1 : 1);
+    // Main Street holds your work; the agents' two (AgentPod, Salaam) live on the Agent Quarter,
+    // the road that carries straight on at the first bend, as in the frame's street footer
+    const QUARTER = new Set(['agentpod', 'salaam']);
+    const quarter = road.get('straight-on');
+    const suiteHouse = (seg: typeof road.main, project: (typeof items)[number], t: number, side: number): void => {
+      const c = seg.curve.getPointAt(t);
+      const tan = seg.curve.getTangentAt(t);
+      const n = seg.perp(t).multiplyScalar(side);
       const faceRoad = Math.atan2(-n.x, -n.z);
-      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[(i * 3 + 1) % houses.length]);
+      jumps.set(project.slug, before(seg, t, 14));
+      const step = items.indexOf(project) + 1;
+      putHouse(c.x + n.x * (half + 8), c.z + n.z * (half + 8), faceRoad, 7.6, houses[((step - 1) * 3 + 1) % houses.length]);
       const dx = c.x + n.x * (half + 2.6);
       const dz = c.z + n.z * (half + 2.6);
       props.place(driveway, 3.0, dx, dz, faceRoad);
       // the sign stands side-on to the road so it reads as you approach
       const bx = c.x + n.x * (half + FOOTPATH + 1.2) - tan.x * 3.2;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
-      boards.suiteBoard(i + 1, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      boards.suiteBoard(step, project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));
+      signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: project.accent ?? '#d98a1f', x: c.x, z: c.z, reach: 9 });
       const ix = c.x + n.x * (half + 4.4) + tan.x * 2.2;
       const iz = c.z + n.z * (half + 4.4) + tan.z * 2.2;
       idleSpots.push({ x: ix, z: iz, facing: faceRoad });
-    });
+    };
+    items.filter((p) => !QUARTER.has(p.slug)).forEach((project, i) =>
+      suiteHouse(road.main, project, 0.07 + i * (22 / road.main.length), i % 2 === 0 ? -1 : 1));
+    // the Agent Quarter's houses stand on its outer side, clear of the loop's inside
+    const outer = quarter.perp(0.5).x < 0 ? 1 : -1;
+    // alternate sides, like Main Street, so one sign doesn't hide the next
+    items.filter((p) => QUARTER.has(p.slug)).forEach((project, i) =>
+      suiteHouse(quarter, project, 0.3 + i * 0.4, i % 2 === 0 ? outer : -outer));
+
+    // the crossroads: an arch over the way into the Agent Quarter, as at the square, so it
+    // names the street without standing in front of the signs beyond it
+    {
+      const c = quarter.curve.getPointAt(0.04);
+      const tan = quarter.curve.getTangentAt(0.04);
+      boards.infoBoard('Agent Quarter', 'where agents live and work', '#2196f3', c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+    }
 
     // where the drive starts: what this place is, and how to skip it
     const c = road.main.curve.getPointAt(startT + 0.02);
@@ -303,15 +337,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const n = road.main.perp(startT + 0.02).multiplyScalar(1);
     const sx = c.x + n.x * (half + FOOTPATH + 1.2);
     const sz = c.z + n.z * (half + FOOTPATH + 1.2);
-    boards.infoBoard('START HERE', 'six tools, one task — drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    boards.infoBoard('START HERE', 'Main Street — your work, drive on', '#d98a1f', sx, sz, Math.atan2(-tan.x, -tan.z));
+    signSpots.push({ x: sx, z: sz });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
       info: {
         title: 'Super Jackfruit Labs',
+        logo: '/brand/sjl-facet.jpg',
         tagline: 'six tools for working with agents',
         lines: [
-          'Drive on: the next six houses are the suite, in the order a task moves through it — you talk, the work is planned, an agent does it, your fleet runs it, it remembers, you see proof.',
-          'Each one works on its own. Further down the road are the experiments that taught us what to build.',
+          'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
+          'Further down the road are the experiments that taught us what to build.',
         ],
         links: [
           { label: 'the suite as a page →', url: '/suite' },
@@ -325,21 +361,31 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (d.id === 'agent-works') continue; // the suite, placed above
     const street = road.get(d.id);
 
-    // a sign on the spine before the turning, so the street is somewhere you
-    // decide to go rather than something you notice in the mirror
+    // an arch over the street's entrance, as at the Agent Quarter and the square: it names the
+    // street without standing in front of the signs further along the main road
+    {
+      const at = 4 / street.length;
+      const c = street.curve.getPointAt(at);
+      const tan = street.curve.getTangentAt(at);
+      boards.infoBoard(d.name, d.blurb, d.accent, c.x, c.z, Math.atan2(-tan.x, -tan.z), { width: 6.6, scale: 1.7, gate: true });
+    }
+    // a turning's arch is edge-on until you reach it, so a small, low pointer on the main road
+    // says it's coming; low enough that the signs beyond it stay in view
     {
       const spec = road.junctions.find((b) => b.id === d.id)!;
-      const at = spec.t - 24 / road.main.length;
+      const at = spec.t - 22 / road.main.length;
       const c = road.main.curve.getPointAt(at);
       const tan = road.main.curve.getTangentAt(at);
       const n = road.main.perp(at).multiplyScalar(spec.side);
-      const half = road.main.width / 2;
-      const off = half + FOOTPATH + 1.2;
-      boards.infoBoard(
-        spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent,
-        c.x + n.x * off, c.z + n.z * off, Math.atan2(-tan.x, -tan.z)
-      );
-      gates.push({ x: c.x + n.x * off, z: c.z + n.z * off });
+      const off = road.main.width / 2 + FOOTPATH + 0.8;
+      const px = c.x + n.x * off, pz = c.z + n.z * off;
+      boards.infoBoard(spec.side === 1 ? `${d.name} →` : `← ${d.name}`, d.blurb, d.accent, px, pz, Math.atan2(-tan.x, -tan.z), {
+        width: 4.2,
+        scale: 0.55,
+        // seen from the other carriageway the turning is on the other hand
+        backTitle: spec.side === 1 ? `← ${d.name}` : `${d.name} →`,
+      });
+      signSpots.push({ x: px, z: pz });
     }
     const items = byDistrict(d.id);
     const half = street.width / 2;
@@ -380,6 +426,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
       const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
       boards.projectBoard(project, d.accent, bx, bz, faceRoad);
+      signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
       const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
@@ -449,7 +496,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const plaza = (() => {
     const c = road.main.curve.getPointAt(1);
     const dir = road.main.curve.getTangentAt(1).normalize(); // direction of travel
-    return { x: c.x + dir.x * 12, z: c.z + dir.z * 12, n: dir, c };
+    // the road lays the square's kerb and footpath ring; the paving goes inside it
+    return { x: road.main.end.x, z: road.main.end.z, n: dir, c };
   })();
   {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 44), new THREE.MeshLambertMaterial({ color: 0xcfc8b8 }));
@@ -462,16 +510,26 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const faceP = Math.atan2(plaza.c.x - plaza.x, plaza.c.z - plaza.z);
     props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP, 'box');
 
-    const hqx = plaza.x + plaza.n.x * 8.5;
-    const hqz = plaza.z + plaza.n.z * 8.5;
-    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP);
+    // the lab's sign spans the road where it opens into the square
+    const hqx = plaza.c.x;
+    jumps.set('hq', before(road.main, 1, 16));
+    const hqz = plaza.c.z;
+    // the lab's own sign: its mark, and wide enough that the name isn't squeezed
+    const mark = await new Promise<HTMLImageElement | undefined>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(undefined);
+      img.src = '/brand/sjl-facet.jpg'; // the Facet mark (raster until its vector is drawn)
+    });
+    boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7, gate: true });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
         title: 'Super Jackfruit Labs',
+        logo: '/brand/sjl-facet.jpg',
         tagline: 'agent-native tools, built in the open',
         lines: [
-          'The first street is the suite: six tools that carry a task from ask to proof. Each works on its own.',
+          'The first street is the suite: six tools that carry a task from ask to proof.',
           'The other streets hold the experiments that taught us what to build.',
         ],
         links: [
@@ -565,6 +623,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   mark('scatter');
   // everything scattered so far becomes a handful of instanced meshes
+  // the drivable area: everything built plus a margin, so the hedge round it never meets a
+  // house, the square or a turning circle
+  const bounds = { minX: -150, maxX: 150, minZ: Z_END - 28, maxZ: Z_START + 22 };
+  // a hedge just past the edge of the drivable area, so the car stops against something
+  {
+    const out = 1.8, step = 1.9;
+    const hedge = (x: number, z: number) =>
+      props.place(bushes[1], 2.2 + rand() * 0.5, x, z, rand() * 6.28, false, 0.015);
+    for (let x = bounds.minX - out; x <= bounds.maxX + out; x += step) {
+      hedge(x, bounds.minZ - out);
+      hedge(x, bounds.maxZ + out);
+    }
+    for (let z = bounds.minZ - out + step; z < bounds.maxZ + out; z += step) {
+      hedge(bounds.minX - out, z);
+      hedge(bounds.maxX + out, z);
+    }
+  }
   props.commit();
   mark('commit-instances');
   // the instanced copies of the house materials, whose glow follows the night
@@ -604,6 +679,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const tan = road.main.curve.getTangentAt(startT);
     car.teleport(p.x, p.z, Math.atan2(tan.x, tan.z));
   }
+  const startJump = before(road.main, startT, 0);
   mark('car');
   const audio = createAudio();
   const input = createInput(canvas, audio.ensure);
@@ -613,6 +689,16 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'm') audio.toggleMute();
   });
+  // desktop shortcuts for getting around: 1–6 the suite in order, H the lab, R the start
+  if (!(window.matchMedia?.('(pointer: coarse)').matches ?? false)) {
+    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'salaam', 'agentpod'];
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
+      if (to) car.teleport(to.x, to.z, to.h);
+    });
+  }
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
     audio.setChannel(e.detail.channel, e.detail.on);
   }) as EventListener);
@@ -674,7 +760,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const carCtx = {
     resolve: props.resolve,
     offRoad,
-    bounds: { minX: -130, maxX: 130, minZ: Z_END + 4, maxZ: Z_START - 2 },
+    bounds,
   };
 
   // ---------- loop ----------
@@ -696,6 +782,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   const timer = new THREE.Timer();
   let framesTimed = 0;
+  const sceneEl = canvas.closest<HTMLElement>('.scene');
   renderer.setAnimationLoop((now) => {
     const frameStart = performance.now();
     timer.update(now);
@@ -720,6 +807,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
+    // the page's own chrome (the station card) goes dark with the village
+    const night = sceneEl?.dataset.night === 'true' ? nightFactor > 0.45 : nightFactor > 0.55;
+    if (sceneEl && String(night) !== sceneEl.dataset.night) sceneEl.dataset.night = String(night);
     for (const m of windowMats) m.emissiveIntensity = nightFactor * 1.6;
     car.applyNight(nightFactor);
 

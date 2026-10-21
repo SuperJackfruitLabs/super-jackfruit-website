@@ -12,7 +12,7 @@ const posts = publishedPosts(await getCollection('blog'));
   description="Notes from inside the lab: what we built, what broke, and what the evidence actually said."
 
 >
-  <main class="writing">
+  <div class="writing">
     <nav class="writing__nav">
       <a href="/">← home</a>
       <a href="/rss.xml">rss</a>
@@ -47,7 +47,7 @@ const posts = publishedPosts(await getCollection('blog'));
         </ul>
       )
     }
-  </main>
+  </div>
 </Layout>
 
 <style>

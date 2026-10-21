@@ -1,6 +1,7 @@
 /**
- * The suite, in the order one task moves through it. Status and version were checked by hand
- * against each product's latest release and README on `checked`; recheck before changing them.
+ * The suite, in the order one task moves through it. Headline, summary, features, status, version
+ * and actions were copied from each product's live site on `checked`; recheck there before
+ * changing them, and never state a capability the product's own site does not.
  */
 export interface Product {
   slug: string;
@@ -8,7 +9,11 @@ export interface Product {
   /** The step this product owns on the home page flow. */
   step: string;
   blurb: string;
+  /** the product site's hero headline, word for word */
+  headline: string;
+  /** the product site's hero subhead, word for word */
   summary: string;
+  /** each one is stated on the product's own site; nothing here is the lab's claim alone */
   features: [string, string, string];
   status: string;
   version?: string;
@@ -22,13 +27,20 @@ export interface Product {
   hex: string;
   fg: string;
   ink: string;
-  /** the product's own website, when it has one; it is where every "go to" link leads */
-  site?: string;
-  cta: { label: string; href: string };
+  /** the product's own website; it is where every "go to" link leads */
+  site: string;
+  /** the one thing to do next, as the product's own site offers it: Sign in, Download or Install */
+  cta: { label: 'Sign in' | 'Download' | 'Install'; href: string };
+  /** Website, Docs and Source, in that order */
   links: { label: string; href: string }[];
 }
 
 const GH = 'https://github.com/SuperJackfruitLabs';
+const links = (slug: string, site: string, docs: string) => [
+  { label: 'Website', href: site },
+  { label: 'Docs', href: docs },
+  { label: 'Source', href: `${GH}/${slug}` },
+];
 
 export const suite: Product[] = [
   {
@@ -36,144 +48,132 @@ export const suite: Product[] = [
     name: 'SuperMessage',
     step: 'You talk',
     blurb: 'chat with your agents',
-    summary: 'An agent-aware Matrix chat client for iOS, Android, Windows, macOS and Linux. Talk to agents where you already talk to people.',
+    headline: 'Chat where your agents are in the room.',
+    summary: 'SuperMessage is a Matrix client in development. When an agent finishes a turn, asks permission, or reaches an approval gate, that arrives as a card in the room, next to what everyone else said.',
     features: [
-      'One Rust Matrix core under every platform: SwiftUI on iOS, Compose on Android, Tauri on desktop',
-      'Agents answer, ask for permission and report progress in the room',
-      'End-to-end encrypted by default',
+      'Agent turns, permission requests and approval gates arrive as cards in the room',
+      'Any homeserver; the people you talk to can use Element or Cinny',
+      'Unsigned desktop previews for macOS, Windows and Linux; no public mobile build yet',
     ],
-    status: 'Released',
+    status: 'In development',
     version: 'v0.0.15',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
     hex: '#8549ef',
     fg: '#ffffff',
     ink: '#6a35cc',
     site: 'https://supermessage.dev',
-    cta: { label: 'Visit supermessage.dev', href: 'https://supermessage.dev' },
-    links: [
-      { label: 'Download', href: `${GH}/supermessage/releases/latest` },
-      { label: 'Source', href: `${GH}/supermessage` },
-    ],
+    cta: { label: 'Download', href: `${GH}/supermessage/releases/latest` },
+    links: links('supermessage', 'https://supermessage.dev', 'https://docs.supermessage.dev'),
   },
   {
     slug: 'superpipeline',
     name: 'SuperPipeline',
     step: 'Work is planned',
     blurb: 'boards for agent work',
-    summary: 'A Kanban board that coordinates AI agents through pipeline stages and human approval gates. It owns the work; agents bring their own harness.',
+    headline: 'Agents do the work. A person approves it.',
+    summary: 'SuperPipeline is a board whose stages are owned by a person or by a capability. Any agent with that capability can claim a card in its stage, and a gate holds the card until a person decides.',
     features: [
-      'Agents connect over REST or MCP from their own infrastructure',
-      'Human approval gates between stages',
-      'Multi-tenant boards, templates and recurring work',
+      'Each stage is owned by a person or a capability, with an optional WIP limit and gate',
+      'Agents claim cards under a lease and connect over MCP or REST',
+      'At a gate you approve, request changes or reject; whoever produced the work cannot approve it',
     ],
     status: 'Released',
-    version: 'v0.0.18',
-    checked: '2026-10-20',
+    version: 'v0.0.19',
+    checked: '2026-10-21',
     hex: '#ffc21a',
     fg: '#2c2a26',
     ink: '#8a6100',
     site: 'https://superpipeline.dev',
-    cta: { label: 'Visit superpipeline.dev', href: 'https://superpipeline.dev' },
-    links: [
-      { label: 'Docs', href: 'https://docs.superpipeline.dev' },
-      { label: 'Source', href: `${GH}/superpipeline` },
-    ],
+    cta: { label: 'Sign in', href: 'https://app.superpipeline.dev' },
+    links: links('superpipeline', 'https://superpipeline.dev', 'https://docs.superpipeline.dev'),
   },
   {
     slug: 'salaam',
     name: 'Salaam',
     step: 'An agent does it',
-    blurb: 'a persistent home for agent work',
-    summary: 'Code in the terminal, step away, and return to the same session, tasks, approvals and results.',
+    blurb: 'coding sessions that outlast your terminal',
+    headline: 'Agent coding sessions that outlast your terminal.',
+    summary: 'Salaam is a persistent session service for terminal coding and unattended agent work, built on Pi. Each session, with its approvals and results, lives on your machine, so you can close the terminal and pick it up later.',
     features: [
-      'A persistent local session service: sal service start',
-      'Attach from any terminal, or observe without taking over',
-      'Tasks, approvals and results survive you closing the window',
+      'Close the terminal and the session keeps going',
+      'Reattach from another terminal, over SSH, or from an editor that speaks ACP',
+      'A patch waits in your approval inbox before it is applied',
     ],
     status: 'Released',
     version: 'v0.0.2',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
     hex: '#f74783',
     fg: '#ffffff',
     ink: '#c42a62',
     site: 'https://salaam.sh',
-    cta: { label: 'Visit salaam.sh', href: 'https://salaam.sh' },
-    links: [
-      { label: 'Docs', href: 'https://docs.salaam.sh' },
-      { label: 'Source', href: `${GH}/salaam` },
-    ],
+    cta: { label: 'Install', href: 'https://docs.salaam.sh/install/' },
+    links: links('salaam', 'https://salaam.sh', 'https://docs.salaam.sh'),
   },
   {
     slug: 'agentpod',
     name: 'AgentPod',
     step: 'Your fleet runs it',
-    blurb: 'hosts and supervises agents',
-    summary: 'The fleet and facilities console for agent runtimes: the machines and workspaces your agents live in.',
+    blurb: 'the console for your agents\' machines',
+    headline: 'The console for the machines your agents live on.',
+    summary: "AgentPod puts a small Go agent on each machine where your agents run. It dials out to a hub, and from one console you read each runtime's files, tail its logs, open a terminal and check its health.",
     features: [
-      'Files, logs, terminals, configuration and health for every runtime',
-      'Attach to runtimes you already run, or provision new ones',
-      'Self-hostable control plane',
+      'The node agent dials out over a WebSocket, so it needs no inbound port',
+      'Files, logs, terminal and health for each runtime from one console',
+      'apn scan checks a host with no hub, no account and no network',
     ],
     status: 'Released',
-    version: 'v0.1.86',
-    checked: '2026-10-20',
+    version: 'v0.1.98',
+    checked: '2026-10-21',
     hex: '#2196f3',
     fg: '#ffffff',
     ink: '#1565c0',
     site: 'https://agentpod.dev',
-    cta: { label: 'Visit agentpod.dev', href: 'https://agentpod.dev' },
-    links: [
-      { label: 'Docs', href: 'https://docs.agentpod.dev' },
-      { label: 'Source', href: `${GH}/agentpod` },
-    ],
+    cta: { label: 'Sign in', href: 'https://console.agentpod.dev' },
+    links: links('agentpod', 'https://agentpod.dev', 'https://docs.agentpod.dev'),
   },
   {
     slug: 'superlibrary',
     name: 'SuperLibrary',
     step: 'It remembers',
     blurb: 'the memory of the stack',
-    summary: 'Keeps what agents make and what work has been done, labelled with how each turned out, so agents consult it before they work.',
+    headline: 'Find what agents made, and whether it worked.',
+    summary: 'SuperLibrary keeps the files agents make and the record of finished work, each labelled with its outcome, and lets people and agents search them.',
     features: [
-      'Upload, view and embed artifacts',
-      'Work history arrives as items, labelled by outcome',
-      'Agents reach it over MCP',
+      'Files are uploaded as versioned artifacts, each carrying one of seven outcomes',
+      'Full-text and vector search together; approved and completed work ranks first',
+      'Agents search it through three read-only MCP tools',
     ],
     status: 'Released',
     version: 'v0.0.1',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
     hex: '#f2704e',
     fg: '#ffffff',
     ink: '#b8442a',
     site: 'https://superlibrary.dev',
-    cta: { label: 'Visit superlibrary.dev', href: 'https://superlibrary.dev' },
-    links: [
-      { label: 'Docs', href: 'https://docs.superlibrary.dev' },
-      { label: 'Source', href: `${GH}/superlibrary` },
-    ],
+    cta: { label: 'Sign in', href: 'https://app.superlibrary.dev' },
+    links: links('superlibrary', 'https://superlibrary.dev', 'https://docs.superlibrary.dev'),
   },
   {
     slug: 'superwitness',
     name: 'SuperWitness',
     step: 'You see proof',
-    blurb: 'observability and evals',
-    summary: 'Shows what an agent did, how the product it ran on behaved, and whether the work was any good, joined on one run.',
+    blurb: 'every run, on the record',
+    headline: 'Every run, on the record.',
+    summary: 'SuperWitness is a self-hosted service that joins a SuperPipeline run, its AgentPod attempts, traces, logs and verdicts into one document: what your agents did, how your products behaved, and whether the work was good.',
     features: [
-      'Agent traces and product telemetry on one run',
-      'Evaluations of whether the work was good',
-      'Run documents for SuperPipeline runs',
+      'A run, its attempts, traces, logs and verdicts joined into one document',
+      'Self-hosted beside Postgres, VictoriaTraces, VictoriaLogs and the OpenTelemetry Collector',
+      'Not standalone yet: it reads runs from SuperPipeline and attempts from AgentPod',
     ],
     status: 'Released',
-    version: 'v0.0.7',
-    checked: '2026-10-20',
+    version: 'v0.0.8',
+    checked: '2026-10-21',
     hex: '#0ea875',
     fg: '#ffffff',
     ink: '#087a55',
     site: 'https://superwitness.dev',
-    cta: { label: 'Visit superwitness.dev', href: 'https://superwitness.dev' },
-    links: [
-      { label: 'Docs', href: 'https://docs.superwitness.dev' },
-      { label: 'Source', href: `${GH}/superwitness` },
-    ],
+    cta: { label: 'Sign in', href: 'https://app.superwitness.dev' },
+    links: links('superwitness', 'https://superwitness.dev', 'https://docs.superwitness.dev'),
   },
 ];
 
