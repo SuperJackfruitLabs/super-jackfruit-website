@@ -343,7 +343,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       kind: 'info', accent: '#d98a1f', x: c.x, z: c.z, reach: 7,
       info: {
         title: 'Super Jackfruit Labs',
-        logo: '/brand/sjl-facet.jpg',
+        logo: '/brand/sjl-facet.svg',
         tagline: 'six tools for working with agents',
         lines: [
           'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
@@ -519,14 +519,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = () => resolve(undefined);
-      img.src = '/brand/sjl-facet.jpg'; // the Facet mark (raster until its vector is drawn)
+      img.src = '/brand/sjl-facet.svg'; // the Facet mark
     });
     boards.infoBoard('SUPER JACKFRUIT LABS', 'agent-native tools, built in the open', '#d98a1f', hqx, hqz, faceP, { logo: mark, width: 6.6, scale: 1.7, gate: true });
     stations.push({
       kind: 'info', accent: '#d98a1f', x: hqx, z: hqz,
       info: {
         title: 'Super Jackfruit Labs',
-        logo: '/brand/sjl-facet.jpg',
+        logo: '/brand/sjl-facet.svg',
         tagline: 'agent-native tools, built in the open',
         lines: [
           'The first street is the suite: six tools that carry a task from ask to proof.',
