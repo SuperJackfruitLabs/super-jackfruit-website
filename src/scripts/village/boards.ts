@@ -58,13 +58,32 @@ export function createBoards(
     return mat;
   }
 
+  // small lamps on the posts, lit with the boards when night falls
+  const lampMat = new THREE.MeshLambertMaterial({ color: 0xfff1c4, emissive: 0x000000 });
+  const capGeo = new THREE.SphereGeometry(1, 12, 8);
   function posts(group: T.Group, xs: number[], height: number, thickness: number, z: number): void {
     for (const px of xs) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(thickness, height, thickness), wood);
       post.position.set(px, height / 2, z);
       post.castShadow = true;
-      group.add(post);
+      const cap = new THREE.Mesh(capGeo, wood);
+      cap.scale.setScalar(thickness * 0.85);
+      cap.position.set(px, height, z);
+      const lamp = new THREE.Mesh(capGeo, lampMat);
+      lamp.scale.setScalar(thickness * 0.75);
+      lamp.position.set(px, height + thickness * 1.4, z);
+      group.add(post, cap, lamp);
     }
+  }
+  // a painted rim a shade darker than the board, inset from its edge
+  function rim(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.roundRect(18, 18, w - 36, h - 36, 22);
+    ctx.stroke();
+    ctx.restore();
   }
 
 
@@ -78,6 +97,9 @@ export function createBoards(
     size: { width: number; scale: number; gate?: boolean } = { width: 4.2, scale: 1 }
   ): void {
     const { lead, logo, title, sub, accent, fg } = o;
+    // a gate with a mark is taller, so the mark can sit above the name
+    const tall = size.gate && logo ? 486 : 320;
+    const panelH = (1.31 * tall) / 320;
     const mat = themedMaterial(
       (night) => (ctx, w, h) => {
         ctx.fillStyle = night ? '#131828' : accent;
@@ -90,7 +112,29 @@ export function createBoards(
           ctx.strokeRect(12, 12, w - 24, h - 24);
           ctx.shadowBlur = 0;
         }
+        if (!night) rim(ctx, w, h);
         ctx.fillStyle = night ? '#ffffff' : (fg ?? '#fffaf0');
+        if (size.gate) {
+          // an arch is read head-on above the road: everything centred, the mark above the name
+          ctx.textAlign = 'center';
+          let y = 0;
+          if (logo) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.roundRect(w / 2 - 78, 38, 156, 156, 30);
+            ctx.fill();
+            ctx.drawImage(logo, w / 2 - 66, 50, 132, 132);
+            ctx.fillStyle = night ? '#ffffff' : (fg ?? '#fffaf0');
+            y = 166;
+          }
+          ctx.font = '800 112px "Bricolage Grotesque Variable", sans-serif';
+          ctx.fillText(title, w / 2, y + 150, w - 100);
+          ctx.globalAlpha = 0.88;
+          ctx.font = '600 54px "Figtree Variable", sans-serif';
+          ctx.fillText(sub, w / 2, y + 228, w - 100);
+          ctx.globalAlpha = 1;
+          return;
+        }
         ctx.textAlign = 'left';
         let left = 56;
         if (logo) {
@@ -115,19 +159,19 @@ export function createBoards(
         ctx.globalAlpha = 1;
       },
       Math.round((1024 * size.width) / 4.2),
-      320
+      tall
     );
 
     const group = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(size.width, 1.31), mat);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(size.width, panelH), mat);
     // an arch is raised clear of the chase camera (about 4 m up), not just the car
     const lift = size.gate ? 1.2 : 0;
-    panel.position.set(0, 2.9 + lift, 0.06);
+    panel.position.set(0, 2.9 + lift + (panelH - 1.31) / 2, 0.06);
     panel.castShadow = true;
     const panelBack = panel.clone();
     panelBack.rotation.y = Math.PI;
     panelBack.position.z = -0.06;
-    posts(group, [-(size.width / 2 - 0.2), size.width / 2 - 0.2], 3.6 + lift, 0.13, 0);
+    posts(group, [-(size.width / 2 - 0.2), size.width / 2 - 0.2], 3.6 + lift + (panelH - 1.31), 0.13, 0);
     group.add(panel, panelBack);
     group.position.set(x, 0, z);
     group.rotation.y = facing;
@@ -172,6 +216,7 @@ export function createBoards(
         }
       }
       for (const tb of themed) tb.mat.emissive.setScalar(nightMode ? Math.min(1, nightFactor * 1.1) : 0);
+      lampMat.emissive.setHex(nightMode ? 0xffd27a : 0x000000);
     },
   };
 }

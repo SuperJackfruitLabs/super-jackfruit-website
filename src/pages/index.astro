@@ -323,7 +323,8 @@ import '@superjackfruit/vibekit/fonts.css';
 
   .card__actions {
     display: flex;
-    gap: 1.4rem;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
   }
 
   .card__actions a {
@@ -333,6 +334,8 @@ import '@superjackfruit/vibekit/fonts.css';
     text-decoration: none;
     border-bottom: 2px solid var(--accent, #d98a1f);
     padding-bottom: 0.1rem;
+    min-width: 0;
+    overflow-wrap: anywhere; /* a long URL label wraps inside the card */
   }
 
   .card__actions a:hover,
