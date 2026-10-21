@@ -686,10 +686,29 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         img.onerror = () => resolve(undefined);
         img.src = '/brand/captain-jack.svg';
       });
-      boards.hangingSign(
-        { name: 'Captain Jack', slug: 'captain-jack', tagline: "the lab's guide — come and ask", accent: '#173d83' } as Project,
-        sx + fz * 1.2, sz - fx * 1.2, home.facing + Math.PI / 2, portrait
-      );
+      // at the kerb in front of his house, like the suite's signs on Main Street: face side-on
+      // to the road, bracket reaching out toward it
+      let bestT = 0;
+      for (let i = 0, bestD = Infinity; i <= 400; i++) {
+        const p = road.main.curve.getPointAt(i / 400);
+        const d = Math.hypot(p.x - home.x, p.z - home.z);
+        if (d < bestD) [bestD, bestT] = [d, i / 400];
+      }
+      {
+        const c = road.main.curve.getPointAt(bestT);
+        const tan = road.main.curve.getTangentAt(bestT);
+        const side = Math.sign(road.main.perp(bestT).x * (home.x - c.x) + road.main.perp(bestT).z * (home.z - c.z)) || 1;
+        const n = road.main.perp(bestT).multiplyScalar(side);
+        const half = road.main.width / 2;
+        const bx = c.x + n.x * (half + FOOTPATH + 1.2 + 1.6);
+        const bz = c.z + n.z * (half + FOOTPATH + 1.2 + 1.6);
+        const along = Math.atan2(-tan.x, -tan.z);
+        const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
+        boards.hangingSign(
+          { name: 'Captain Jack', slug: 'captain-jack', tagline: "the lab's guide — come and ask", accent: '#173d83' } as Project,
+          bx, bz, towardRoad ? along : along + Math.PI, portrait
+        );
+      }
       stations.push({
         kind: 'info', accent: '#173d83', x: sx, z: sz, reach: 8,
         info: {
