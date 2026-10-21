@@ -17,7 +17,7 @@ const next = suite[i + 1];
     <h1><img class="logo" src={`/brand/${p.slug}.svg`} alt="" width="72" height="72" />{p.name}</h1>
     <p class="headline">{p.headline}</p>
     <p class="lede">{p.summary}</p>
-    <p class="status">● {p.status}{p.version ? ` · ${p.version}` : ''} <span>checked {p.checked}</span></p>
+    <p class="status" data-released={p.status === 'Released' ? 'yes' : 'no'}>● {p.status}{p.version ? ` · ${p.version}` : ''} <span>checked {p.checked}</span></p>
     <ul class="features">{p.features.map((f) => <li>{f}</li>)}</ul>
     <div class="actions">
       <a class="btn" href={p.cta.href}>{p.cta.label}</a>
@@ -46,4 +46,6 @@ const next = suite[i + 1];
   .alone { color: var(--vk-color-muted); margin-top: 2rem; }
   .steps { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-top: 1px solid var(--vk-color-line); padding-top: 1rem; }
   .steps a { color: var(--vk-color-muted); }
+  /* not yet released reads neutral, not as the green of a release */
+  .status[data-released='no'] { color: var(--vk-color-muted); }
 </style>

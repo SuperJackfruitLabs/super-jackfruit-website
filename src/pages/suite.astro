@@ -22,7 +22,7 @@ import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
           <span class="kicker">{i + 1} · {p.step}</span>
           <a class="name" href={`/products/${p.slug}`}><strong>{p.name}</strong></a>
           <span class="blurb">{p.blurb}</span>
-          <span class="status">● {p.status}{p.version ? ` · ${p.version}` : ''}</span>
+          <span class="status" data-released={p.status === 'Released' ? 'yes' : 'no'}>● {p.status}{p.version ? ` · ${p.version}` : ''}</span>
           <span class="ctas">
             <a class="cta" href={p.cta.href}>{p.cta.label} →</a>
             <a class="more" href={p.site}>{new URL(p.site).host}</a>
@@ -66,4 +66,6 @@ import { suite, coming, CONTACT, accentAttrs } from '../data/suite';
   .paths { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin-top: 3rem; }
   .paths a { display: flex; flex-direction: column; gap: .3rem; padding: 1.25rem; background: var(--vk-color-raised); border-radius: var(--vk-radius-md); text-decoration: none; }
   .paths span:last-child { color: var(--vk-color-muted); font-size: .9rem; }
+  /* not yet released reads neutral, not as the green of a release */
+  .status[data-released='no'] { color: var(--vk-color-muted); }
 </style>
