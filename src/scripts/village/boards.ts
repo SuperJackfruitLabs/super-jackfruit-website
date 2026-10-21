@@ -20,7 +20,7 @@ export interface BoardKit {
   /** Main Street: a round sign swinging from an iron bracket */
   hangingSign(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   /** the Agent Quarter: a flag on a tall pole */
-  flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
+  flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement, opts?: { baseY?: number; emblem?: boolean }): void;
   /** MCP Alley: a little terminal on a post, with a status light and a cable into the ground */
   kiosk(project: Project, accent: string, x: number, z: number, facing: number): void;
   /** the Odd Shop: a rough plank with the name carved in */
@@ -314,13 +314,23 @@ export function createBoards(
   }
 
   // --- flag ---
-  function flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void {
+  function flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement, opts: { baseY?: number; emblem?: boolean } = {}): void {
     const accent = project.accent ?? '#d98a1f';
     const fg = project.accentFg ?? '#fffaf0';
     const mat = themedMaterial((night) => (ctx, w, h) => {
       ctx.fillStyle = night ? '#131828' : accent;
       ctx.fillRect(0, 0, w, h);
       if (night) neon(ctx, w, h, accent);
+      if (opts.emblem) {
+        // a banner, not a sign: the mark centred, a band of the suite's colours along the hoist
+        const band = ['#8549ef', '#ffc21a', '#f2704e', '#0ea875', '#2196f3', '#f74783'];
+        band.forEach((c, i) => {
+          ctx.fillStyle = c;
+          ctx.fillRect(0, (h / band.length) * i, 70, h / band.length + 1);
+        });
+        logoTile(ctx, logo, w / 2 - 110 + 35, h / 2 - 110, 220, night);
+        return;
+      }
       logoTile(ctx, logo, 50, 60, 220, night);
       ctx.fillStyle = night ? '#ffffff' : fg;
       ctx.textAlign = 'left';
@@ -331,7 +341,7 @@ export function createBoards(
       ctx.fillText(shortLine(project), 304, 245, w - 330);
     }, 1024, 340);
     mat.side = THREE.FrontSide;
-    const W = 3.6, H = 1.2;
+    const W = opts.emblem ? 2.6 : 3.6, H = opts.emblem ? 1.6 : 1.2;
     const geo = () => {
       const gg = new THREE.PlaneGeometry(W, H, 16, 4);
       gg.translate(W / 2, 0, 0);
@@ -355,6 +365,16 @@ export function createBoards(
     g.add(fm, bm);
     flags.push({ front, back, base: (front.getAttribute('position').array as Float32Array).slice(), phase: Math.random() * 6.28 });
     // a low plinth so the pole stands on something
+    if (opts.baseY) {
+      // on a roof: no plinth and nothing for the car to hit
+      g.position.y = opts.baseY;
+      g.traverse((o) => { if ((o as T.Mesh).isMesh) (o as T.Mesh).castShadow = true; });
+      g.position.x = x;
+      g.position.z = z;
+      g.rotation.y = facing;
+      scene.add(g);
+      return;
+    }
     g.add(box(0.7, 0.3, 0.7, stoneDark, 0, 0.15, 0));
     place(g, x, z, facing);
     addCollider(x, z, 0.4, 0.4, facing);

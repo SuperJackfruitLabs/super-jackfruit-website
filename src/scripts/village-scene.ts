@@ -593,14 +593,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const kx = plaza.x + plaza.n.x * front - plaza.n.z * 3.2;
     const kz = plaza.z + plaza.n.z * front + plaza.n.x * 3.2;
     const faceK = faceP;
-    // the lab flies its flag on the other side of the door
+    // the lab's flag flies from its roof: the mark alone, no words
+    const hqTop = props.scaledSize(houses[7], 13).y;
     boards.flag(
-      { name: 'Super Jackfruit Labs', slug: 'sjl', tagline: 'agent-native tools, built in the open', accent: '#d98a1f' } as Project,
-      plaza.x + plaza.n.x * front + plaza.n.z * 3.6,
-      plaza.z + plaza.n.z * front - plaza.n.x * 3.6,
-      // flying outward, away from the monument, so the stone doesn't hide it
+      { name: 'Super Jackfruit Labs', slug: 'sjl', tagline: '', accent: '#d98a1f' } as Project,
+      plaza.x + plaza.n.x * 18,
+      plaza.z + plaza.n.z * 18,
       faceP + Math.PI,
-      mark
+      mark,
+      { baseY: hqTop - 0.3, emblem: true }
     );
     boards.chalkboard('say hi', ['the lab is always open', 'everything here is', 'open source', 'come and wave'], kx, kz, faceK);
     stations.push({
