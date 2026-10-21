@@ -22,6 +22,7 @@ import { createProps } from './village/props';
 import { createBoards } from './village/boards';
 import { createLamps } from './village/lamps';
 import { createCar } from './village/car';
+import { CARS, loadChoice, saveChoice, type CarChoice } from './village/cars';
 import { createAudio } from './village/audio';
 import { createInput, isTyping } from './village/input';
 import { createFx } from './village/fx';
@@ -673,7 +674,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   mark('npcs');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
-  const car = await createCar(THREE, props.loadGltf, scene);
+  let carChoice = loadChoice();
+  const car = await createCar(THREE, props.loadGltf, scene, carChoice);
   {
     const p = road.main.curve.getPointAt(startT);
     const tan = road.main.curve.getTangentAt(startT);
@@ -682,7 +684,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const startJump = before(road.main, startT, 0);
   mark('car');
   const audio = createAudio();
+  audio.setEngine(car.spec.engine);
   const input = createInput(canvas, audio.ensure);
+
+  // ---------- the garage: the menu picks, C cycles ----------
+  const chooseCar = (next: CarChoice): void => {
+    carChoice = next;
+    saveChoice(next);
+    void car.choose(next).then(() => audio.setEngine(car.spec.engine));
+    window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: next }));
+  };
+  window.addEventListener('village:car', ((e: CustomEvent<CarChoice>) => chooseCar(e.detail)) as EventListener);
+  window.addEventListener('keydown', (e) => {
+    if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'c') return;
+    const i = CARS.findIndex((c) => c.id === carChoice.car);
+    chooseCar({ car: CARS[(i + 1) % CARS.length].id, paint: 0 });
+  });
+  window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: carChoice }));
   const fx = createFx(THREE, scene);
 
   // ---------- page wiring ----------

@@ -1,14 +1,15 @@
 // Everything you hear. One AudioContext, created on the first gesture:
-//   engine  — a real petrol loop (CC-BY qubodup, opengameart.org), pitch-bent
-//             by a faked gearbox, idling rather than cutting out at rest
+//   engine  — a loop per car (see cars.ts; the shared petrol one is CC-BY
+//             qubodup, opengameart.org), pitch-bent by a faked gearbox whose
+//             gears, range and tone each car sets, idling rather than cutting
+//             out at rest
 //   skid    — filtered noise whose gain follows how much the tyres are scrubbing
 //   thud    — a one-shot knock when the car hits something
 //   music   — "Where Was I" by yd (CC0, opengameart.org), plain <audio>
-const ENGINE_URL = '/assets/village/engine-petrol.mp3';
+import { CARS, type EngineSound } from './cars';
+
 const MUSIC_URL = '/assets/village/music.m4a';
 
-/** speed span of one imaginary gear, in m/s */
-const GEAR_SPAN = 6.5;
 /** how far past a gear's edge the speed must go before the gear changes, m/s */
 const GEAR_HYSTERESIS = 0.6;
 
@@ -39,6 +40,8 @@ export interface AudioBus {
   toggleMute(): boolean;
   setChannel(channel: string, on: boolean): void;
   engine(speed: number, nitro: boolean): void;
+  /** the car changed: switch to its engine */
+  setEngine(sound: EngineSound): void;
   /** sustained tyre scrub, 0..1 */
   skid(level: number): void;
   /** one-shot body knock, 0..1 */
@@ -49,6 +52,12 @@ export function createAudio(): AudioBus {
   let ctx: AudioContext | null = null;
   let engineSrc: AudioBufferSourceNode | null = null;
   let engineGain: GainNode | null = null;
+  let engineTone: BiquadFilterNode | null = null;
+  let engineGrit: WaveShaperNode | null = null;
+  let sound: EngineSound = CARS[0].engine;
+  /** the loop that's playing, so a car sharing it doesn't restart it */
+  let playingUrl = '';
+  const buffers = new Map<string, Promise<AudioBuffer>>();
   let skidGain: GainNode | null = null;
   let sfxBus: GainNode | null = null;
   let noise: AudioBuffer | null = null;
@@ -65,6 +74,59 @@ export function createAudio(): AudioBus {
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     return buf;
+  }
+
+  /** a soft clipper: 0 leaves the loop alone, 1 makes it rasp */
+  function gritCurve(amount: number): Float32Array {
+    const n = 512;
+    const curve = new Float32Array(n);
+    const k = 1 + amount * 18;
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(k * x) / Math.tanh(k);
+    }
+    return curve;
+  }
+
+  function decode(actx: AudioContext, url: string): Promise<AudioBuffer> {
+    let p = buffers.get(url);
+    if (!p) {
+      p = fetch(url)
+        .then((r) => r.arrayBuffer())
+        .then((b) => actx.decodeAudioData(b));
+      buffers.set(url, p);
+      p.catch(() => buffers.delete(url));
+    }
+    return p;
+  }
+
+  /** start the current car's loop, replacing whatever loop was running */
+  async function playEngine(actx: AudioContext): Promise<void> {
+    const url = sound.url;
+    if (url === playingUrl || !engineGain) return;
+    playingUrl = url;
+    try {
+      const buf = await decode(actx, url);
+      if (playingUrl !== url) return; // the car changed again meanwhile
+      const src = actx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const span = loopSpan(buf.getChannelData(0), buf.sampleRate);
+      src.loopStart = span.start;
+      src.loopEnd = span.end;
+      src.connect(engineGrit!);
+      src.start(0, span.start);
+      engineSrc?.stop();
+      engineSrc = src;
+    } catch {
+      if (playingUrl === url) playingUrl = '';
+    }
+  }
+
+  function applyTone(): void {
+    if (!ctx || !engineTone || !engineGrit) return;
+    engineTone.frequency.setTargetAtTime(sound.tone, ctx.currentTime, 0.05);
+    engineGrit.curve = sound.grit > 0 ? gritCurve(sound.grit) : null;
   }
 
   function start(): void {
@@ -96,30 +158,21 @@ export function createAudio(): AudioBus {
     skidGain.connect(sfxBus);
     skidSrc.start();
 
-    (async () => {
-      try {
-        const res = await fetch(ENGINE_URL);
-        const buf = await actx.decodeAudioData(await res.arrayBuffer());
-        const src = actx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const span = loopSpan(buf.getChannelData(0), buf.sampleRate);
-        src.loopStart = span.start;
-        src.loopEnd = span.end;
-        const gain = actx.createGain();
-        gain.gain.value = 0;
-        src.connect(gain);
-        gain.connect(comp);
-        src.start(0, span.start);
-        engineSrc = src;
-        engineGain = gain;
-      } catch {
-        engineSrc = null;
-        engineGain = null;
-      } finally {
-        starting = false;
-      }
-    })();
+    // loop → grit → tone → level; the loop is swapped per car, the rest stays
+    engineGrit = actx.createWaveShaper();
+    engineGrit.oversample = '2x';
+    engineTone = actx.createBiquadFilter();
+    engineTone.type = 'lowpass';
+    engineTone.Q.value = 0.7;
+    engineGain = actx.createGain();
+    engineGain.gain.value = 0;
+    engineGrit.connect(engineTone);
+    engineTone.connect(engineGain);
+    engineGain.connect(comp);
+    applyTone();
+    void playEngine(actx).finally(() => {
+      starting = false;
+    });
   }
 
   function startMusic(): void {
@@ -169,16 +222,25 @@ export function createAudio(): AudioBus {
       const sp = Math.abs(speed);
       // change gear only once the speed is clear of the edge, so a car
       // cruising right at a gear's top doesn't flick between two pitches
-      if (sp > (gear + 1) * GEAR_SPAN + GEAR_HYSTERESIS) gear++;
-      else if (gear > 0 && sp < gear * GEAR_SPAN - GEAR_HYSTERESIS) gear--;
-      gear = Math.max(0, Math.min(gear, Math.floor((sp + GEAR_HYSTERESIS) / GEAR_SPAN)));
-      const inGear = sp < 0.15 ? 0 : Math.min(1, Math.max(0, (sp - gear * GEAR_SPAN) / GEAR_SPAN));
+      const span = sound.gearSpan;
+      if (sp > (gear + 1) * span + GEAR_HYSTERESIS) gear++;
+      else if (gear > 0 && sp < gear * span - GEAR_HYSTERESIS) gear--;
+      gear = Math.max(0, Math.min(gear, Math.floor((sp + GEAR_HYSTERESIS) / span)));
+      const inGear = sp < 0.15 ? 0 : Math.min(1, Math.max(0, (sp - gear * span) / span));
       const rpm = Math.min(1, 0.18 + inGear * 0.82 + (nitro ? 0.12 : 0));
-      engineSrc.playbackRate.setTargetAtTime(0.65 + rpm * 1.15 + (nitro ? 0.3 : 0), now, 0.07);
+      engineSrc.playbackRate.setTargetAtTime(sound.idleRate + rpm * sound.rateSpan + (nitro ? 0.3 : 0), now, 0.07);
       // an idle floor, so a parked car still sounds like a running one
       const idle = 0.022 + Math.sin(now * 3.1) * 0.003;
       const vol = sp < 0.15 ? idle : Math.max(idle, Math.min(0.12, 0.05 + (sp / 18) * 0.06) + (nitro ? 0.02 : 0));
-      engineGain.gain.setTargetAtTime(vol, now, 0.1);
+      engineGain.gain.setTargetAtTime(vol * sound.gain, now, 0.1);
+    },
+
+    setEngine(next: EngineSound): void {
+      sound = next;
+      gear = 0;
+      if (!ctx) return; // picked before the first gesture: it starts with this one
+      applyTone();
+      void playEngine(ctx);
     },
 
     skid(level: number): void {
