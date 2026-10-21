@@ -15,7 +15,7 @@ export async function GET(context: APIContext) {
   const posts = publishedPosts(await getCollection('blog'));
 
   return rss({
-    title: 'Super Jackfruit Labs — Writing',
+    title: 'Super Jackfruit Labs — Lab notes',
     description:
       'Notes from inside the lab: what we built, what broke, and what the evidence actually said.',
     // Requires `site` in astro.config.mjs; the build fails loudly without it rather than emitting
