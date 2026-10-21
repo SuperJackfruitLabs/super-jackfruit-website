@@ -752,15 +752,20 @@ export function createBoards(
 
     tick(t: number): void {
       for (const s of swingers) s.o.rotation.x = Math.sin(t * 1.3 + s.phase) * s.amp;
-      // One wind for the whole village: it gusts and slowly backs and veers. Each flag
-      // swings round its pole to follow it, a little behind, and the cloth ripples in
-      // waves running from the pole to the free end, harder in a gust.
-      const gust = 0.55 + 0.45 * Math.sin(t * 0.37) * Math.sin(t * 0.91 + 1.3);
-      const windDir = Math.sin(t * 0.07) * 1.1 + Math.sin(t * 0.23 + 2) * 0.45;
+      // One wind for the whole village, slow: strength wanders over tens of seconds,
+      // with real lulls when the flag hangs down against its pole, and the direction
+      // drifts round over a minute or two. The cloth ripples gently, a little faster
+      // and wider as the wind picks up.
+      const raw = 0.5 + 0.32 * Math.sin(t * 0.11 + 0.4) + 0.18 * Math.sin(t * 0.047 + 2.1) + 0.1 * Math.sin(t * 0.29);
+      const wind = Math.min(1, Math.max(0, (raw - 0.12) / 0.75)); // calm about a fifth of the time
+      const windDir = Math.sin(t * 0.035) * 1.2 + Math.sin(t * 0.09 + 2) * 0.35;
       for (const f of flags) {
-        const lag = Math.sin(t * 0.5 + f.phase) * 0.25 + Math.sin(t * 1.7 + f.phase * 2) * 0.08 * gust;
-        f.fly.rotation.y = windDir + lag;
-        const amp = 0.08 + 0.22 * gust;
+        f.fly.rotation.y += (windDir + Math.sin(t * 0.3 + f.phase) * 0.12 - f.fly.rotation.y) * 0.02;
+        // calm: the cloth falls toward the pole; wind lifts it out
+        const hang = (1 - wind) * (1 - wind) * 1.25;
+        f.fly.rotation.z += (-hang - f.fly.rotation.z) * 0.03;
+        const amp = 0.02 + 0.1 * wind;
+        const speed = 1.6 + 2.4 * wind;
         for (const [geo, sign] of [[f.front, 1], [f.back, -1]] as const) {
           const pos = geo.getAttribute('position') as T.BufferAttribute;
           for (let i = 0; i < pos.count; i++) {
@@ -768,12 +773,10 @@ export function createBoards(
             const y = f.base[i * 3 + 1];
             const k = x / f.w; // 0 at the pole, 1 at the free end
             const wave =
-              Math.sin(x * 2.4 - t * (5 + 4 * gust) + f.phase) * amp +
-              Math.sin(x * 4.1 - t * 8.3 + y * 1.7 + f.phase) * amp * 0.35;
+              Math.sin(x * 1.8 - t * speed + f.phase) * amp +
+              Math.sin(x * 3.1 - t * speed * 1.4 + y * 1.2 + f.phase) * amp * 0.25;
             pos.setZ(i, sign * wave * k);
-            // in a lull the free end droops; in a gust it stands out
-            pos.setY(i, y - (1 - gust) * 0.35 * k * k + Math.sin(x * 3 - t * 6 + f.phase) * 0.04 * k);
-            pos.setX(i, x * (1 - 0.06 * k * Math.abs(Math.sin(x * 2.4 - t * 6))));
+            pos.setY(i, y + Math.sin(x * 2 - t * speed * 0.8 + f.phase) * 0.02 * k);
           }
           pos.needsUpdate = true;
           geo.computeVertexNormals();
