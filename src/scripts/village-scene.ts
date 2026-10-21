@@ -319,16 +319,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const bz = c.z + n.z * (half + FOOTPATH + 1.2) - tan.z * 3.2;
       if (seg === road.main) {
         // Main Street is a high street: a sign swinging from a bracket, the bracket reaching
-        // out over the pavement toward the road, and the name painted on the house's side wall
+        // out over the pavement toward the road
         // the sign's face stays side-on to the road; turn it so its bracket (local +x) points at the road
         const along = Math.atan2(-tan.x, -tan.z);
         const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
         boards.hangingSign(project, bx + n.x * 1.6, bz + n.z * 1.6, towardRoad ? along : along + Math.PI, logos.get(project.slug));
-        const size = props.scaledSize(proto, 7.6);
-        const xdir = { x: Math.cos(faceRoad), z: -Math.sin(faceRoad) };
-        const s = xdir.x * -tan.x + xdir.z * -tan.z > 0 ? 1 : -1;
-        const off = (size.x / 2) * 0.93 + 0.03;
-        boards.mural(project, hx + xdir.x * s * off, size.y * 0.36, hz + xdir.z * s * off, Math.atan2(xdir.x * s, xdir.z * s), Math.min(size.z * 0.8, 5), logos.get(project.slug));
       } else {
         // the Agent Quarter flies flags
         boards.flag(project, bx, bz, Math.atan2(-tan.x, -tan.z), logos.get(project.slug));

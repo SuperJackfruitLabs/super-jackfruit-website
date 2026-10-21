@@ -19,8 +19,6 @@ export interface BoardKit {
   infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number, big?: { logo?: HTMLImageElement; width: number; scale: number; gate?: boolean; backTitle?: string }): void;
   /** Main Street: a round sign swinging from an iron bracket */
   hangingSign(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
-  /** the product's name painted large on a house's side wall */
-  mural(project: Project, x: number, y: number, z: number, facing: number, width: number, logo?: HTMLImageElement): void;
   /** the Agent Quarter: a flag on a tall pole */
   flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   /** MCP Alley: a little terminal on a post, with a status light and a cable into the ground */
@@ -314,42 +312,6 @@ export function createBoards(
     addCollider(x, z, 0.25, 0.25, facing);
   }
 
-  // --- wall mural ---
-  function mural(project: Project, x: number, y: number, z: number, facing: number, width: number, logo?: HTMLImageElement): void {
-    const accent = project.accent ?? '#d98a1f';
-    const fg = project.accentFg ?? '#fffaf0';
-    const mat = themedMaterial((night) => (ctx, w, h) => {
-      ctx.fillStyle = night ? '#131828' : accent;
-      ctx.beginPath();
-      ctx.roundRect(0, 0, w, h, 40);
-      ctx.fill();
-      if (night) neon(ctx, w, h, accent);
-      // a painted wall shows its bricks through the paint
-      if (!night) {
-        ctx.globalAlpha = 0.07;
-        ctx.fillStyle = '#000';
-        for (let row = 0; row < h; row += 40) {
-          ctx.fillRect(0, row, w, 3);
-          for (let col = (row / 40) % 2 ? 0 : 60; col < w; col += 120) ctx.fillRect(col, row, 3, 40);
-        }
-        ctx.globalAlpha = 1;
-      }
-      logoTile(ctx, logo, 60, h / 2 - 130, 260, night);
-      ctx.fillStyle = night ? '#ffffff' : fg;
-      ctx.textAlign = 'left';
-      ctx.font = font(800, 150);
-      ctx.fillText(project.name, logo ? 370 : 70, h / 2 + 20, w - (logo ? 420 : 140));
-      ctx.globalAlpha = 0.88;
-      ctx.font = font(600, 64, '"Figtree Variable", sans-serif');
-      ctx.fillText(shortLine(project), logo ? 376 : 76, h / 2 + 110, w - (logo ? 420 : 140));
-    }, 1600, 560);
-    mat.transparent = true;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(width, (width * 560) / 1600), mat);
-    m.position.set(x, y, z);
-    m.rotation.y = facing;
-    scene.add(m);
-  }
-
   // --- flag ---
   function flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void {
     const accent = project.accent ?? '#d98a1f';
@@ -453,56 +415,90 @@ export function createBoards(
     addCollider(x, z, 0.9, 0.3, facing);
   }
 
-  // --- carved plank ---
+  // --- carved plank: a rough-edged board hung on chains from a ranch-style crossbar ---
   function plank(project: Project, accent: string, x: number, z: number, facing: number): void {
+    // the outline wobbles a little, as if cut by hand; the same wobble on day and night faces
+    const seed = [...project.slug].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+    const wob = (i: number) => Math.sin(seed * 0.7 + i * 2.3) * 7;
     const mat = themedMaterial((night) => (ctx, w, h) => {
-      ctx.fillStyle = night ? '#2a1d12' : '#b98a55';
-      ctx.fillRect(0, 0, w, h);
-      // grain
-      ctx.strokeStyle = night ? 'rgba(255,200,140,0.08)' : 'rgba(90,55,25,0.35)';
+      ctx.beginPath();
+      const steps = 8;
+      ctx.moveTo(24, 20 + wob(0));
+      for (let i = 1; i <= steps; i++) ctx.lineTo(24 + ((w - 48) * i) / steps, 20 + wob(i));
+      ctx.lineTo(w - 10, h / 2);
+      for (let i = steps; i >= 0; i--) ctx.lineTo(24 + ((w - 48) * i) / steps, h - 20 + wob(i + 9));
+      ctx.lineTo(10, h / 2);
+      ctx.closePath();
+      ctx.fillStyle = night ? '#2a1d12' : '#c08f57';
+      ctx.fill();
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = night ? 'rgba(255,200,140,0.07)' : 'rgba(95,58,26,0.28)';
       ctx.lineWidth = 3;
-      for (let yy = 18; yy < h; yy += 22 + ((yy * 7) % 13)) {
+      for (let yy = 30; yy < h; yy += 26) {
         ctx.beginPath();
         ctx.moveTo(0, yy);
-        for (let xx = 0; xx <= w; xx += 80) ctx.lineTo(xx, yy + Math.sin(xx * 0.013 + yy) * 5);
+        for (let xx = 0; xx <= w; xx += 70) ctx.lineTo(xx, yy + Math.sin(xx * 0.012 + yy + seed) * 5);
         ctx.stroke();
       }
-      // a knot
-      ctx.beginPath();
-      ctx.ellipse(w * 0.83, h * 0.72, 26, 14, 0.2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.textAlign = 'center';
-      ctx.font = font(800, 108, 'Georgia, "Times New Roman", serif');
-      // carved: a light lip under dark letters
-      ctx.fillStyle = night ? accent : 'rgba(255,235,200,0.55)';
+      ctx.restore();
+      // a darker burnt edge
+      ctx.strokeStyle = night ? accent : '#6e4520';
+      ctx.lineWidth = night ? 10 : 8;
       if (night) {
         ctx.shadowColor = accent;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 18;
       }
-      ctx.fillText(project.name, w / 2 + 3, 170 + 4, w - 80);
+      ctx.stroke();
       ctx.shadowBlur = 0;
-      if (!night) {
-        ctx.fillStyle = '#3d2814';
-        ctx.fillText(project.name, w / 2, 170, w - 80);
+      // nail heads where the chains hold it
+      ctx.fillStyle = '#3a2a1a';
+      for (const nx of [w * 0.14, w * 0.86]) {
+        ctx.beginPath();
+        ctx.arc(nx, 44, 9, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.font = font(400, 50, 'Georgia, "Times New Roman", serif');
-      ctx.fillStyle = night ? '#e8d7c0' : '#4a3018';
-      ctx.fillText(shortLine(project), w / 2, 262, w - 100);
-      // a dab of the street's colour, painted on
-      ctx.fillStyle = accent;
-      ctx.fillRect(0, 0, w, 14);
-    }, 1024, 320);
+      ctx.textAlign = 'center';
+      // fit the name to the board rather than squash it
+      let size = 104;
+      ctx.font = font(700, size, 'Georgia, "Times New Roman", serif');
+      while (ctx.measureText(project.name).width > w - 170 && size > 56) {
+        size -= 4;
+        ctx.font = font(700, size, 'Georgia, "Times New Roman", serif');
+      }
+      if (!night) {
+        ctx.fillStyle = 'rgba(255,236,205,0.6)';
+        ctx.fillText(project.name, w / 2 + 2, 168 + 3);
+      }
+      ctx.fillStyle = night ? '#ffe9c8' : '#3a230e';
+      ctx.fillText(project.name, w / 2, 168);
+      ctx.font = font(400, 46, 'Georgia, "Times New Roman", serif');
+      ctx.fillStyle = night ? '#e3cba8' : '#5a3a1c';
+      ctx.fillText(shortLine(project), w / 2, 244, w - 190);
+    }, 1024, 300);
+    mat.transparent = true;
+    mat.alphaTest = 0.5;
     const g = new THREE.Group();
-    for (const px of [-1.7, 1.7]) g.add(box(0.2, 2.9, 0.2, timber, px, 1.45, 0));
-    const board = new THREE.Group();
-    board.add(box(3.9, 1.22, 0.12, timber, 0, 0, 0));
-    const face = faces(mat, 3.9, 1.22, 0.12);
-    board.add(face);
-    board.position.y = 2.2;
-    board.rotation.z = (Math.random() - 0.5) * 0.07;
-    g.add(board);
+    // two posts and a crossbar, behind and above the board so nothing crosses its words
+    for (const px of [-2.05, 2.05]) g.add(box(0.2, 3.7, 0.2, timber, px, 1.85, -0.2));
+    g.add(box(4.6, 0.2, 0.22, timber, 0, 3.6, -0.2));
+    const hang = new THREE.Group();
+    hang.position.set(0, 3.5, 0);
+    for (const cx of [-1.32, 1.32]) {
+      hang.add(box(0.03, 0.42, 0.03, iron, cx, -0.21, -0.1));
+    }
+    const board = faces(mat, 3.6, 1.05, 0.08);
+    board.position.y = -0.95;
+    board.rotation.z = Math.sin(seed) * 0.03;
+    hang.add(board);
+    g.add(hang);
+    swingers.push({ o: hang, phase: seed, amp: 0.04 });
+    // a dab of the street's colour on a little flag at one post top
+    const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), new THREE.MeshLambertMaterial({ color: new THREE.Color(accent), side: THREE.DoubleSide }));
+    pennant.position.set(2.32, 3.55, -0.2);
+    g.add(pennant, box(0.04, 0.5, 0.04, timber, 2.07, 3.95, -0.2));
     place(g, x, z, facing);
-    for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * 1.7 * k, z - Math.sin(facing) * 1.7 * k, 0.25, 0.25, facing);
+    for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * 2.05 * k, z - Math.sin(facing) * 2.05 * k, 0.25, 0.25, facing);
   }
 
   // --- monument ---
@@ -603,7 +599,8 @@ export function createBoards(
     for (const side of [-1, 1]) {
       const hinge = new THREE.Group();
       hinge.position.y = 1.62;
-      hinge.rotation.x = side * 0.24;
+      // feet splay outward, so each leaf's chalk side faces out
+      hinge.rotation.x = -side * 0.24;
       const leaf = new THREE.Group();
       leaf.position.set(0, -0.8, side * 0.04);
       leaf.add(box(1.25, 1.6, 0.06, timber, 0, 0, 0));
@@ -715,7 +712,6 @@ export function createBoards(
   return {
     streetArch,
     hangingSign,
-    mural,
     flag,
     kiosk,
     plank,
