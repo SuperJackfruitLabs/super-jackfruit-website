@@ -317,10 +317,12 @@ export function createBoards(
   function flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement, opts: { baseY?: number; emblem?: boolean } = {}): void {
     const accent = project.accent ?? '#d98a1f';
     const fg = project.accentFg ?? '#fffaf0';
-    const mat = themedMaterial((night) => (ctx, w, h) => {
-      ctx.fillStyle = night ? '#131828' : accent;
+    const mat = themedMaterial((nightTime) => (ctx, w, h) => {
+      // the lab's banner is the same black cloth by day and by night
+      const night = opts.emblem ? true : nightTime;
+      ctx.fillStyle = opts.emblem ? '#111318' : night ? '#131828' : accent;
       ctx.fillRect(0, 0, w, h);
-      if (night) neon(ctx, w, h, accent);
+      if (night && !opts.emblem) neon(ctx, w, h, accent);
       if (opts.emblem) {
         // a banner, not a sign: the mark centred, a band of the suite's colours along the hoist
         const band = ['#8549ef', '#ffc21a', '#f2704e', '#0ea875', '#2196f3', '#f74783'];
@@ -328,7 +330,7 @@ export function createBoards(
           ctx.fillStyle = c;
           ctx.fillRect(0, (h / band.length) * i, 70, h / band.length + 1);
         });
-        logoTile(ctx, logo, w / 2 - 110 + 35, h / 2 - 110, 220, night);
+        logoTile(ctx, logo, w / 2 - 110 + 35, h / 2 - 110, 220, true);
         return;
       }
       logoTile(ctx, logo, 50, 60, 220, night);
@@ -341,6 +343,8 @@ export function createBoards(
       ctx.fillText(shortLine(project), 304, 245, w - 330);
     }, 1024, 340);
     mat.side = THREE.FrontSide;
+    // the lab's banner is cloth, not a lit sign: out of the day/night swap, so it never glows or changes
+    if (opts.emblem) themed.splice(themed.findIndex((tb) => tb.mat === mat), 1);
     const W = opts.emblem ? 2.6 : 3.6, H = opts.emblem ? 1.6 : 1.2;
     const geo = () => {
       const gg = new THREE.PlaneGeometry(W, H, 16, 4);
