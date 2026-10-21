@@ -564,9 +564,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       },
     });
 
-    const kx = plaza.x - plaza.n.z * 9.5;
-    const kz = plaza.z + plaza.n.x * 9.5;
-    const faceK = Math.atan2(plaza.x - kx, plaza.z - kz);
+    // the A-board stands out front of HQ, to one side of its door, the way a shop puts one out
+    const hqDepth = props.scaledSize(houses[7], 13).z;
+    const front = 18 - hqDepth / 2 - 1.6;
+    const kx = plaza.x + plaza.n.x * front - plaza.n.z * 3.2;
+    const kz = plaza.z + plaza.n.z * front + plaza.n.x * 3.2;
+    const faceK = faceP;
     boards.chalkboard('say hi', ['the lab is always open', 'everything here is', 'open source', 'come and wave'], kx, kz, faceK);
     stations.push({
       kind: 'info', accent: '#3f9e3f', x: kx, z: kz,
