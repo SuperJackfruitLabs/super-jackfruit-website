@@ -37,6 +37,8 @@ export interface StreetSpec {
   culDeSac: number;
   /** radius of one before the first cell, 0 or absent for none */
   startCulDeSac?: number;
+  /** a branch whose far end runs back into the spine instead of stopping */
+  rejoins?: boolean;
 }
 
 export interface RoadSegment {
@@ -106,11 +108,11 @@ export async function createRoads(
 
   // A street's path: straight across each cell, a bezier through a corner
   // cell, entering and leaving at the cell edges.
-  function path(cells: Cell[], from?: Cell): T.CurvePath<T.Vector3> {
+  function path(cells: Cell[], from?: Cell, to?: Cell): T.CurvePath<T.Vector3> {
     const p = new THREE.CurvePath<T.Vector3>();
-    const seq = from ? [from, ...cells] : cells;
+    const seq = [...(from ? [from] : []), ...cells, ...(to ? [to] : [])];
     const start = from ? 1 : 0;
-    for (let i = start; i < seq.length; i++) {
+    for (let i = start; i < seq.length - (to ? 1 : 0); i++) {
       const c = centre(seq[i]);
       const prev = seq[i - 1];
       const next = seq[i + 1];
@@ -163,9 +165,12 @@ export async function createRoads(
   const branches = branchSpecs.map((spec) => {
     const first = spec.cells[0];
     // the spine cell this street leaves from is its neighbour on the spine
-    const from = main.cells.find((m) => Math.abs(m[0] - first[0]) + Math.abs(m[1] - first[1]) === 1)!;
-    chain([from, ...spec.cells]);
-    const seg = segment(spec.id, path(spec.cells, from), spec.culDeSac);
+    const near = (c: Cell) => (m: Cell) => Math.abs(m[0] - c[0]) + Math.abs(m[1] - c[1]) === 1;
+    const from = main.cells.find(near(first))!;
+    const last = spec.cells[spec.cells.length - 1];
+    const to = spec.rejoins ? main.cells.find((m) => m !== from && near(last)(m)) : undefined;
+    chain([from, ...spec.cells, ...(to ? [to] : [])]);
+    const seg = segment(spec.id, path(spec.cells, from, to), spec.culDeSac);
     const idx = main.cells.indexOf(from);
     const t = Math.min(1, Math.max(0, ((idx + 0.5) * TILE) / mainSeg.length));
     const out = centre(first).sub(centre(from));

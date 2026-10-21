@@ -131,6 +131,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     THREE, scene, props.loadAsset,
     { id: 'main', cells: MAIN_CELLS, culDeSac: 0, startCulDeSac: 9 },
     [
+      // straight on at the first bend, back into the main street where it returns
+      { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
       { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
       { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
     ],
