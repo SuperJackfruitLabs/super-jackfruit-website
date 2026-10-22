@@ -17,14 +17,10 @@ export interface BoardKit {
   suiteBoard(step: number, project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   districtBoard(d: District, gx: number, gz: number, facing: number): void;
   infoBoard(title: string, sub: string, accent: string, x: number, z: number, facing: number, big?: { logo?: HTMLImageElement; width: number; scale: number; gate?: boolean; backTitle?: string }): void;
-  /** Main Street: a round sign swinging from an iron bracket */
+  /** every project house: a round sign swinging from an iron bracket */
   hangingSign(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   /** the Agent Quarter: a flag on a tall pole */
   flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement, opts?: { baseY?: number; emblem?: boolean }): void;
-  /** MCP Alley: a little terminal on a post, with a status light and a cable into the ground */
-  kiosk(project: Project, accent: string, x: number, z: number, facing: number): void;
-  /** the Odd Shop: a rough plank with the name carved in */
-  plank(project: Project, accent: string, x: number, z: number, facing: number): void;
   /** the lab: a stone block with a brass plaque */
   monument(title: string, sub: string, x: number, z: number, facing: number, logo?: HTMLImageElement): void;
   /** a post of arrow boards; `dir` is −1 for left, +1 for right, 0 for straight on */
@@ -262,11 +258,16 @@ export function createBoards(
     ctx.shadowBlur = 0;
   };
   const shortLine = (p: Project) => p.tagline.split(' — ').pop() ?? p.tagline;
+  /** a light accent (MCP Alley's amber) takes dark lettering */
+  const light = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6;
+  };
 
   // --- hanging blade sign ---
   function hangingSign(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement): void {
     const accent = project.accent ?? '#d98a1f';
-    const fg = project.accentFg ?? '#fffaf0';
+    const fg = project.accentFg ?? (light(accent) ? '#1d1a14' : '#fffaf0');
     const mat = themedMaterial((night) => (ctx, w, h) => {
       ctx.save();
       ctx.beginPath();
@@ -279,13 +280,15 @@ export function createBoards(
       ctx.fill();
       if (night) neon(ctx, w, h, accent, true);
       logoTile(ctx, logo, w / 2 - 110, 150, 220, night);
+      // without a logo the name takes the middle of the disc
+      const nameY = logo ? 470 : 360;
       ctx.fillStyle = night ? '#ffffff' : fg;
       ctx.textAlign = 'center';
       ctx.font = font(800, 92);
-      ctx.fillText(project.name, w / 2, 470, w - 150);
+      ctx.fillText(project.name, w / 2, nameY, w - 150);
       ctx.globalAlpha = 0.85;
       ctx.font = font(600, 44, '"Figtree Variable", sans-serif');
-      ctx.fillText(shortLine(project), w / 2, 540, w - 230);
+      ctx.fillText(shortLine(project), w / 2, nameY + 70, w - 230);
       ctx.restore();
     }, 720, 720);
     mat.transparent = true;
@@ -316,7 +319,7 @@ export function createBoards(
   // --- flag ---
   function flag(project: Project, x: number, z: number, facing: number, logo?: HTMLImageElement, opts: { baseY?: number; emblem?: boolean } = {}): void {
     const accent = project.accent ?? '#d98a1f';
-    const fg = project.accentFg ?? '#fffaf0';
+    const fg = project.accentFg ?? (light(accent) ? '#1d1a14' : '#fffaf0');
     const mat = themedMaterial((nightTime) => (ctx, w, h) => {
       // the lab's banner is the same black cloth by day and by night
       const night = opts.emblem ? true : nightTime;
@@ -386,148 +389,6 @@ export function createBoards(
     g.add(box(0.7, 0.3, 0.7, stoneDark, 0, 0.15, 0));
     place(g, x, z, facing);
     addCollider(x, z, 0.4, 0.4, facing);
-  }
-
-  // --- kiosk ---
-  function kiosk(project: Project, accent: string, x: number, z: number, facing: number): void {
-    const mat = themedMaterial((night) => (ctx, w, h) => {
-      ctx.fillStyle = night ? '#0b0f18' : '#141a26';
-      ctx.fillRect(0, 0, w, h);
-      // scanlines
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = '#7fe0ff';
-      for (let yy = 0; yy < h; yy += 6) ctx.fillRect(0, yy, w, 1);
-      ctx.globalAlpha = 1;
-      ctx.textAlign = 'left';
-      ctx.fillStyle = accent;
-      ctx.font = font(700, 40, '"IBM Plex Mono", ui-monospace, monospace');
-      ctx.fillText('$ mcp connect', 36, 70);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = font(800, 92);
-      ctx.fillText(project.name, 36, 200, w - 72);
-      ctx.fillStyle = '#9fe8ff';
-      ctx.font = font(500, 40, '"IBM Plex Mono", ui-monospace, monospace');
-      const words = shortLine(project).split(' ');
-      let line = '';
-      let yy = 280;
-      for (const word of words) {
-        if (ctx.measureText(line + word).width > w - 72 && line) {
-          ctx.fillText(line, 36, yy);
-          line = '';
-          yy += 52;
-        }
-        line += word + ' ';
-      }
-      ctx.fillText(line, 36, yy);
-      ctx.fillStyle = '#3fd18a';
-      ctx.fillText('● online', 36, h - 40);
-    }, 640, 520);
-    const g = new THREE.Group();
-    const body = new THREE.MeshLambertMaterial({ color: 0x2b303b });
-    g.add(box(0.22, 1.2, 0.22, body, 0, 0.6, 0));
-    g.add(box(1.5, 1.3, 0.34, body, 0, 1.85, 0));
-    g.add(box(1.62, 0.1, 0.46, iron, 0, 2.55, 0));
-    const screen = faces(mat, 1.3, 1.06, 0.34);
-    screen.position.y = 1.85;
-    g.add(screen);
-    const ledMat = new THREE.MeshLambertMaterial({ color: 0x3fd18a, emissive: 0x3fd18a, emissiveIntensity: 0.6 });
-    glowMats.push({ mat: ledMat, color: 0x3fd18a });
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), ledMat);
-    led.position.set(0.62, 2.62, 0);
-    g.add(led);
-    // the cable: out of the back and into the ground, in the street's colour
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.6, 1.4, -0.17), new THREE.Vector3(0.95, 0.9, -0.5), new THREE.Vector3(1.2, 0.2, -0.9), new THREE.Vector3(1.3, -0.05, -1.3),
-    ]);
-    g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.045, 6), new THREE.MeshLambertMaterial({ color: new THREE.Color(accent) })));
-    place(g, x, z, facing, 1.35);
-    addCollider(x, z, 0.9, 0.3, facing);
-  }
-
-  // --- carved plank: a rough-edged board hung on chains from a ranch-style crossbar ---
-  function plank(project: Project, accent: string, x: number, z: number, facing: number): void {
-    // the outline wobbles a little, as if cut by hand; the same wobble on day and night faces
-    const seed = [...project.slug].reduce((n, ch) => n + ch.charCodeAt(0), 0);
-    const wob = (i: number) => Math.sin(seed * 0.7 + i * 2.3) * 7;
-    const mat = themedMaterial((night) => (ctx, w, h) => {
-      ctx.beginPath();
-      const steps = 8;
-      ctx.moveTo(24, 20 + wob(0));
-      for (let i = 1; i <= steps; i++) ctx.lineTo(24 + ((w - 48) * i) / steps, 20 + wob(i));
-      ctx.lineTo(w - 10, h / 2);
-      for (let i = steps; i >= 0; i--) ctx.lineTo(24 + ((w - 48) * i) / steps, h - 20 + wob(i + 9));
-      ctx.lineTo(10, h / 2);
-      ctx.closePath();
-      ctx.fillStyle = night ? '#2a1d12' : '#c08f57';
-      ctx.fill();
-      ctx.save();
-      ctx.clip();
-      ctx.strokeStyle = night ? 'rgba(255,200,140,0.07)' : 'rgba(95,58,26,0.28)';
-      ctx.lineWidth = 3;
-      for (let yy = 30; yy < h; yy += 26) {
-        ctx.beginPath();
-        ctx.moveTo(0, yy);
-        for (let xx = 0; xx <= w; xx += 70) ctx.lineTo(xx, yy + Math.sin(xx * 0.012 + yy + seed) * 5);
-        ctx.stroke();
-      }
-      ctx.restore();
-      // a darker burnt edge
-      ctx.strokeStyle = night ? accent : '#6e4520';
-      ctx.lineWidth = night ? 10 : 8;
-      if (night) {
-        ctx.shadowColor = accent;
-        ctx.shadowBlur = 18;
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      // nail heads where the chains hold it
-      ctx.fillStyle = '#3a2a1a';
-      for (const nx of [w * 0.14, w * 0.86]) {
-        ctx.beginPath();
-        ctx.arc(nx, 44, 9, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.textAlign = 'center';
-      // fit the name to the board rather than squash it
-      let size = 104;
-      ctx.font = font(700, size, 'Georgia, "Times New Roman", serif');
-      while (ctx.measureText(project.name).width > w - 170 && size > 56) {
-        size -= 4;
-        ctx.font = font(700, size, 'Georgia, "Times New Roman", serif');
-      }
-      if (!night) {
-        ctx.fillStyle = 'rgba(255,236,205,0.6)';
-        ctx.fillText(project.name, w / 2 + 2, 168 + 3);
-      }
-      ctx.fillStyle = night ? '#ffe9c8' : '#3a230e';
-      ctx.fillText(project.name, w / 2, 168);
-      ctx.font = font(400, 46, 'Georgia, "Times New Roman", serif');
-      ctx.fillStyle = night ? '#e3cba8' : '#5a3a1c';
-      ctx.fillText(shortLine(project), w / 2, 244, w - 190);
-    }, 1024, 300);
-    mat.transparent = true;
-    mat.alphaTest = 0.5;
-    const g = new THREE.Group();
-    // two posts and a crossbar, behind and above the board so nothing crosses its words
-    for (const px of [-2.05, 2.05]) g.add(box(0.2, 3.7, 0.2, timber, px, 1.85, -0.2));
-    g.add(box(4.6, 0.2, 0.22, timber, 0, 3.6, -0.2));
-    const hang = new THREE.Group();
-    hang.position.set(0, 3.5, 0);
-    for (const cx of [-1.32, 1.32]) {
-      hang.add(box(0.03, 0.42, 0.03, iron, cx, -0.21, -0.1));
-    }
-    const board = faces(mat, 3.6, 1.05, 0.08);
-    board.position.y = -0.95;
-    board.rotation.z = Math.sin(seed) * 0.03;
-    hang.add(board);
-    g.add(hang);
-    swingers.push({ o: hang, phase: seed, amp: 0.04 });
-    // a dab of the street's colour on a little flag at one post top
-    const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), new THREE.MeshLambertMaterial({ color: new THREE.Color(accent), side: THREE.DoubleSide }));
-    pennant.position.set(2.32, 3.55, -0.2);
-    g.add(pennant, box(0.04, 0.5, 0.04, timber, 2.07, 3.95, -0.2));
-    place(g, x, z, facing);
-    for (const k of [-1, 1]) addCollider(x + Math.cos(facing) * 2.05 * k, z - Math.sin(facing) * 2.05 * k, 0.25, 0.25, facing);
   }
 
   // --- monument ---
@@ -747,8 +608,6 @@ export function createBoards(
     streetArch,
     hangingSign,
     flag,
-    kiosk,
-    plank,
     monument,
     fingerpost,
     chalkboard,
