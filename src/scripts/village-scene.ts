@@ -386,6 +386,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     });
   }
 
+  // every side-street sign its own colour, picked by name so a house keeps it from visit to visit
+  const SIGN_COLOURS = ['#e4572e', '#f2a707', '#2a9d8f', '#3a86ff', '#8338ec', '#ff006e', '#6a994e', '#c1121f', '#0081a7', '#bc6c25', '#7b2cbf', '#e76f51'];
+  function signColour(slug: string): string {
+    let h = 0;
+    for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return SIGN_COLOURS[h % SIGN_COLOURS.length];
+  }
+
   for (const d of districts) {
     if (d.id === 'agent-works') continue; // the suite, placed above
     const street = road.get(d.id);
@@ -417,9 +425,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const items = byDistrict(d.id);
     const half = street.width / 2;
 
-    // the V-board's wings reach this far back from the kerb; the house stands clear behind them
-    const wing = d.id === 'mcp-alley' ? 2.0 : 4.5;
-    const signDepth = FOOTPATH + 0.6 + wing * 0.72 + 1.2;
+    // the sign stands beside the drive, as on Main Street, so the house sits as close as Main Street's
+    const signDepth = FOOTPATH + 2.4;
     let side = 1;
     items.forEach((project, i) => {
       const proto = houses[Math.floor(rand() * houses.length)];
@@ -436,8 +443,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       // house on anybody's road.
       const tryside = (s: number, push: number) => {
         const n = street.perp(t).multiplyScalar(s);
-        const bx = c.x + n.x * (half + 1.5 + push) + tan.x * 1.5;
-        const bz = c.z + n.z * (half + 1.5 + push) + tan.z * 1.5;
+        const bx = c.x + n.x * (half + FOOTPATH + 2.8 + push) - tan.x * 3.2;
+        const bz = c.z + n.z * (half + FOOTPATH + 2.8 + push) - tan.z * 3.2;
         const hx = c.x + n.x * (half + setback + push);
         const hz = c.z + n.z * (half + setback + push);
         if (road.onRibbon(bx, bz, 1.2) || road.onRibbon(hx, hz, 2.5)) return null;
@@ -457,27 +464,18 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       const dz = c.z + n.z * (half + 2.6 + push);
       if (!road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.0, dx, dz, faceRoad);
 
-      const bx = c.x + n.x * (half + FOOTPATH + 1.2 + push) + tan.x * 1.5;
-      const bz = c.z + n.z * (half + FOOTPATH + 1.2 + push) + tan.z * 1.5;
-      // a V-board: two faces joined at the back, one turned 45° toward each direction of
-      // traffic, so the sign reads to cars coming in and going out alike
-      const w = wing;
-      const apexX = bx - n.x * 0.6;
-      const apexZ = bz - n.z * 0.6;
-      for (const a of [faceRoad + Math.PI / 4, faceRoad - Math.PI / 4]) {
-        const xd = { x: Math.cos(a), z: -Math.sin(a) };
-        // the point of the V is at the kerb; each wing runs back from it, away from the road
-        const sgn = xd.x * n.x + xd.z * n.z > 0 ? 1 : -1;
-        const cx = apexX + xd.x * sgn * (w / 2);
-        const cz = apexZ + xd.z * sgn * (w / 2);
-        if (d.id === 'mcp-alley') boards.kiosk(project, d.accent, cx, cz, a);
-        else boards.plank(project, d.accent, cx, cz, a);
-      }
+      // the same sign as Main Street: a round board swinging from a bracket, side-on to the
+      // road beside the drive, so it reads as you approach and leaves the house in view
+      const bx = c.x + n.x * (half + FOOTPATH + 2.8 + push) - tan.x * 3.2;
+      const bz = c.z + n.z * (half + FOOTPATH + 2.8 + push) - tan.z * 3.2;
+      const along = Math.atan2(-tan.x, -tan.z);
+      const towardRoad = Math.cos(along) * -n.x - Math.sin(along) * -n.z > 0;
+      boards.hangingSign({ ...project, accent: project.accent ?? signColour(project.slug) }, bx, bz, towardRoad ? along : along + Math.PI);
       signSpots.push({ x: bx, z: bz });
       stations.push({ kind: 'project', project, accent: d.accent, x: c.x + n.x * 2, z: c.z + n.z * 2, reach: 5 });
 
-      const ix = c.x + n.x * (half + 4.4 + push) - tan.x * 2.2;
-      const iz = c.z + n.z * (half + 4.4 + push) - tan.z * 2.2;
+      const ix = c.x + n.x * (half + 4.4 + push) + tan.x * 2.2;
+      const iz = c.z + n.z * (half + 4.4 + push) + tan.z * 2.2;
       if (!road.onRibbon(ix, iz, 1)) idleSpots.push({ x: ix, z: iz, facing: faceRoad });
 
       // a garden across the lane, so the far kerb isn't bare
