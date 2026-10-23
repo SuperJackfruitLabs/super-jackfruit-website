@@ -287,7 +287,9 @@ export async function createTraffic(
       const p = b.curve.getPointAt(end);
       const tan = b.curve.getTangentAt(end);
       const k = end === 0 ? -TILE / 2 : TILE / 2;
-      junctions.push({ x: p.x + tan.x * k, z: p.z + tan.z * k });
+      const j = { x: p.x + tan.x * k, z: p.z + tan.z * k };
+      // a crossing of several back streets is one junction, however many end there
+      if (!junctions.some((o) => Math.hypot(o.x - j.x, o.z - j.z) < 1)) junctions.push(j);
     }
   }
   const moves: Move[] = [];

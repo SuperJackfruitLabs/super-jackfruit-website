@@ -31,6 +31,10 @@ import { createNpcs, type IdleSpot } from './village/npcs';
 import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
 import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
+import { layStreets } from './village/streets.mjs';
+
+/** the id prefix of every back street, so the named streets can be told apart */
+const BACK_STREET = 'lane-';
 import { restoreVisits } from './village/visits.mjs';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
@@ -129,15 +133,37 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     ...run(2, -18, 0, -18),
     ...run(0, -19, 0, -25),
   ];
+  const NAMED = [
+    // straight on at the first bend, back into the main street where it returns
+    { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
+    { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
+    { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
+  ];
+  // The back streets: a knocked-about grid over the open ground either side
+  // (streets.mjs), joined to the spine only where it has no suite house, sign
+  // or turning pointer to cut through. The cells the named streets' turning
+  // circles and the square stand on count as taken.
+  const backStreets = layStreets({
+    seed: 16,
+    prefix: BACK_STREET,
+    taken: [
+      ...MAIN_CELLS, ...NAMED.flatMap((b) => b.cells),
+      [0, 2], [0, 3], [12, -13], [13, -13], [-7, -21], [-8, -21],
+      [0, -26], [0, -27], [0, -28], [1, -26], [1, -27], [-1, -26], [-1, -27],
+    ],
+    regions: [
+      // west of the spine, from the start down past the Odd Shop
+      { x0: -13, x1: -4, z0: 3, z1: -30, connect: [{ from: [0, -9], dir: [-1, 0] }, { from: [0, -24], dir: [-1, 0] }] },
+      // east of the suite, north of the first bend
+      { x0: 4, x1: 13, z0: 3, z1: -8, connect: [{ from: [3, -10], dir: [0, 1] }] },
+      // east of the square, south of MCP Alley
+      { x0: 5, x1: 13, z0: -17, z1: -30, connect: [{ from: [3, -18], dir: [0, -1] }] },
+    ],
+  });
   const road = await createRoads(
     THREE, scene, props.loadAsset,
     { id: 'main', cells: MAIN_CELLS, culDeSac: 13, startCulDeSac: 9 } /* the far end is the village square */,
-    [
-      // straight on at the first bend, back into the main street where it returns
-      { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
-      { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
-      { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
-    ],
+    [...NAMED, ...backStreets],
     (o) => {
       if ((o as import('three').Mesh).isMesh) o.receiveShadow = true;
     }
@@ -534,6 +560,58 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  // ---------- the back streets: ordinary neighbours, gardens and trees ----------
+  // Both sides of each street, every so often, kept off every street's tarmac,
+  // clear of the houses already standing and inside the hedge.
+  for (const seg of road.branches) {
+    if (!seg.id.startsWith(BACK_STREET) || seg.length < 24) continue;
+    const half = seg.width / 2;
+    for (let t = 9 / seg.length; t < 1 - 9 / seg.length; t += (17 + rand() * 6) / seg.length) {
+      const c = seg.curve.getPointAt(t);
+      const tan = seg.curve.getTangentAt(t);
+      for (const sd of [1, -1]) {
+        const n = seg.perp(t).multiplyScalar(sd);
+        const faceRoad = Math.atan2(-n.x, -n.z);
+        const hx = c.x + n.x * (half + 7.6);
+        const hz = c.z + n.z * (half + 7.6);
+        const inside = Math.abs(hx) < 140 && hz > Z_END - 18 && hz < Z_START + 14;
+        if (rand() < 0.82 && inside && !road.onRibbon(hx, hz, 3.2) && clearOfHouses(hx, hz, 12)) {
+          putHouse(hx, hz, faceRoad, 6.6 + rand() * 1.8);
+          const dx = c.x + n.x * (half + 2.6);
+          const dz = c.z + n.z * (half + 2.6);
+          if (rand() < 0.5 && !road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.0, dx, dz, faceRoad);
+          const ix = c.x + n.x * (half + 4.4) + tan.x * 2.4;
+          const iz = c.z + n.z * (half + 4.4) + tan.z * 2.4;
+          if (rand() < 0.25 && !road.onRibbon(ix, iz, 1)) idleSpots.push({ x: ix, z: iz, facing: faceRoad });
+        } else if (inside && !road.onRibbon(hx, hz, 3) && clearOfHouses(hx, hz, 7)) {
+          // an empty plot: a garden tree, and a bush by the pavement
+          seasonalTree(Math.floor(rand() * 100), 2.8 + rand() * 1.6, hx, hz, rand() * 6.28);
+        }
+        // a garden between this house and the next
+        const gx = c.x + n.x * (half + 5.2) + tan.x * 8.5;
+        const gz = c.z + n.z * (half + 5.2) + tan.z * 8.5;
+        if (rand() < 0.5 && !road.onRibbon(gx, gz, 1.2) && clearOfHouses(gx, gz, 5)) {
+          props.place(bushes[Math.floor(rand() * bushes.length)], 1.1 + rand() * 0.7, gx, gz, rand() * 6.28, false, 0.02);
+        }
+      }
+    }
+  }
+
+  // the middles of the blocks: back gardens, a tree or two in each
+  {
+    const blocks = [[-135, -35, 35, -305], [35, 135, 35, -85], [45, 135, -165, -305]];
+    const wanted = Math.round(quality.settings.bgTrees * 0.6);
+    for (let i = 0, tries = 0; i < wanted && tries < wanted * 12; tries++) {
+      const [x0, x1, z0, z1] = blocks[tries % blocks.length];
+      const x = x0 + rand() * (x1 - x0);
+      const z = z1 + rand() * (z0 - z1);
+      const d = road.distTo(x, z);
+      if (d < 10.5 || d > 26 || road.onRibbon(x, z, 3) || !clearOfHouses(x, z, 8)) continue;
+      seasonalTree(Math.floor(rand() * 100), 2.6 + rand() * 2.2, x, z, rand() * 6.28);
+      i++;
+    }
+  }
+
   // ---------- the village square: HQ, about, contact kiosk ----------
   // the square sits at the END of the road — the drive's destination
   // The square is where the road ENDS, so it has to swallow the road end
@@ -727,6 +805,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const colours = byDistrict('agent-works').map((p) => p.accent ?? '#d98a1f');
     const gap = 46;
     for (const seg of road.all) {
+      if (seg.id.startsWith(BACK_STREET)) continue; // the named streets are the ones dressed up
       const half = seg.width / 2;
       for (let d = 30; d < seg.length - 12; d += gap) {
         const t = d / seg.length;
