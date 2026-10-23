@@ -1269,6 +1269,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     colliders: () => props.colliderCount(),
     timings: () => timings,
     npcs: () => npcs.list(),
+    chats: () => npcs.conversations(),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     // nothing should be standing in the road; this is how that gets checked
     audit: () => {

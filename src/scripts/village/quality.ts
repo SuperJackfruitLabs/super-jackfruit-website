@@ -41,8 +41,8 @@ export interface Quality {
 }
 
 const TIERS: Record<Tier, Omit<QualitySettings, 'pixelRatio'>> = {
-  high: { tier: 'high', shadows: true, shadowMapSize: 2048, bgTrees: 150, bgRocks: 50, forestTrees: 520, flowerChance: 0.5, lampLights: 5, npcWalkers: 8, npcIdlers: 6, birds: 14, chimneys: 7, traffic: 8 },
-  medium: { tier: 'medium', shadows: true, shadowMapSize: 1024, bgTrees: 90, bgRocks: 30, forestTrees: 300, flowerChance: 0.35, lampLights: 4, npcWalkers: 5, npcIdlers: 4, birds: 8, chimneys: 4, traffic: 5 },
+  high: { tier: 'high', shadows: true, shadowMapSize: 2048, bgTrees: 150, bgRocks: 50, forestTrees: 520, flowerChance: 0.5, lampLights: 5, npcWalkers: 10, npcIdlers: 7, birds: 14, chimneys: 7, traffic: 8 },
+  medium: { tier: 'medium', shadows: true, shadowMapSize: 1024, bgTrees: 90, bgRocks: 30, forestTrees: 300, flowerChance: 0.35, lampLights: 4, npcWalkers: 6, npcIdlers: 5, birds: 8, chimneys: 4, traffic: 5 },
   low: { tier: 'low', shadows: false, shadowMapSize: 512, bgTrees: 45, bgRocks: 15, forestTrees: 140, flowerChance: 0.2, lampLights: 2, npcWalkers: 3, npcIdlers: 2, birds: 0, chimneys: 2, traffic: 3 },
 };
 

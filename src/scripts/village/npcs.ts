@@ -11,6 +11,12 @@
 // The walkers are a fixed pool (pool.ts) that follows the visitor: one left far
 // behind, out of sight, is moved to a pavement somewhere ahead, so a small
 // crowd always seems to be about wherever you drive.
+//
+// Neighbours who pass close enough sometimes stop for a chat: the pair turn to
+// face each other and stand a few seconds, then go their ways and don't chat
+// again for a while. The meeting rules (a chance on meeting, a few seconds'
+// talk, a longer social cooldown) follow slop-newyork's js/traffic.js meet();
+// the behaviour is re-written here for the village's own villagers.
 import type * as T from 'three';
 import type { Three } from './types';
 import type { LoadedGltf } from './props';
@@ -31,6 +37,15 @@ const DODGE_STEP = 2;
 const HOP_TIME = 0.4;
 /** walkers left further behind than this, out of view, are recycled */
 const WALKER_RETIRE = 95;
+/** how close two villagers come before they may stop to talk: on the same pavement, and across a front garden */
+const MEET_WALKERS = 2.6;
+const MEET_GARDEN = 4.8;
+/** the chance a meeting turns into a chat; a missed one isn't rolled for again soon */
+const CHAT_CHANCE = 0.55;
+const CHAT_MIN = 6;
+const CHAT_MAX = 12;
+const COOLDOWN_MIN = 30;
+const COOLDOWN_MAX = 90;
 /** and land this far from the visitor */
 const WALKER_SPAWN_MIN = 30;
 const WALKER_SPAWN_MAX = 85;
@@ -57,9 +72,11 @@ export interface Npcs {
   reseed(): void;
   /** recycling activity since the last call */
   poolStats(): { placed: number; reseeds: number };
+  /** the pairs chatting right now, for the murmur: where they stand and who is speaking */
+  conversations(): Array<{ id: number; x: number; z: number; started: number }>;
   count(): number;
   /** where everyone is and what they're doing — for the debug hook */
-  list(): Array<{ x: number; z: number; walker: boolean; yielding: boolean; clock: number }>;
+  list(): Array<{ x: number; z: number; walker: boolean; yielding: boolean; talking: boolean; clock: number }>;
 }
 
 interface Villager extends PoolActor {
@@ -77,6 +94,13 @@ interface Villager extends PoolActor {
   isWalker: boolean;
   /** where an idler stands; walkers take theirs from the road */
   home: { x: number; y: number; z: number };
+  /** which way an idler faces when nobody is talking to it */
+  facing: number;
+  /** stopped, for the car or for a chat; the walk and idle clips follow this */
+  stopped: boolean;
+  /** the chat this villager is in, and when it may next start one */
+  chat: { with: Villager; until: number; id: number; started: number } | null;
+  sociable: number;
   /** the sidestep from the car, eased in and back out, and the hop that goes with it */
   dodge: { x: number; z: number; tx: number; tz: number; hop: number };
 }
@@ -92,7 +116,7 @@ export async function createNpcs(
 ): Promise<Npcs> {
   const wanted = counts.walkers + counts.idlers;
   if (wanted === 0) {
-    return { update: () => {}, reseed: () => {}, poolStats: () => ({ placed: 0, reseeds: 0 }), count: () => 0, list: () => [] };
+    return { update: () => {}, reseed: () => {}, poolStats: () => ({ placed: 0, reseeds: 0 }), conversations: () => [], count: () => 0, list: () => [] };
   }
 
   const loaded = await Promise.all(
@@ -170,6 +194,10 @@ export async function createNpcs(
       yielding: false,
       isWalker,
       home: { x: 0, y: 0, z: 0 },
+      facing: 0,
+      stopped: false,
+      chat: null,
+      sociable: rand() * 20,
       dodge: { x: 0, z: 0, tx: 0, tz: 0, hop: 0 },
     };
   }
@@ -250,6 +278,7 @@ export async function createNpcs(
     v.root.position.set(spot.x, 0, spot.z);
     v.home = { x: spot.x, y: 0, z: spot.z };
     v.root.rotation.y = spot.facing;
+    v.facing = spot.facing;
     v.x = spot.x;
     v.z = spot.z;
     villagers.push(v);
@@ -257,11 +286,60 @@ export async function createNpcs(
 
   const point = new THREE.Vector3();
   const tangent = new THREE.Vector3();
+  let clock = 0;
+  let chats = 0;
+
+  /** pairs who meet may stop to talk; checked a few times a second, not every frame */
+  let sinceMeet = 0;
+  function meet(carX: number, carZ: number): void {
+    for (const a of villagers) {
+      if (!a.active || !a.isWalker || a.chat || a.yielding || clock < a.sociable) continue;
+      for (const b of villagers) {
+        if (b === a || !b.active || b.chat || clock < b.sociable) continue;
+        const reach = b.isWalker ? MEET_WALKERS : MEET_GARDEN;
+        const d = Math.hypot(a.x - b.x, a.z - b.z);
+        if (d > reach || d < 0.6) continue;
+        // never right by the car, where everyone is busy getting out of its way
+        if (Math.hypot(a.x - carX, a.z - carZ) < YIELD_RADIUS * 1.5) continue;
+        if (Math.random() > CHAT_CHANCE) {
+          a.sociable = clock + 8; // walked on by; ask again further along
+          break;
+        }
+        const until = clock + CHAT_MIN + Math.random() * (CHAT_MAX - CHAT_MIN);
+        const id = ++chats;
+        a.chat = { with: b, until, id, started: clock };
+        b.chat = { with: a, until, id, started: clock };
+        break;
+      }
+    }
+  }
+  function endChat(v: Villager): void {
+    const other = v.chat?.with;
+    for (const p of other ? [v, other] : [v]) {
+      p.chat = null;
+      p.sociable = clock + COOLDOWN_MIN + Math.random() * (COOLDOWN_MAX - COOLDOWN_MIN);
+    }
+  }
+  /** turn smoothly toward an angle, the short way round */
+  const turnTo = (v: Villager, target: number, dt: number) => {
+    let d = target - v.root.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    v.root.rotation.y += d * Math.min(1, dt * 5);
+  };
 
   return {
     count: () => villagers.length,
     reseed: () => pool.reseed(),
     poolStats: () => pool.takeStats(),
+
+    conversations: () => {
+      const out = new Map<number, { id: number; x: number; z: number; started: number }>();
+      for (const v of villagers) {
+        if (!v.chat || out.has(v.chat.id)) continue;
+        out.set(v.chat.id, { id: v.chat.id, x: (v.x + v.chat.with.x) / 2, z: (v.z + v.chat.with.z) / 2, started: v.chat.started });
+      }
+      return [...out.values()];
+    },
 
     list: () =>
       villagers.map((v) => ({
@@ -269,30 +347,45 @@ export async function createNpcs(
         z: +v.root.position.z.toFixed(2),
         walker: v.isWalker,
         yielding: v.yielding,
+        talking: !!v.chat,
         clock: +v.mixer.time.toFixed(2),
       })),
 
     update(dt, carX, carZ, carHeading, inView): void {
+      clock += dt;
       pool.update(carX, carZ, carHeading, inView);
+      sinceMeet += dt;
+      if (sinceMeet > 0.25) {
+        sinceMeet = 0;
+        meet(carX, carZ);
+      }
       for (const v of villagers) {
+        // a chat ends on time, when the car comes, or when the other one was recycled away
+        if (v.chat) {
+          const o = v.chat.with;
+          const carNear = Math.hypot(v.x - carX, v.z - carZ) < YIELD_RADIUS;
+          if (clock > v.chat.until || carNear || !o.active || o.chat?.id !== v.chat.id || Math.hypot(o.x - v.x, o.z - v.z) > MEET_GARDEN + 1.5) endChat(v);
+        }
         if (!v.active) continue;
         if (v.isWalker) {
           const near = Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < YIELD_RADIUS;
-          if (near !== v.yielding) {
-            v.yielding = near;
+          v.yielding = near;
+          const stop = near || !!v.chat;
+          if (stop !== v.stopped) {
+            v.stopped = stop;
             if (v.walk) {
               // half a second is long enough to read as stopping, short enough
               // not to look like a stutter at speed. Fade one way only, and wake the
               // action being faded in: fading both ways at once could leave the walk
               // at zero weight while the walker kept moving, so it glided.
-              const [from, to] = near ? [v.walk, v.idle] : [v.idle, v.walk];
+              const [from, to] = stop ? [v.walk, v.idle] : [v.idle, v.walk];
               to.enabled = true;
               to.setEffectiveTimeScale(1);
               to.setEffectiveWeight(1);
               from.crossFadeTo(to, 0.35, false);
             }
           }
-          if (!v.yielding) {
+          if (!v.stopped) {
             v.t += (v.dir * v.speed * dt) / v.seg.length;
             // turn walkers round before they end up strolling down the tarmac
             const tMin = tMinOf(v.seg);
@@ -310,8 +403,12 @@ export async function createNpcs(
           const pavement = v.seg.width / 2 + FOOTPATH / 2;
           v.home = { x: point.x + n.x * pavement * v.side, y: KERB_TOP, z: point.z + n.z * pavement * v.side };
           v.seg.curve.getTangentAt(v.t, tangent);
-          v.root.rotation.y = Math.atan2(tangent.x * v.dir, tangent.z * v.dir);
+          if (!v.chat) turnTo(v, Math.atan2(tangent.x * v.dir, tangent.z * v.dir), dt * 3);
+        } else if (!v.chat) {
+          turnTo(v, v.facing, dt);
         }
+        // in a chat: face the other one
+        if (v.chat) turnTo(v, Math.atan2(v.chat.with.x - v.x, v.chat.with.z - v.z), dt);
 
         // in the car's way: hop aside, away from it, then drift home once it has gone
         const d = v.dodge;
