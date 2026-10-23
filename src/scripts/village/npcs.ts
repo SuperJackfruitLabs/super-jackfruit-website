@@ -226,7 +226,7 @@ export async function createNpcs(
       const z = probe.z + n.z * pavement * side;
       const d = Math.hypot(x - rules.focusX, z - rules.focusZ);
       if (d < rules.minDist || d > rules.maxDist) continue;
-      if (!rules.mayBeSeen && rules.inView(x, z, 2)) continue;
+      if (!rules.mayBeSeen && d < rules.farView && rules.inView(x, z, 2)) continue;
       const spot = { seg, t, side, x, z };
       if ((x - rules.focusX) * rules.headX + (z - rules.focusZ) * rules.headZ > 0) return take(spot);
       behind ??= spot;
@@ -239,6 +239,7 @@ export async function createNpcs(
     spawnMin: WALKER_SPAWN_MIN,
     spawnMax: WALKER_SPAWN_MAX,
     budget: 1,
+    farView: 70,
     place: placeWalker,
   });
 

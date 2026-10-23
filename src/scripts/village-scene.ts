@@ -30,6 +30,7 @@ import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
 import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
+import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
 import { restoreVisits } from './village/visits.mjs';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
@@ -179,6 +180,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // wait for this batch to finish before they were even requested, which cost
   // half a second of dead air on the wire for nothing.
   for (const name of ALL_VILLAGE_MODELS) void props.loadGltf(name);
+  for (const name of TRAFFIC_MODELS.slice(0, quality.settings.traffic)) void props.loadGltf(name);
 
   const [houses, driveway, planter, flowers, bushes, rocks, oaks, fallOaks, spruces, deadTrees, bigRocks, forestRocks] =
     await Promise.all([
@@ -862,6 +864,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }, rand);
 
   mark('npcs');
+  const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows);
+  mark('traffic');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
   let carChoice = loadChoice();
@@ -876,6 +880,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const teleport = (x: number, z: number, h: number): void => {
     car.teleport(x, z, h);
     npcs.reseed();
+    traffic.reseed();
   };
   mark('car');
   const audio = createAudio();
@@ -971,7 +976,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     !road.isPaved(x, z, PAVED_MARGIN) && Math.hypot(x - plaza.x, z - plaza.z) > PLAZA_R;
 
   const carCtx = {
-    resolve: props.resolve,
+    // the world, then the other cars: either can knock the car back
+    resolve: (pos: import('three').Vector3, radius: number) => {
+      const a = props.resolve(pos, radius);
+      const b = traffic.resolve(pos, radius);
+      return { x: a.x + b.x, z: a.z + b.z, depth: Math.max(a.depth, b.depth) };
+    },
     offRoad,
     bounds,
   };
@@ -1009,6 +1019,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     viewSphere.radius = r;
     return frustum.intersectsSphere(viewSphere);
   };
+
+  const trafficPlayer = { x: 0, z: 0, heading: 0, speed: 0 };
 
   const timer = new THREE.Timer();
   let framesTimed = 0;
@@ -1049,6 +1061,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen);
     npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView);
+    trafficPlayer.x = car.root.position.x;
+    trafficPlayer.z = car.root.position.z;
+    trafficPlayer.heading = car.heading;
+    trafficPlayer.speed = car.speed;
+    traffic.update(dt, trafficPlayer, inView, false);
+    traffic.applyNight(nightFactor);
     ambient.update(dt, t, nightFactor);
     for (const cloud of clouds) {
       cloud.position.x += dt * 0.6;
@@ -1197,6 +1215,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }),
     teleport: (x: number, z: number, h = Math.PI) => teleport(x, z, h),
     pool: () => ({ walkers: npcs.poolStats() }),
+    traffic: () => traffic.debug(),
     fx: () => fx.counts(),
   };
 

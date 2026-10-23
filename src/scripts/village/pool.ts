@@ -30,6 +30,8 @@ export interface SpawnRules {
   maxDist: number;
   /** after a teleport the view is new anyway, so placing in sight is allowed */
   mayBeSeen: boolean;
+  /** past this, deep in the fog, an actor may appear in sight */
+  farView: number;
   inView(x: number, z: number, r: number): boolean;
 }
 
@@ -40,6 +42,8 @@ export interface PoolOptions<A extends PoolActor> {
   /** recycled actors land this far off */
   spawnMin: number;
   spawnMax: number;
+  /** far enough into the fog that appearing in sight goes unnoticed */
+  farView: number;
   /** placements attempted per frame, successful or not */
   budget: number;
   /** a focus that moves further than this in one frame counts as a teleport */
@@ -79,16 +83,18 @@ export function createPool<A extends PoolActor>(o: PoolOptions<A>): ActorPool<A>
       lastZ = focusZ;
       if (jump) reseeds++;
 
-      // on a teleport, keep anyone who already happens to be near the new spot
+      // on a teleport, keep anyone who already happens to be near the new spot, but not on top of it
       const keep = jump ? o.spawnMin : o.retireRadius;
+      const clear = jump ? Math.min(12, o.spawnMin) : 0;
       const rules: SpawnRules = {
         focusX,
         focusZ,
         headX: Math.sin(heading),
         headZ: Math.cos(heading),
-        minDist: jump ? Math.min(12, o.spawnMin) : o.spawnMin,
+        minDist: jump ? clear : o.spawnMin,
         maxDist: o.spawnMax,
         mayBeSeen: jump,
+        farView: o.farView,
         inView,
       };
       let budget = jump ? n : o.budget;
@@ -97,7 +103,7 @@ export function createPool<A extends PoolActor>(o: PoolOptions<A>): ActorPool<A>
         cursor = (cursor + 1) % n;
         if (a.active) {
           const d = Math.hypot(a.x - focusX, a.z - focusZ);
-          if (d <= keep) continue;
+          if (d <= keep && d >= clear) continue;
           if (!jump && inView(a.x, a.z, 3)) continue; // never pull one out from under the visitor's eyes
         }
         budget--;
