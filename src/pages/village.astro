@@ -89,6 +89,11 @@ import '@superjackfruit/vibekit/fonts.css';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.5 5.3 10a2 2 0 0 1 1.9-1.4h9.6A2 2 0 0 1 18.7 10l1.8 5.5v2.6h-2.1M5.6 18.1H3.5v-2.6M3.5 15.5h17"/><circle cx="7.8" cy="18.1" r="1.7"/><circle cx="16.2" cy="18.1" r="1.7"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
         </button>
       </div>
+      <!-- how loud: the music, and everything else (the car, the traffic, the neighbours) -->
+      <label class="menu__label" for="volume-music">Music volume</label>
+      <input class="menu__volume" type="range" id="volume-music" data-volume="music" min="0" max="100" step="5" value="70" aria-valuetext="70%" />
+      <label class="menu__label" for="volume-sound">Sound volume</label>
+      <input class="menu__volume" type="range" id="volume-sound" data-volume="sound" min="0" max="100" step="5" value="100" aria-valuetext="100%" />
       <span class="menu__label" id="tilt-label" hidden>Steering</span>
       <div class="env__group" id="tilt-row" hidden>
         <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
@@ -681,6 +686,8 @@ import '@superjackfruit/vibekit/fonts.css';
     .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
   }
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
+  .menu__volume { width: min(12rem, 52vw); height: 2rem; margin: 0; accent-color: #d98a1f; cursor: pointer; }
+  .scene[data-touch='true'] .menu__volume { height: 2.75rem; }
   .menu .env__group { background: rgba(40, 50, 60, 0.05); }
   .env__auto { width: auto !important; padding: 0 0.7rem !important; font: 600 1.05rem 'Figtree Variable', system-ui, sans-serif; }
   .menu__label--wide, .menu__cars, .menu__car-note { grid-column: 1 / -1; }
@@ -897,7 +904,7 @@ import '@superjackfruit/vibekit/fonts.css';
   });
   // Esc toggles it; opened from the keyboard, focus goes to its first control and
   // the arrow keys walk the controls; closing hands focus back to the menu button
-  const menuItems = () => [...menu.querySelectorAll<HTMLElement>('button, a')].filter((el) => el.offsetParent !== null);
+  const menuItems = () => [...menu.querySelectorAll<HTMLElement>('button, a, input')].filter((el) => el.offsetParent !== null);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (!keysPanel.hidden) return;
@@ -912,6 +919,8 @@ import '@superjackfruit/vibekit/fonts.css';
       return;
     }
     if (menu.hidden || !menu.contains(document.activeElement)) return;
+    // a slider's arrows move the slider
+    if ((document.activeElement as HTMLInputElement).type === 'range') return;
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step) return;
     e.preventDefault();
@@ -920,6 +929,37 @@ import '@superjackfruit/vibekit/fonts.css';
     const i = items.indexOf(document.activeElement as HTMLElement);
     items[(i + step + items.length) % items.length]?.focus();
   }, { capture: true });
+
+  // ---------- volume: two sliders, remembered per visitor ----------
+  // The page keeps the numbers and tells the scene; the scene's audio only applies them to
+  // sound that is already playing, so a slider moved before the first gesture starts nothing.
+  {
+    const DEFAULTS = { music: 70, sound: 100 } as const;
+    const sliders = [...document.querySelectorAll<HTMLInputElement>('input[data-volume]')];
+    const key = (bus: string) => `village:volume:${bus}`;
+    const send = (input: HTMLInputElement) => {
+      input.setAttribute('aria-valuetext', `${input.value}%`);
+      window.dispatchEvent(new CustomEvent('village:volume', { detail: { bus: input.dataset.volume, level: Number(input.value) / 100 } }));
+    };
+    for (const input of sliders) {
+      const bus = input.dataset.volume as keyof typeof DEFAULTS;
+      let v: number = DEFAULTS[bus];
+      try {
+        const saved = localStorage.getItem(key(bus));
+        if (saved !== null && Number.isFinite(Number(saved))) v = Math.min(100, Math.max(0, Number(saved)));
+      } catch {}
+      input.value = String(v);
+      input.setAttribute('aria-valuetext', `${v}%`);
+      input.addEventListener('input', () => {
+        send(input);
+        try { localStorage.setItem(key(bus), input.value); } catch {}
+      });
+      // the arrow keys move the slider, not the car
+      input.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    // the scene listens once it's up
+    window.addEventListener('village:ready', () => sliders.forEach(send));
+  }
 
   // sound: the one switch that's always to hand, the same as pressing m
   const soundBtn = document.getElementById('sound-toggle')!;

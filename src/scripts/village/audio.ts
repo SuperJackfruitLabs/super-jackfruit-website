@@ -5,10 +5,16 @@
 //             out at rest
 //   skid    — filtered noise whose gain follows how much the tyres are scrubbing
 //   thud    — a one-shot knock when the car hits something
-//   music   — "Where Was I" by yd (CC0, opengameart.org), plain <audio>
+//   music   — "Where Was I" by yd (CC0, opengameart.org), an <audio> element
+//             played through its own gain, since iOS ignores an element's volume
 //   world   — a bus for everything out in the village (the other cars, the
 //             neighbours chatting; spatial-audio.ts), under the same mute and
 //             the same sound toggle as the engine
+// Two volumes, set from the menu's sliders: music, and sound (the engine, the
+// tyres, the knocks and the world bus together), each a gain on its own bus.
+// Mute still silences both, and a slider at 0 is the same as that channel off.
+// Setting a volume before the first gesture only remembers it: sound still
+// starts on that gesture, never on a slider.
 import { CARS, type EngineSound } from './cars';
 
 const MUSIC_URL = '/assets/village/music.m4a';
@@ -51,6 +57,10 @@ export interface AudioBus {
   thud(force: number): void;
   /** the context and the world bus, once the first gesture has started sound; null before */
   world(): { ctx: AudioContext; out: AudioNode } | null;
+  /** 0..1 for the music, or for every other sound */
+  setVolume(bus: 'music' | 'sound', level: number): void;
+  /** what's actually playing, for the debug hook */
+  levels(): { started: boolean; muted: boolean; sound: number | null; music: number | null };
 }
 
 export function createAudio(): AudioBus {
@@ -65,6 +75,11 @@ export function createAudio(): AudioBus {
   const buffers = new Map<string, Promise<AudioBuffer>>();
   let skidGain: GainNode | null = null;
   let worldBus: GainNode | null = null;
+  let soundBus: GainNode | null = null;
+  let musicBus: GainNode | null = null;
+  const volume = { music: 1, sound: 1 };
+  /** the music's level when it can only go through the element (no context to route it) */
+  const MUSIC_LEVEL = 0.8;
   let sfxBus: GainNode | null = null;
   let noise: AudioBuffer | null = null;
   let music: HTMLAudioElement | null = null;
@@ -141,8 +156,13 @@ export function createAudio(): AudioBus {
     const actx = new (window.AudioContext || (window as any).webkitAudioContext)();
     ctx = actx;
 
-    const comp = actx.createDynamicsCompressor();
-    comp.connect(actx.destination);
+    const master = actx.createDynamicsCompressor();
+    master.connect(actx.destination);
+    // everything but the music meets here, under the sound slider
+    soundBus = actx.createGain();
+    soundBus.gain.value = volume.sound;
+    soundBus.connect(master);
+    const comp = soundBus;
     sfxBus = actx.createGain();
     sfxBus.gain.value = 1;
     sfxBus.connect(comp);
@@ -184,11 +204,26 @@ export function createAudio(): AudioBus {
     });
   }
 
+  /** music through a gain of its own, where the context allows; otherwise the element's volume does */
+  function routeMusic(): void {
+    if (!ctx || !music || musicBus) return;
+    try {
+      const src = ctx.createMediaElementSource(music);
+      musicBus = ctx.createGain();
+      musicBus.gain.value = MUSIC_LEVEL * volume.music;
+      src.connect(musicBus).connect(ctx.destination);
+      music.volume = 1;
+    } catch {
+      musicBus = null; // left on the element's own volume
+    }
+  }
+
   function startMusic(): void {
     if (music || muted || !musicOn) return;
     music = new Audio(MUSIC_URL);
     music.loop = true;
-    music.volume = 0.8;
+    music.volume = MUSIC_LEVEL * volume.music;
+    routeMusic();
     music.play().catch(() => {});
   }
 
@@ -258,6 +293,24 @@ export function createAudio(): AudioBus {
       const target = muted || !engineOn ? 0 : Math.min(1, level) * 0.055;
       skidGain.gain.setTargetAtTime(target, ctx.currentTime, 0.05);
     },
+
+    setVolume(bus, level): void {
+      const v = Math.min(1, Math.max(0, level));
+      volume[bus] = v;
+      // remembered either way; applied only to sound that has already started
+      if (bus === 'sound' && ctx && soundBus) soundBus.gain.setTargetAtTime(v, ctx.currentTime, 0.03);
+      if (bus === 'music' && music) {
+        if (ctx && musicBus) musicBus.gain.setTargetAtTime(MUSIC_LEVEL * v, ctx.currentTime, 0.03);
+        else music.volume = MUSIC_LEVEL * v;
+      }
+    },
+
+    levels: () => ({
+      started: !!ctx,
+      muted,
+      sound: soundBus ? +soundBus.gain.value.toFixed(3) : null,
+      music: musicBus ? +musicBus.gain.value.toFixed(3) : music ? +music.volume.toFixed(3) : null,
+    }),
 
     world() {
       return ctx && worldBus && !muted ? { ctx, out: worldBus } : null;

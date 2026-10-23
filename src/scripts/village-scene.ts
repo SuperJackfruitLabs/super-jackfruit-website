@@ -1003,6 +1003,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       if (to) teleport(to.x, to.z, to.h);
     });
   }
+  window.addEventListener('village:volume', ((e: CustomEvent<{ bus: 'music' | 'sound'; level: number }>) => {
+    if (e.detail.bus === 'music' || e.detail.bus === 'sound') audio.setVolume(e.detail.bus, e.detail.level);
+  }) as EventListener);
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
     audio.setChannel(e.detail.channel, e.detail.on);
   }) as EventListener);
@@ -1286,7 +1289,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     timings: () => timings,
     npcs: () => npcs.list(),
     chats: () => npcs.conversations(),
-    sound: () => spatial.counts(),
+    sound: () => ({ ...spatial.counts(), levels: audio.levels() }),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     // nothing should be standing in the road; this is how that gets checked
     audit: () => {
