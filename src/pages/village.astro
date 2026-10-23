@@ -1,7 +1,12 @@
 ---
 import Layout from '../layouts/Village.astro';
 import { CARS } from '../scripts/village/cars';
+import { byDistrict } from '../data/projects';
 import '@fontsource-variable/inconsolata';
+
+// the places the menu lists: the suite in flow order, then the lab and its guide
+const SUITE_PLACES = byDistrict('agent-works');
+const linkLabel = (url: string) => (url.startsWith('/') ? 'page' : new URL(url).host);
 import '@superjackfruit/vibekit/fonts.css';
 ---
 
@@ -47,6 +52,36 @@ import '@superjackfruit/vibekit/fonts.css';
         <a href="/">see it as a page →</a>
         <span class="visited" id="visited-chip" hidden>visited <span id="visited-count">0/6</span></span>
       </div>
+      <!-- every place worth stopping at, as plain links: the way in for anyone not driving -->
+      <span class="menu__label menu__label--wide" id="places-label">Places</span>
+      <ul class="menu__places" aria-labelledby="places-label">
+        {SUITE_PLACES.map((p) => (
+          <li data-slug={p.slug} style={`--dot: ${p.accent ?? '#d98a1f'}`}>
+            <span class="place__name">{p.name}<span class="place__tick" hidden> ✓<span class="sr-only"> visited</span></span></span>
+            <a href={p.github} target="_blank" rel="noopener noreferrer">{linkLabel(p.github)}<span class="sr-only"> ({p.name} website)</span></a>
+            {p.demo && <a href={p.demo} target="_blank" rel="noopener noreferrer">docs<span class="sr-only"> ({p.name})</span></a>}
+            <button type="button" class="env__auto place__go" data-jump={p.slug}>drive here<span class="sr-only"> to {p.name}</span></button>
+          </li>
+        ))}
+        <li style="--dot: #8a5a1a">
+          <span class="place__name">The lab's square</span>
+          <a href="/">the suite as a page</a>
+          <a href="mailto:rakesh@superjackfruit.com">write to us</a>
+          <button type="button" class="env__auto place__go" data-jump="hq">drive here<span class="sr-only"> to the lab's square</span></button>
+        </li>
+        <li style="--dot: #173d83">
+          <span class="place__name">Captain Jack's house</span>
+          <a href="#captain-jack" data-ask>talk to him</a>
+          <button type="button" class="env__auto place__go" data-jump="captain-jack">drive here<span class="sr-only"> to Captain Jack's house</span></button>
+        </li>
+      </ul>
+
+      <!-- the cards that rise beside each house; off, a one-line chip says where you are instead -->
+      <span class="menu__label" id="cards-label">Place cards</span>
+      <div class="env__group">
+        <button type="button" id="cards-toggle" class="env__auto" aria-pressed="true" aria-labelledby="cards-label cards-state"><span id="cards-state">shown</span></button>
+      </div>
+
       <span class="menu__label">Time</span>
       <!-- time reads as one track the day moves along, not four loose buttons -->
       <div class="env__group env__group--track" id="time-row" role="group" aria-label="Time of day">
@@ -152,6 +187,16 @@ import '@superjackfruit/vibekit/fonts.css';
         <dt>Esc</dt><dd>menu</dd>
         <dt>?</dt><dd>this list</dd>
       </dl>
+    </div>
+
+    <!-- with the cards hidden: just the place's name and how to open it -->
+    <div class="chip-live" aria-live="polite">
+      <a class="chip" id="place-chip" href="#" data-show="false" tabindex="-1">
+        <span class="chip__key" aria-hidden="true">↵</span>
+        <span id="chip-name"></span>
+        <span aria-hidden="true">↗</span>
+        <span class="sr-only" id="chip-how"></span>
+      </a>
     </div>
 
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
@@ -641,6 +686,48 @@ import '@superjackfruit/vibekit/fonts.css';
   /* on a touch screen the map sits over the pedals (its top ~17.7rem up), so the card stops above it */
   .scene[data-touch='true'] .card { max-height: calc(100dvh - 4.8rem - 18.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 
+  /* ---------- the places list in the menu ---------- */
+  .menu__places { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; width: 100%; }
+  .menu__places li {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.75rem;
+    padding: 0.35rem 0.6rem 0.35rem 0.75rem; border-radius: 10px;
+    background: rgba(40, 50, 60, 0.04); border-left: 4px solid var(--dot);
+  }
+  .place__name { font: 600 1rem 'Figtree Variable', system-ui, sans-serif; color: #2c2a26; margin-right: auto; }
+  .place__tick { color: #3f9e3f; }
+  .menu__places a { font-size: 0.95rem; color: #2c2a26; }
+  .scene .env.menu button.place__go { height: 2rem; font-size: 0.9rem !important; }
+  .scene[data-touch='true'] .menu__places a { display: inline-flex; align-items: center; min-height: 2.75rem; }
+  .scene[data-touch='true'] .env.menu button.place__go { height: 2.75rem; }
+
+  /* ---------- cards off: a one-line chip where the card would be ---------- */
+  .scene[data-cards='off'] .card { display: none; }
+  .chip {
+    position: absolute;
+    top: calc(4.8rem + env(safe-area-inset-top));
+    right: calc(1.4rem + env(safe-area-inset-right));
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    min-height: 2.75rem; max-width: calc(100vw - 2.8rem);
+    padding: 0 1rem; border-radius: 999px;
+    background: rgba(246, 240, 226, 0.95); color: #2c2a26;
+    border: 2px solid var(--accent, #d98a1f);
+    box-shadow: 0 6px 18px rgba(40, 50, 60, 0.25);
+    font: 700 1rem 'Figtree Variable', system-ui, sans-serif; text-decoration: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; visibility: hidden; transform: translateY(-8px);
+    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+  }
+  .chip[data-show='true'] { opacity: 1; visibility: visible; transform: none; transition: opacity 0.25s ease, transform 0.25s ease; }
+  .scene[data-night='true'] .chip { background: rgba(22, 27, 43, 0.95); color: #f1ece0; }
+  .chip__key { font: 600 0.8rem 'Inconsolata Variable', monospace; border: 1px solid currentColor; border-radius: 4px; padding: 0 0.25rem; opacity: 0.7; }
+  .scene[data-touch='true'] .chip__key { display: none; }
+  .scene:has(#menu:not([hidden])) .chip { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) { .chip, .chip[data-show='true'] { transition: none; transform: none; } }
+  :global(html[data-motion='reduce']) .chip { transition: none; transform: none; }
+  @media (max-width: 520px) {
+    .chip { top: calc(4.1rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); max-width: calc(100vw - 1.6rem); }
+  }
+
   /* ---------- the map: a round window on the streets, bottom right, clear of the card ---------- */
   .minimap {
     position: absolute;
@@ -713,6 +800,9 @@ import '@superjackfruit/vibekit/fonts.css';
       overflow-x: hidden;
     }
     .env.menu > .menu__label:not(:first-child) { margin-top: 0.45rem; }
+    /* each place: its name on one line, its links in a row under it */
+    .place__name { flex: 1 1 100%; }
+    .menu__places li { gap: 0 1rem; }
     .menu__volume { width: 100%; }
   }
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
@@ -1129,6 +1219,70 @@ import '@superjackfruit/vibekit/fonts.css';
     card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
     card.dataset.open = 'true';
     showMore();
+  }) as EventListener);
+
+  // ---------- place cards on or off, and the chip that stands in for them ----------
+  const scene = document.querySelector<HTMLElement>('.scene')!;
+  const cardsBtn = document.getElementById('cards-toggle')!;
+  const cardsState = document.getElementById('cards-state')!;
+  const chip = document.getElementById('place-chip') as HTMLAnchorElement;
+  const chipName = document.getElementById('chip-name')!;
+  const chipHow = document.getElementById('chip-how')!;
+  let cardsOn = true;
+  try { cardsOn = localStorage.getItem('village:cards') !== 'off'; } catch {}
+  const showCards = (on: boolean) => {
+    cardsOn = on;
+    scene.dataset.cards = on ? 'on' : 'off';
+    cardsBtn.setAttribute('aria-pressed', String(on));
+    cardsState.textContent = on ? 'shown' : 'hidden';
+    syncChip();
+  };
+  // the chip shows the card's place and its first link, and only while the cards are off
+  function syncChip(): void {
+    const show = !cardsOn && card.dataset.open === 'true' && !!githubEl.getAttribute('href');
+    if (show) {
+      chipName.textContent = nameEl.textContent;
+      chip.href = githubEl.href;
+      chip.style.setProperty('--accent', card.style.getPropertyValue('--accent'));
+      chipHow.textContent = window.matchMedia('(pointer: coarse)').matches
+        ? ', tap to open'
+        : `, press Enter to open it${demoEl.hidden ? '' : ', or P for the second link'}`;
+    }
+    chip.dataset.show = String(show);
+    chip.tabIndex = show ? 0 : -1;
+  }
+  // the chip opens what the card's first link would, Captain Jack's sheet included
+  chip.addEventListener('click', (e) => {
+    e.preventDefault();
+    githubEl.click();
+  });
+  cardsBtn.addEventListener('click', () => {
+    showCards(!cardsOn);
+    try { localStorage.setItem('village:cards', cardsOn ? 'on' : 'off'); } catch {}
+  });
+  window.addEventListener('village:station', () => syncChip());
+  showCards(cardsOn);
+
+  // ---------- the places list: drive there, ticks for the ones visited ----------
+  menu.addEventListener('click', (e) => {
+    const go = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-jump]');
+    if (go) {
+      window.dispatchEvent(new CustomEvent('village:jump', { detail: go.dataset.jump }));
+      setMenu(false);
+      return;
+    }
+    const ask = (e.target as HTMLElement).closest('a[data-ask]');
+    if (ask) {
+      e.preventDefault();
+      setMenu(false);
+      window.dispatchEvent(new CustomEvent('sjl-ask', { detail: {} }));
+    }
+  });
+  window.addEventListener('village:visited', ((e: CustomEvent<{ slugs?: string[] }>) => {
+    const seen = new Set(e.detail.slugs ?? []);
+    for (const li of menu.querySelectorAll<HTMLElement>('.menu__places li[data-slug]')) {
+      li.querySelector<HTMLElement>('.place__tick')!.hidden = !seen.has(li.dataset.slug!);
+    }
   }) as EventListener);
 
   // "more" opens the whole description (scrolling inside the card if it's long), and closes it again

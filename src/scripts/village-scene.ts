@@ -790,6 +790,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           bx, bz, towardRoad ? along : along + Math.PI, portrait
         );
       }
+      jumps.set('captain-jack', before(road.main, bestT, 14));
       stations.push({
         kind: 'info', accent: '#173d83', x: sx, z: sz, reach: 8,
         info: {
@@ -1003,6 +1004,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       if (to) teleport(to.x, to.z, to.h);
     });
   }
+  // the menu's places list: drive straight to one
+  window.addEventListener('village:jump', ((e: CustomEvent<string>) => {
+    const to = e.detail === 'start' ? startJump : jumps.get(e.detail);
+    if (to) teleport(to.x, to.z, to.h);
+  }) as EventListener);
   window.addEventListener('village:volume', ((e: CustomEvent<{ bus: 'music' | 'sound'; level: number }>) => {
     if (e.detail.bus === 'music' || e.detail.bus === 'sound') audio.setVolume(e.detail.bus, e.detail.level);
   }) as EventListener);
@@ -1055,7 +1061,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
   } catch {}
   setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
+    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length, slugs: [...visited] } }));
   }, 500);
 
   // ---------- the minimap ----------
@@ -1212,7 +1218,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         try {
           localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
         } catch {}
-        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
+        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length, slugs: [...visited] } }));
         if (visited.size === suiteSlugs.length) fx.celebrate(plaza.x, plaza.z);
       }
     }
