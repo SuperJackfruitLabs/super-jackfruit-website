@@ -32,6 +32,7 @@ import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
 import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
 import { layStreets } from './village/streets.mjs';
+import { createMinimap } from './village/minimap';
 
 /** the id prefix of every back street, so the named streets can be told apart */
 const BACK_STREET = 'lane-';
@@ -1058,6 +1059,21 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
   }, 500);
 
+  // ---------- the minimap ----------
+  // the suite's houses in their colours, the lab's square and Captain Jack's house
+  const mapCanvas = document.getElementById('minimap-canvas');
+  const minimap = mapCanvas instanceof HTMLCanvasElement
+    ? createMinimap(mapCanvas, road, bounds, [
+      ...stations
+        .filter((st) => st.kind === 'project' && st.project && suiteSlugs.includes(st.project.slug))
+        .map((st) => ({ x: st.x, z: st.z, color: st.project!.accent ?? st.accent, slug: st.project!.slug, kind: 'suite' as const })),
+      { x: plaza.x, z: plaza.z, color: '#8a5a1a', kind: 'hq' as const },
+      ...stations
+        .filter((st) => st.info?.title === 'Captain Jack')
+        .map((st) => ({ x: st.x, z: st.z, color: st.accent, kind: 'guide' as const })),
+    ], () => visited)
+    : null;
+
   // ---------- driving surface ----------
   // the asphalt and the paved square are smooth; everything else is dirt
   const PAVED_MARGIN = 0.6;
@@ -1194,6 +1210,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
 
     fx.update(dt, nightFactor, car.root.position.x, car.root.position.z, car.heading);
+    minimap?.update(car.root.position.x, car.root.position.z, car.heading, night, traffic.cars());
 
     // chase camera: sits behind the car's heading, lags softly into corners,
     // and looks ahead of the car rather than at it.

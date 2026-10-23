@@ -9,8 +9,11 @@ import '@superjackfruit/vibekit/fonts.css';
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute · ? keys</p>
-    <!-- the only controls always on screen: sound, and the menu with everything else -->
+    <!-- the only controls always on screen: the map, sound, and the menu with everything else -->
     <div class="hud">
+      <button type="button" id="map-toggle" class="hud__btn" aria-pressed="true" aria-label="Map shown. Hide it" title="Map (n)" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13l-5.5 2-6-2-5.5 2Z"/><path d="M9 4.5v13M15 6.5v13"/></svg>
+      </button>
       <button type="button" id="sound-toggle" class="hud__btn" aria-pressed="true" aria-label="Sound on. Mute" title="Sound (m)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z"/><path class="hud__wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><line class="hud__slash" x1="15" y1="9" x2="21" y2="15"/><line class="hud__slash" x1="21" y1="9" x2="15" y2="15"/></svg>
       </button>
@@ -18,6 +21,10 @@ import '@superjackfruit/vibekit/fonts.css';
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>
       </button>
     </div>
+
+    <!-- the map is a picture of what the menu and the cards already say in words -->
+    <div class="minimap" id="minimap" aria-hidden="true" hidden><canvas id="minimap-canvas"></canvas></div>
+    <p class="sr-only">A small map in the corner shows the streets around your car, the six suite houses and the lab's square. The same places are listed under Suite in the menu.</p>
 
     <div class="env menu" id="menu" hidden>
       <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
@@ -136,6 +143,7 @@ import '@superjackfruit/vibekit/fonts.css';
         <dt>C</dt><dd>next car</dd>
         <dt>T</dt><dd>time of day</dd>
         <dt>M</dt><dd>mute</dd>
+        <dt>N</dt><dd>map</dd>
         <dt>Esc</dt><dd>menu</dd>
         <dt>?</dt><dd>this list</dd>
       </dl>
@@ -621,6 +629,31 @@ import '@superjackfruit/vibekit/fonts.css';
   /* above the wheel and pedals (measured: their tops sit ~9.6rem up), never under them */
   .scene[data-touch='true'] .card { bottom: calc(10.2rem + env(safe-area-inset-bottom)); }
 
+  /* ---------- the map: a round window on the streets, bottom right, clear of the card ---------- */
+  .minimap {
+    position: absolute;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    width: 9.5rem;
+    height: 9.5rem;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 6px 18px rgba(40, 50, 60, 0.25);
+    pointer-events: none;
+  }
+  .minimap[hidden] { display: none; }
+  .minimap canvas { width: 100%; height: 100%; display: block; }
+  .scene[data-night='true'] .minimap { border-color: rgba(241, 236, 224, 0.35); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+  /* on a touch screen the pedals hold the bottom right, so the map sits on top of them */
+  .scene[data-touch='true'] .minimap { right: 1.1rem; bottom: calc(10.2rem + env(safe-area-inset-bottom)); width: 7.5rem; height: 7.5rem; }
+  .hud__btn[hidden] { display: none; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
   /* ---------- the two always-on controls, and the menu behind one of them ---------- */
   .hud { position: absolute; top: 1.4rem; right: 1.4rem; display: flex; gap: 0.5rem; }
   .hud__btn {
@@ -701,6 +734,8 @@ import '@superjackfruit/vibekit/fonts.css';
     .touch__pedals { gap: 0.4rem; }
     .touch__btn--gas { width: 3.9rem; height: 3.9rem; font-size: 1.4rem; }
     .touch__btn--brake, .touch__btn--nitro { width: 2.85rem; height: 2.85rem; font-size: 1rem; }
+    /* a phone's pedals are a third smaller, so the map comes down to just above them */
+    .minimap, .scene[data-touch='true'] .minimap { right: 0.8rem; bottom: calc(7.6rem + env(safe-area-inset-bottom)); width: 6.25rem; height: 6.25rem; }
   }
   @media (max-width: 640px) {
     .hint { font-size: 1.2rem; bottom: 1.2rem; }
@@ -1045,6 +1080,32 @@ import '@superjackfruit/vibekit/fonts.css';
     welcomeFill.style.width = `${pct}%`;
     welcomeBar.setAttribute('aria-valuenow', String(pct));
   }) as EventListener);
+
+  // ---------- the map: shown once the village is up, unless it was put away last time ----------
+  {
+    const map = document.getElementById('minimap')!;
+    const btn = document.getElementById('map-toggle')!;
+    const KEY = 'village:minimap';
+    const show = (on: boolean) => {
+      map.hidden = !on;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.setAttribute('aria-label', on ? 'Map shown. Hide it' : 'Map hidden. Show it');
+      try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch {}
+    };
+    window.addEventListener('village:ready', () => {
+      let on = true;
+      try { on = localStorage.getItem(KEY) !== 'off'; } catch {}
+      btn.hidden = false;
+      map.hidden = !on;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.setAttribute('aria-label', on ? 'Map shown. Hide it' : 'Map hidden. Show it');
+    });
+    btn.addEventListener('click', () => show(map.hidden));
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'n' || btn.hidden) return;
+      show(map.hidden);
+    });
+  }
 
   window.addEventListener('village:ready', () => {
     ready = true;

@@ -84,6 +84,9 @@ export interface RoadNetwork {
    * guards use this so nothing lands in a street, including the next one over.
    */
   onRibbon(x: number, z: number, clearance?: number): boolean;
+  /** every road tile's middle, and every turning circle, in metres: what a map needs to draw */
+  tiles: Array<{ x: number; z: number }>;
+  circles: Array<{ x: number; z: number; r: number }>;
 }
 
 /** the four tile shapes, by which sides they open onto, before rotation */
@@ -377,5 +380,7 @@ export async function createRoads(
     },
     isPaved: (x, z, margin = 0.6) => inCell(x, z, margin - 0.6) || inCircle(x, z, margin - 0.6),
     onRibbon: (x, z, clearance = 0) => inCell(x, z, clearance) || inCircle(x, z, clearance),
+    tiles: cells.map(([cx, cz]) => ({ x: cx * TILE, z: cz * TILE })),
+    circles,
   };
 }
