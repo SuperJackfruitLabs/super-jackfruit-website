@@ -872,6 +872,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     car.teleport(p.x, p.z, Math.atan2(tan.x, tan.z));
   }
   const startJump = before(road.main, startT, 0);
+  // a jump leaves the old neighbourhood behind: everyone pooled is placed round the new spot
+  const teleport = (x: number, z: number, h: number): void => {
+    car.teleport(x, z, h);
+    npcs.reseed();
+  };
   mark('car');
   const audio = createAudio();
   audio.setEngine(car.spec.engine);
@@ -904,7 +909,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
-      if (to) car.teleport(to.x, to.z, to.h);
+      if (to) teleport(to.x, to.z, to.h);
     });
   }
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
@@ -993,6 +998,18 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   renderer.render(scene, camera);
   mark('compile');
 
+  // what the camera can see, for the pooled actors: they only come and go off-screen
+  const frustum = new THREE.Frustum();
+  const projScreen = new THREE.Matrix4();
+  const viewSphere = new THREE.Sphere();
+  const inView = (x: number, z: number, r: number): boolean => {
+    // past the fog's far edge nothing can be seen, frustum or not
+    if (Math.hypot(x - camera.position.x, z - camera.position.z) - r > 150) return false;
+    viewSphere.center.set(x, 1, z);
+    viewSphere.radius = r;
+    return frustum.intersectsSphere(viewSphere);
+  };
+
   const timer = new THREE.Timer();
   let framesTimed = 0;
   const sceneEl = canvas.closest<HTMLElement>('.scene');
@@ -1028,7 +1045,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     car.applyNight(nightFactor);
 
     props.updateSway(t);
-    npcs.update(dt, car.root.position.x, car.root.position.z);
+    // last frame's view is close enough to tell what's on screen
+    projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreen);
+    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView);
     ambient.update(dt, t, nightFactor);
     for (const cloud of clouds) {
       cloud.position.x += dt * 0.6;
@@ -1175,7 +1195,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           end: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) },
         };
       }),
-    teleport: (x: number, z: number, h = Math.PI) => car.teleport(x, z, h),
+    teleport: (x: number, z: number, h = Math.PI) => teleport(x, z, h),
+    pool: () => ({ walkers: npcs.poolStats() }),
     fx: () => fx.counts(),
   };
 

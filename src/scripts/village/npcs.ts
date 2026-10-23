@@ -7,10 +7,15 @@
 // Walkers pace the pavement along the road spine and stand aside when the car
 // comes past; idlers wait in their front gardens. Mixers only tick for the
 // villagers near enough to see moving.
+//
+// The walkers are a fixed pool (pool.ts) that follows the visitor: one left far
+// behind, out of sight, is moved to a pavement somewhere ahead, so a small
+// crowd always seems to be about wherever you drive.
 import type * as T from 'three';
 import type { Three } from './types';
 import type { LoadedGltf } from './props';
 import type { RoadSegment } from './road';
+import { createPool, type ActorPool, type PoolActor, type SpawnRules } from './pool';
 
 /** villager height in village units — a shade under half the car's length */
 const HEIGHT = 1.4;
@@ -24,6 +29,11 @@ const DODGE_RADIUS = 2.6;
 /** how far they hop, and how long the hop lasts */
 const DODGE_STEP = 2;
 const HOP_TIME = 0.4;
+/** walkers left further behind than this, out of view, are recycled */
+const WALKER_RETIRE = 95;
+/** and land this far from the visitor */
+const WALKER_SPAWN_MIN = 30;
+const WALKER_SPAWN_MAX = 85;
 
 export { NPC_MODELS } from '../../data/village-models';
 import { NPC_MODELS } from '../../data/village-models';
@@ -41,13 +51,18 @@ export interface NpcCounts {
 }
 
 export interface Npcs {
-  update(dt: number, carX: number, carZ: number): void;
+  /** `inView` is the camera's frustum test, so recycling happens off-screen */
+  update(dt: number, carX: number, carZ: number, carHeading: number, inView: SpawnRules['inView']): void;
+  /** the car was teleported: place the walkers round its new spot */
+  reseed(): void;
+  /** recycling activity since the last call */
+  poolStats(): { placed: number; reseeds: number };
   count(): number;
   /** where everyone is and what they're doing — for the debug hook */
   list(): Array<{ x: number; z: number; walker: boolean; yielding: boolean; clock: number }>;
 }
 
-interface Villager {
+interface Villager extends PoolActor {
   root: T.Object3D;
   mixer: T.AnimationMixer;
   idle: T.AnimationAction;
@@ -76,7 +91,9 @@ export async function createNpcs(
   rand: () => number
 ): Promise<Npcs> {
   const wanted = counts.walkers + counts.idlers;
-  if (wanted === 0) return { update: () => {}, count: () => 0, list: () => [] };
+  if (wanted === 0) {
+    return { update: () => {}, reseed: () => {}, poolStats: () => ({ placed: 0, reseeds: 0 }), count: () => 0, list: () => [] };
+  }
 
   const loaded = await Promise.all(
     NPC_MODELS.map(async (name) => {
@@ -138,6 +155,9 @@ export async function createNpcs(
     mixer.setTime(rand() * 2);
 
     return {
+      active: !isWalker, // walkers wait for the pool to place them
+      x: 0,
+      z: 0,
       root: holder,
       mixer,
       idle,
@@ -154,16 +174,73 @@ export async function createNpcs(
     };
   }
 
+  const walkers: Villager[] = [];
   for (let i = 0; i < counts.walkers; i++) {
     const v = spawn(true, i);
-    // spread them over the network, main road first so the spine feels used
-    v.seg = segments[i % segments.length];
-    const tMin = v.seg.id === 'main' ? 0.06 : Math.min(0.42, 18 / v.seg.length);
-    v.t = tMin + (((i / Math.max(1, counts.walkers)) * 0.8 + rand() * 0.1) % (0.95 - tMin));
-    v.dir = rand() < 0.5 ? 1 : -1;
     v.side = i % 2 === 0 ? 1 : -1;
+    v.root.visible = false;
     villagers.push(v);
+    walkers.push(v);
+    // the walkers used to draw their places from the layout's seeded sequence; keep
+    // drawing them, so the idlers and chimneys after them stand where they always have
+    rand();
+    rand();
   }
+
+  // a side street has no pavement across its junction apron, so walkers keep off its first stretch
+  const tMinOf = (seg: RoadSegment) => (seg.id === 'main' ? 0.03 : Math.min(0.4, 16 / seg.length));
+  const totalLength = segments.reduce((sum, s) => sum + s.length, 0);
+  const probe = new THREE.Vector3();
+  /**
+   * A pavement spot the rules allow: a few random tries, longer streets more
+   * often, and the first one ahead of the car wins. One behind is kept only
+   * when nothing ahead turned up.
+   */
+  function placeWalker(v: Villager, rules: SpawnRules): boolean {
+    let behind: { seg: RoadSegment; t: number; side: 1 | -1; x: number; z: number } | null = null;
+    const take = (c: NonNullable<typeof behind>) => {
+      v.seg = c.seg;
+      v.t = c.t;
+      v.side = c.side;
+      v.dir = Math.random() < 0.5 ? 1 : -1;
+      v.x = c.x;
+      v.z = c.z;
+      v.dodge = { x: 0, z: 0, tx: 0, tz: 0, hop: 0 };
+      v.root.visible = true;
+      return true;
+    };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      let pick = Math.random() * totalLength;
+      let seg = segments[0];
+      for (const s of segments) {
+        seg = s;
+        if ((pick -= s.length) <= 0) break;
+      }
+      const tMin = tMinOf(seg) + 0.01;
+      const t = tMin + Math.random() * (0.96 - tMin);
+      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+      seg.curve.getPointAt(t, probe);
+      const n = seg.perp(t);
+      const pavement = seg.width / 2 + FOOTPATH / 2;
+      const x = probe.x + n.x * pavement * side;
+      const z = probe.z + n.z * pavement * side;
+      const d = Math.hypot(x - rules.focusX, z - rules.focusZ);
+      if (d < rules.minDist || d > rules.maxDist) continue;
+      if (!rules.mayBeSeen && rules.inView(x, z, 2)) continue;
+      const spot = { seg, t, side, x, z };
+      if ((x - rules.focusX) * rules.headX + (z - rules.focusZ) * rules.headZ > 0) return take(spot);
+      behind ??= spot;
+    }
+    return behind ? take(behind) : false;
+  }
+  const pool: ActorPool<Villager> = createPool({
+    actors: walkers,
+    retireRadius: WALKER_RETIRE,
+    spawnMin: WALKER_SPAWN_MIN,
+    spawnMax: WALKER_SPAWN_MAX,
+    budget: 1,
+    place: placeWalker,
+  });
 
   const spots = [...idleSpots];
   for (let i = 0; i < counts.idlers && spots.length > 0; i++) {
@@ -172,6 +249,8 @@ export async function createNpcs(
     v.root.position.set(spot.x, 0, spot.z);
     v.home = { x: spot.x, y: 0, z: spot.z };
     v.root.rotation.y = spot.facing;
+    v.x = spot.x;
+    v.z = spot.z;
     villagers.push(v);
   }
 
@@ -180,6 +259,8 @@ export async function createNpcs(
 
   return {
     count: () => villagers.length,
+    reseed: () => pool.reseed(),
+    poolStats: () => pool.takeStats(),
 
     list: () =>
       villagers.map((v) => ({
@@ -190,8 +271,10 @@ export async function createNpcs(
         clock: +v.mixer.time.toFixed(2),
       })),
 
-    update(dt, carX, carZ): void {
+    update(dt, carX, carZ, carHeading, inView): void {
+      pool.update(carX, carZ, carHeading, inView);
       for (const v of villagers) {
+        if (!v.active) continue;
         if (v.isWalker) {
           const near = Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < YIELD_RADIUS;
           if (near !== v.yielding) {
@@ -210,9 +293,8 @@ export async function createNpcs(
           }
           if (!v.yielding) {
             v.t += (v.dir * v.speed * dt) / v.seg.length;
-            // a side street has no pavement across its junction apron, so turn
-            // walkers round before they end up strolling down the tarmac
-            const tMin = v.seg.id === 'main' ? 0.03 : Math.min(0.4, 16 / v.seg.length);
+            // turn walkers round before they end up strolling down the tarmac
+            const tMin = tMinOf(v.seg);
             if (v.t > 0.97) {
               v.t = 0.97;
               v.dir = -1;
@@ -249,6 +331,8 @@ export async function createNpcs(
         d.hop = Math.max(0, d.hop - dt);
         const lift = d.hop > 0 ? Math.sin((1 - d.hop / HOP_TIME) * Math.PI) * 0.45 : 0;
         v.root.position.set(v.home.x + d.x, v.home.y + lift, v.home.z + d.z);
+        v.x = v.root.position.x;
+        v.z = v.root.position.z;
 
         if (Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < ANIMATE_RADIUS) {
           v.mixer.update(dt);
