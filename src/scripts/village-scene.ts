@@ -34,6 +34,7 @@ import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
 import { layStreets } from './village/streets.mjs';
 import { createMinimap } from './village/minimap';
 import { createSpatialAudio } from './village/spatial-audio';
+import { createMotion } from './village/motion';
 
 /** the id prefix of every back street, so the named streets can be told apart */
 const BACK_STREET = 'lane-';
@@ -1132,6 +1133,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   const trafficPlayer = { x: 0, z: 0, heading: 0, speed: 0 };
 
+  // reduced motion stills the village's own motion; this clock stops while it's on, so
+  // the signs, trees, birds and smoke hold where they are instead of snapping back
+  const motion = createMotion();
+  let ambientT = 0;
+
   const timer = new THREE.Timer();
   let framesTimed = 0;
   const sceneEl = canvas.closest<HTMLElement>('.scene');
@@ -1150,7 +1156,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     audio.engine(car.speed, nitro);
 
     // nitro widens the lens as the surge builds
-    const targetFov = 50 + 8 * Math.max(0, (car.speed - 11 * 0.7) / (18 - 11 * 0.7));
+    const still = motion.reduced;
+    const ambientDt = still ? 0 : dt;
+    ambientT += ambientDt;
+    const targetFov = still ? 50 : 50 + 8 * Math.max(0, (car.speed - 11 * 0.7) / (18 - 11 * 0.7));
     if (Math.abs(camera.fov - targetFov) > 0.05) {
       camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 5);
       camera.updateProjectionMatrix();
@@ -1159,14 +1168,14 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
-    boards.tick(t);
+    boards.tick(ambientT);
     // the page's own chrome (the station card) goes dark with the village
     const night = sceneEl?.dataset.night === 'true' ? nightFactor > 0.45 : nightFactor > 0.55;
     if (sceneEl && String(night) !== sceneEl.dataset.night) sceneEl.dataset.night = String(night);
     for (const m of windowMats) m.emissiveIntensity = nightFactor * 1.6;
     car.applyNight(nightFactor);
 
-    props.updateSway(t);
+    props.updateSway(ambientT);
     props.updateCulling(camera.position.x, camera.position.z);
     // last frame's view is close enough to tell what's on screen
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -1176,11 +1185,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     trafficPlayer.z = car.root.position.z;
     trafficPlayer.heading = car.heading;
     trafficPlayer.speed = car.speed;
-    traffic.update(dt, trafficPlayer, inView, false);
+    traffic.update(dt, trafficPlayer, inView, still);
     traffic.applyNight(nightFactor);
-    ambient.update(dt, t, nightFactor);
+    ambient.update(ambientDt, ambientT, nightFactor);
     for (const cloud of clouds) {
-      cloud.position.x += dt * 0.6;
+      cloud.position.x += ambientDt * 0.6;
       if (cloud.position.x > 150) cloud.position.x = -150;
     }
 
@@ -1216,7 +1225,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
 
     fx.update(dt, nightFactor, car.root.position.x, car.root.position.z, car.heading);
-    minimap?.update(car.root.position.x, car.root.position.z, car.heading, night, traffic.cars());
+    minimap?.update(car.root.position.x, car.root.position.z, car.heading, night, traffic.cars(), !still);
 
     // chase camera: sits behind the car's heading, lags softly into corners,
     // and looks ahead of the car rather than at it.
@@ -1234,7 +1243,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     camOffset.lerp(desiredCam, 1 - Math.exp(-dt * CAM_RATE));
     camPos.copy(car.root.position).add(camOffset);
     camera.position.copy(camPos);
-    if (car.shake > 0.001) {
+    if (car.shake > 0.001 && !still) {
       // a knock rattles the mount, not the car
       const s = car.shake * 0.14;
       camera.position.x += (Math.random() - 0.5) * s;
@@ -1340,6 +1349,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       }),
     teleport: (x: number, z: number, h = Math.PI) => teleport(x, z, h),
     pool: () => ({ walkers: npcs.poolStats() }),
+    motion: () => ({ reduced: motion.reduced, ambientT: +ambientT.toFixed(2), fov: +camera.fov.toFixed(1) }),
     traffic: () => traffic.debug(),
     fx: () => fx.counts(),
   };

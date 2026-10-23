@@ -18,7 +18,8 @@ export interface MapPlace {
 }
 
 export interface Minimap {
-  update(x: number, z: number, heading: number, night: boolean, cars: ReadonlyArray<{ x: number; z: number; active: boolean }>): void;
+  /** `turn`: heading-up; off (reduced motion), the map holds still with north up and only the arrow turns */
+  update(x: number, z: number, heading: number, night: boolean, cars: ReadonlyArray<{ x: number; z: number; active: boolean }>, turn: boolean): void;
 }
 
 /** metres from the car to the map's rim */
@@ -81,7 +82,7 @@ export function createMinimap(
   }
 
   return {
-    update(x, z, heading, night, cars): void {
+    update(x, z, heading, night, cars, turnWithCar): void {
       if (canvas.offsetParent === null) return; // hidden: nothing to draw
       fit();
       const r = size / 2;
@@ -94,7 +95,8 @@ export function createMinimap(
       ctx.clip();
 
       // the car's heading, (sin h, cos h) in x/z, is (sin h, cos h) in the image too; turn it to point up
-      const turn = -Math.PI / 2 - Math.atan2(Math.cos(heading), Math.sin(heading));
+      const carAngle = -Math.PI / 2 - Math.atan2(Math.cos(heading), Math.sin(heading));
+      const turn = turnWithCar ? carAngle : Math.PI;
       ctx.translate(r, r);
       ctx.rotate(turn);
       ctx.scale(scale, scale);
@@ -145,8 +147,9 @@ export function createMinimap(
       }
       ctx.restore();
 
-      // the car, always in the middle and pointing up
+      // the car, always in the middle: pointing up, or the way it faces on a map that holds still
       ctx.setTransform(1, 0, 0, 1, r, r);
+      ctx.rotate(turnWithCar ? 0 : turn - carAngle);
       const a = size / 22;
       ctx.beginPath();
       ctx.moveTo(0, -a * 1.3);
