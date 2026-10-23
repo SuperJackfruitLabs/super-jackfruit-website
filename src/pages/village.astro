@@ -26,7 +26,7 @@ import '@superjackfruit/vibekit/fonts.css';
     <div class="minimap" id="minimap" aria-hidden="true" hidden><canvas id="minimap-canvas"></canvas></div>
     <p class="sr-only">A small map in the corner shows the streets around your car, the six suite houses and the lab's square. The same places are listed under Suite in the menu.</p>
 
-    <div class="env menu" id="menu" hidden>
+    <div class="env menu" id="menu" role="dialog" aria-modal="true" aria-label="Settings" hidden>
       <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
       <!-- the garage: thumbnails come from the same list the scene drives, see cars.ts -->
       <span class="menu__label menu__label--wide">Car</span>
@@ -673,17 +673,34 @@ import '@superjackfruit/vibekit/fonts.css';
   .hud__btn[aria-pressed='false'] .hud__wave { display: none; }
 
   .env.menu {
-    top: 4.9rem; right: 1.4rem; left: auto;
+    top: calc(4.9rem + env(safe-area-inset-top)); right: calc(1.4rem + env(safe-area-inset-right)); left: auto;
+    /* never taller than the screen below the buttons: what doesn't fit scrolls inside the panel */
+    max-height: calc(100dvh - 4.9rem - 0.8rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto; overscroll-behavior: contain;
     display: grid; grid-template-columns: auto auto; align-items: center; justify-items: start;
     gap: 0.6rem 1rem; padding: 1rem 1.1rem; border-radius: 14px;
     background: rgba(250, 247, 240, 0.94); box-shadow: 0 10px 30px rgba(40, 50, 60, 0.2); backdrop-filter: blur(6px);
   }
   .env.menu[hidden], .env__group[hidden], .visited[hidden] { display: none; }
-  /* the menu and the card share the top of a phone; while the menu is open it has the room */
-  .scene:has(#menu:not([hidden])) .card { visibility: hidden; }
+  /* while the menu is open it has the room: the card, the map and the pedals step aside */
+  .scene:has(#menu:not([hidden])) :is(.card, .minimap, .touch) { visibility: hidden; }
+  /* on a touch screen every control in the menu is a full fingertip, 44px */
+  .scene[data-touch='true'] .env.menu button:not(.menu__car) { min-width: 2.75rem; height: 2.75rem; }
+  .scene[data-touch='true'] .env.menu :global(button.menu__paint) { width: 2.75rem; height: 2.75rem; }
+  .scene[data-touch='true'] .menu__suite a { display: inline-flex; align-items: center; min-height: 2.75rem; }
   @media (max-width: 640px) {
-    .hud { top: 0.8rem; right: 0.8rem; }
-    .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
+    .hud { top: calc(0.8rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); }
+    .env.menu {
+      top: calc(4.2rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); left: calc(0.8rem + env(safe-area-inset-left));
+      max-height: calc(100dvh - 4.2rem - 0.8rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      justify-content: start;
+      /* a phone is too narrow for label and control side by side: each label sits over its control */
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.3rem;
+      overflow-x: hidden;
+    }
+    .env.menu > .menu__label:not(:first-child) { margin-top: 0.45rem; }
+    .menu__volume { width: 100%; }
   }
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
   .menu__volume { width: min(12rem, 52vw); height: 2rem; margin: 0; accent-color: #d98a1f; cursor: pointer; }
@@ -720,8 +737,8 @@ import '@superjackfruit/vibekit/fonts.css';
     .credit { display: none; }
     .env { top: 0.8rem; right: 0.8rem; left: 0.8rem; justify-content: center; }
     .env { gap: 0.25rem; flex-wrap: nowrap; }
-    .scene[data-touch='true'] .env button { width: 2.35rem; height: 2.35rem; }
-    .scene[data-touch='true'] .env button svg { width: 1.2rem; height: 1.2rem; }
+    .scene[data-touch='true'] .env button:not(.menu__car) { width: 2.75rem; height: 2.75rem; }
+    .scene[data-touch='true'] .env button svg { width: 1.3rem; height: 1.3rem; }
   }
   /* a phone: a short sheet across the width, and the description waits for a tap */
   @media (max-width: 520px) {
@@ -891,8 +908,12 @@ import '@superjackfruit/vibekit/fonts.css';
   const menu = document.getElementById('menu')!;
   const menuBtn = document.getElementById('menu-toggle')!;
   const setMenu = (open: boolean) => {
+    const hadFocus = menu.contains(document.activeElement);
     menu.hidden = !open;
     menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) menu.scrollTop = 0;
+    // closing with focus inside hands it back to the button that opened it
+    else if (hadFocus) menuBtn.focus();
   };
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -916,6 +937,15 @@ import '@superjackfruit/vibekit/fonts.css';
         setMenu(false);
         menuBtn.focus();
       }
+      return;
+    }
+    // while it's open, Tab and Shift+Tab go round the menu and its button, never out into the page
+    if (e.key === 'Tab' && !menu.hidden) {
+      const ring = [menuBtn, ...menuItems()];
+      const i = ring.indexOf(document.activeElement as HTMLElement);
+      const next = ring[(i + (e.shiftKey ? -1 : 1) + ring.length) % ring.length];
+      e.preventDefault();
+      next?.focus();
       return;
     }
     if (menu.hidden || !menu.contains(document.activeElement)) return;
