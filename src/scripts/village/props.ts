@@ -6,6 +6,14 @@
 //
 // Colliders are ORIENTED boxes: axis-aligned AABBs bloat diagonally on rotated
 // houses, which is what used to create invisible walls beside the road.
+//
+// The instances are cut into CHUNKS, one InstancedMesh per square of ground,
+// each with a bounding sphere of its own, so the view and the shadow camera
+// skip the squares they can't see instead of drawing the whole woods every
+// frame. A chunk of small things (flowers, stones) is also hidden once it is
+// far enough off that they'd be a pixel or two, and anything past the fog's
+// far edge is hidden outright (updateCulling). The idea, and the sizing rule,
+// follow slop-newyork's js/scene-culling.js; the code is the village's own.
 import type * as T from 'three';
 import type { GltfLoaderLike, Three } from './types';
 import { modelUrl } from '../../data/village-models';
@@ -51,6 +59,8 @@ export interface Props {
   scaledSize(proto: T.Group, targetSize: number): { x: number; y: number; z: number };
   setSeason(season: Season): void;
   updateSway(t: number): void;
+  /** hides the chunks too far from the camera to see; call once a frame */
+  updateCulling(x: number, z: number): void;
   /** resolves the player circle out of every solid; mutates `pos` */
   resolve(pos: T.Vector3, radius: number): Impact;
   colliderCount(): number;
@@ -68,6 +78,27 @@ interface Queue {
   season: Season | null;
   hasSway: boolean;
 }
+
+/** a square of ground's worth of one mesh's instances */
+interface Chunk {
+  mesh: T.InstancedMesh;
+  /** in the current season, or not seasonal */
+  inSeason: boolean;
+  cx: number;
+  cz: number;
+  radius: number;
+  /** past this, from the camera to the chunk's edge, it isn't drawn */
+  reach: number;
+}
+
+/** ground cut into squares this many metres on a side */
+const CHUNK = 60;
+/** a proto with fewer placements than this stays one mesh: chunking it would only add draw calls */
+const CHUNK_MIN = 16;
+/** the fog is solid past here (env.ts), so nothing beyond needs drawing */
+const FOG_FAR = 150;
+/** how far a thing of size s metres stays worth drawing: a couple of pixels at the village's lens */
+const reachFor = (size: number) => Math.min(FOG_FAR + 15, Math.max(45, size * 32));
 
 interface Metrics {
   maxDim: number;
@@ -87,6 +118,8 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
   // one shared uniform object, referenced by every swaying material
   const swayTime = { value: 0 };
   let drawCalls = 0;
+  const chunks: Chunk[] = [];
+  let season: Season = 'summer';
 
   function loadGltf(name: string): Promise<LoadedGltf> {
     const hit = cache.get(name);
@@ -259,37 +292,63 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
         if (mesh.isMesh) meshes.push(mesh);
       });
 
+      // which square of ground each placement stands in
+      const cells = new Map<string, Placement[]>();
+      for (const item of q.items) {
+        const e = item.matrix.elements;
+        const k = q.items.length < CHUNK_MIN ? 'all' : `${Math.floor(e[12] / CHUNK)},${Math.floor(e[14] / CHUNK)}`;
+        let list = cells.get(k);
+        if (!list) cells.set(k, (list = []));
+        list.push(item);
+      }
+      const m = metrics(q.proto);
+      // its typical size once placed: the middle of its scales, times its largest extent
+      const scales = q.items.map((it) => it.matrix.getMaxScaleOnAxis()).sort((a, b) => a - b);
+      const size = scales[Math.floor(scales.length / 2)] * Math.max(m.size.x, m.size.y, m.size.z);
+
       for (const mesh of meshes) {
         const geo = bakeGeometry(mesh);
         const src = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
         const mat = src.clone();
+        if (q.hasSway) patchSway(mat);
 
-        const im = new THREE.InstancedMesh(geo, mat, q.items.length);
-        im.castShadow = true;
-        im.receiveShadow = true;
-        for (let i = 0; i < q.items.length; i++) im.setMatrixAt(i, q.items[i].matrix);
-        im.instanceMatrix.needsUpdate = true;
+        for (const items of cells.values()) {
+          // each chunk shares the baked vertex data and the material; only the per-instance data is its own
+          const part = new THREE.BufferGeometry();
+          if (geo.index) part.setIndex(geo.index);
+          for (const [name, attr] of Object.entries(geo.attributes)) part.setAttribute(name, attr);
+          const im = new THREE.InstancedMesh(part, mat, items.length);
+          im.castShadow = true;
+          im.receiveShadow = true;
+          for (let i = 0; i < items.length; i++) im.setMatrixAt(i, items[i].matrix);
+          im.instanceMatrix.needsUpdate = true;
 
-        if (q.hasSway) {
-          const sway = new Float32Array(q.items.length * 3);
-          for (let i = 0; i < q.items.length; i++) {
-            const s = q.items[i].sway;
-            sway[i * 3] = s ? s.phase : 0;
-            sway[i * 3 + 1] = s ? s.amp : 0;
-            sway[i * 3 + 2] = s ? s.rate : 0;
+          if (q.hasSway) {
+            const sway = new Float32Array(items.length * 3);
+            for (let i = 0; i < items.length; i++) {
+              const sw = items[i].sway;
+              sway[i * 3] = sw ? sw.phase : 0;
+              sway[i * 3 + 1] = sw ? sw.amp : 0;
+              sway[i * 3 + 2] = sw ? sw.rate : 0;
+            }
+            part.setAttribute('aSway', new THREE.InstancedBufferAttribute(sway, 3));
           }
-          geo.setAttribute('aSway', new THREE.InstancedBufferAttribute(sway, 3));
-          patchSway(mat);
-        }
 
-        // the default bounding sphere covers one instance at the origin, which
-        // would cull the whole field the moment that spot left frame
-        im.computeBoundingSphere();
-        scene.add(im);
-        drawCalls++;
-        if (q.season) {
-          seasonMeshes[q.season].push(im);
-          im.visible = q.season === 'summer';
+          // the default bounding sphere covers one instance at the origin, which
+          // would cull the whole chunk the moment that spot left frame
+          im.computeBoundingSphere();
+          scene.add(im);
+          drawCalls++;
+          const sphere = im.boundingSphere!;
+          const chunk: Chunk = {
+            mesh: im, inSeason: true, cx: sphere.center.x, cz: sphere.center.z, radius: sphere.radius, reach: reachFor(size),
+          };
+          if (q.season) {
+            seasonMeshes[q.season].push(im);
+            chunk.inSeason = q.season === season;
+            im.visible = chunk.inSeason;
+          }
+          chunks.push(chunk);
         }
       }
     }
@@ -318,9 +377,20 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
       return { x: m.size.x * s, y: m.size.y * s, z: m.size.z * s };
     },
 
-    setSeason(season): void {
-      for (const m of seasonMeshes.summer) m.visible = season === 'summer';
-      for (const m of seasonMeshes.autumn) m.visible = season === 'autumn';
+    setSeason(next): void {
+      season = next;
+      for (const c of chunks) {
+        const set = seasonMeshes.summer.includes(c.mesh) ? 'summer' : seasonMeshes.autumn.includes(c.mesh) ? 'autumn' : null;
+        if (set) c.inSeason = set === next;
+        c.mesh.visible = c.inSeason; // the next updateCulling trims the far ones
+      }
+    },
+
+    updateCulling(x: number, z: number): void {
+      for (const c of chunks) {
+        const d = Math.hypot(c.cx - x, c.cz - z) - c.radius;
+        c.mesh.visible = c.inSeason && d < c.reach;
+      }
     },
 
     updateSway(t: number): void {

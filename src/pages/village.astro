@@ -1,7 +1,12 @@
 ---
 import Layout from '../layouts/Village.astro';
 import { CARS } from '../scripts/village/cars';
+import { byDistrict } from '../data/projects';
 import '@fontsource-variable/inconsolata';
+
+// the places the menu lists: the suite in flow order, then the lab and its guide
+const SUITE_PLACES = byDistrict('agent-works');
+const linkLabel = (url: string) => (url.startsWith('/') ? 'page' : new URL(url).host);
 import '@superjackfruit/vibekit/fonts.css';
 ---
 
@@ -9,8 +14,11 @@ import '@superjackfruit/vibekit/fonts.css';
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute · ? keys</p>
-    <!-- the only controls always on screen: sound, and the menu with everything else -->
+    <!-- the only controls always on screen: the map, sound, and the menu with everything else -->
     <div class="hud">
+      <button type="button" id="map-toggle" class="hud__btn" aria-expanded="false" aria-controls="places-panel" aria-label="Map and places" title="Map and places" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13l-5.5 2-6-2-5.5 2Z"/><path d="M9 4.5v13M15 6.5v13"/></svg>
+      </button>
       <button type="button" id="sound-toggle" class="hud__btn" aria-pressed="true" aria-label="Sound on. Mute" title="Sound (m)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z"/><path class="hud__wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><line class="hud__slash" x1="15" y1="9" x2="21" y2="15"/><line class="hud__slash" x1="21" y1="9" x2="15" y2="15"/></svg>
       </button>
@@ -19,7 +27,43 @@ import '@superjackfruit/vibekit/fonts.css';
       </button>
     </div>
 
-    <div class="env menu" id="menu" hidden>
+    <!-- the map is a picture of what the menu and the cards already say in words -->
+    <div class="minimap" id="minimap" aria-hidden="true" hidden><canvas id="minimap-canvas"></canvas></div>
+    <p class="sr-only">A small map in the corner shows the streets around your car, the six suite houses and the lab's square. The same places are listed under Suite in the menu.</p>
+
+    <!-- the map button's panel: the minimap switch, and every place with its links -->
+    <div class="env menu places" id="places-panel" role="dialog" aria-modal="true" aria-label="Map and places" hidden>
+      <span class="menu__label" id="minimap-label">Minimap</span>
+      <div class="env__group">
+        <button type="button" id="minimap-switch" class="env__auto" aria-pressed="true" aria-labelledby="minimap-label minimap-state"><span id="minimap-state">shown</span> <span class="menu__key" aria-hidden="true">N</span></button>
+      </div>
+      <!-- every place worth stopping at, as plain links: the way in for anyone not driving -->
+      <span class="menu__label menu__label--wide" id="places-label">Places</span>
+      <ul class="menu__places" aria-labelledby="places-label">
+        {SUITE_PLACES.map((p) => (
+          <li data-slug={p.slug} style={`--dot: ${p.accent ?? '#d98a1f'}`}>
+            <span class="place__name">{p.name}<span class="place__tick" hidden> ✓<span class="sr-only"> visited</span></span></span>
+            <a href={p.github} target="_blank" rel="noopener noreferrer">{linkLabel(p.github)}<span class="sr-only"> ({p.name} website)</span></a>
+            {p.demo && <a href={p.demo} target="_blank" rel="noopener noreferrer">docs<span class="sr-only"> ({p.name})</span></a>}
+            <button type="button" class="env__auto place__go" data-jump={p.slug}>drive here<span class="sr-only"> to {p.name}</span></button>
+          </li>
+        ))}
+        <li style="--dot: #8a5a1a">
+          <span class="place__name">The lab's square</span>
+          <a href="/">the suite as a page</a>
+          <a href="mailto:rakesh@superjackfruit.com">write to us</a>
+          <button type="button" class="env__auto place__go" data-jump="hq">drive here<span class="sr-only"> to the lab's square</span></button>
+        </li>
+        <li style="--dot: #173d83">
+          <span class="place__name">Captain Jack's house</span>
+          <a href="#captain-jack" data-ask>talk to him</a>
+          <button type="button" class="env__auto place__go" data-jump="captain-jack">drive here<span class="sr-only"> to Captain Jack's house</span></button>
+        </li>
+      </ul>
+
+    </div>
+
+    <div class="env menu" id="menu" role="dialog" aria-modal="true" aria-label="Settings" hidden>
       <!-- the suite as a page, and how much of it you've driven past: kept here, off the screen -->
       <!-- the garage: thumbnails come from the same list the scene drives, see cars.ts -->
       <span class="menu__label menu__label--wide">Car</span>
@@ -40,6 +84,13 @@ import '@superjackfruit/vibekit/fonts.css';
         <a href="/">see it as a page →</a>
         <span class="visited" id="visited-chip" hidden>visited <span id="visited-count">0/6</span></span>
       </div>
+      <!-- the cards that rise beside each house; off, a one-line chip says where you are instead -->
+      <span class="menu__label" id="cards-label">Place cards</span>
+      <div class="env__group">
+        <button type="button" id="cards-toggle" class="env__auto" aria-pressed="true" aria-labelledby="cards-label cards-state"><span id="cards-state">shown</span></button>
+      </div>
+      <p class="menu__car-note">Every place, and the way to it, is under the map button.</p>
+
       <span class="menu__label">Time</span>
       <!-- time reads as one track the day moves along, not four loose buttons -->
       <div class="env__group env__group--track" id="time-row" role="group" aria-label="Time of day">
@@ -82,6 +133,11 @@ import '@superjackfruit/vibekit/fonts.css';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.5 5.3 10a2 2 0 0 1 1.9-1.4h9.6A2 2 0 0 1 18.7 10l1.8 5.5v2.6h-2.1M5.6 18.1H3.5v-2.6M3.5 15.5h17"/><circle cx="7.8" cy="18.1" r="1.7"/><circle cx="16.2" cy="18.1" r="1.7"/><line class="env__slash" x1="4.2" y1="19.8" x2="19.8" y2="4.2"/></svg>
         </button>
       </div>
+      <!-- how loud: the music, and everything else (the car, the traffic, the neighbours) -->
+      <label class="menu__label" for="volume-music">Music volume</label>
+      <input class="menu__volume" type="range" id="volume-music" data-volume="music" min="0" max="100" step="5" value="70" aria-valuetext="70%" />
+      <label class="menu__label" for="volume-sound">Sound volume</label>
+      <input class="menu__volume" type="range" id="volume-sound" data-volume="sound" min="0" max="100" step="5" value="100" aria-valuetext="100%" />
       <span class="menu__label" id="tilt-label" hidden>Steering</span>
       <div class="env__group" id="tilt-row" hidden>
         <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
@@ -136,9 +192,20 @@ import '@superjackfruit/vibekit/fonts.css';
         <dt>C</dt><dd>next car</dd>
         <dt>T</dt><dd>time of day</dd>
         <dt>M</dt><dd>mute</dd>
+        <dt>N</dt><dd>minimap on or off (the map button lists every place)</dd>
         <dt>Esc</dt><dd>menu</dd>
         <dt>?</dt><dd>this list</dd>
       </dl>
+    </div>
+
+    <!-- with the cards hidden: just the place's name and how to open it -->
+    <div class="chip-live" aria-live="polite">
+      <a class="chip" id="place-chip" href="#" data-show="false" tabindex="-1">
+        <span class="chip__key" aria-hidden="true">↵</span>
+        <span id="chip-name"></span>
+        <span aria-hidden="true">↗</span>
+        <span class="sr-only" id="chip-how"></span>
+      </a>
     </div>
 
     <aside class="card" id="station-card" data-open="false" aria-live="polite">
@@ -288,7 +355,10 @@ import '@superjackfruit/vibekit/fonts.css';
   }
 
   /* the project card — warm paper by day, ink after dark. Dark is the village's own
-     night (the scene sets data-night), not the visitor's system theme. */
+     night (the scene sets data-night), not the visitor's system theme.
+     It hangs top right, just under the map, sound and menu buttons and lined up with
+     their right edge, so the road ahead and the minimap at the bottom stay clear; being
+     pinned at the top, a card that changes size grows downward and its title stays put. */
   .card {
     --card-bg: #f6f0e2;
     --card-fg: #2c2a26;
@@ -296,9 +366,13 @@ import '@superjackfruit/vibekit/fonts.css';
     --card-link: #2c2a26;
     --card-shadow: rgba(40, 50, 60, 0.25);
     position: absolute;
-    left: 1.2rem;
-    bottom: 1.2rem;
-    width: min(21.25rem, calc(100vw - 2.4rem));
+    top: calc(4.8rem + env(safe-area-inset-top));
+    right: calc(1.4rem + env(safe-area-inset-right));
+    width: min(21.25rem, calc(100vw - 2.8rem));
+    /* never down as far as the minimap (bottom right, 9.5rem tall): a long card scrolls inside */
+    max-height: calc(100dvh - 4.8rem - 12rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--card-bg);
     color: var(--card-fg);
     border: 2px solid var(--accent, #d98a1f);
@@ -306,7 +380,7 @@ import '@superjackfruit/vibekit/fonts.css';
     padding: 0.65rem 0.85rem;
     box-shadow: 0 8px 24px var(--card-shadow);
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(-12px);
     transition: opacity 0.25s ease, transform 0.25s ease, background-color 0.4s ease, color 0.4s ease;
     pointer-events: none;
   }
@@ -618,8 +692,81 @@ import '@superjackfruit/vibekit/fonts.css';
     right: auto;
     font-size: 0.75rem;
   }
-  /* above the wheel and pedals (measured: their tops sit ~9.6rem up), never under them */
-  .scene[data-touch='true'] .card { bottom: calc(10.2rem + env(safe-area-inset-bottom)); }
+  /* on a touch screen the map sits over the pedals (its top ~17.7rem up), so the card stops above it */
+  .scene[data-touch='true'] .card { max-height: calc(100dvh - 4.8rem - 18.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+
+  /* ---------- the places list in the menu ---------- */
+  .menu__places { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; width: 100%; }
+  .menu__places li {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.75rem;
+    padding: 0.35rem 0.6rem 0.35rem 0.75rem; border-radius: 10px;
+    background: rgba(40, 50, 60, 0.04); border-left: 4px solid var(--dot);
+  }
+  .place__name { font: 600 1rem 'Figtree Variable', system-ui, sans-serif; color: #2c2a26; margin-right: auto; }
+  .place__tick { color: #3f9e3f; }
+  .menu__places a { font-size: 0.95rem; color: #2c2a26; }
+  .scene .env.menu button.place__go { height: 2rem; font-size: 0.9rem !important; }
+  .scene[data-touch='true'] .menu__places a { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; min-width: 2.75rem; }
+  .scene[data-touch='true'] .env.menu button.place__go { height: 2.75rem; }
+
+  /* ---------- cards off: a one-line chip where the card would be ---------- */
+  .scene[data-cards='off'] .card { display: none; }
+  .chip {
+    position: absolute;
+    top: calc(4.8rem + env(safe-area-inset-top));
+    right: calc(1.4rem + env(safe-area-inset-right));
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    min-height: 2.75rem; max-width: calc(100vw - 2.8rem);
+    padding: 0 1rem; border-radius: 999px;
+    background: rgba(246, 240, 226, 0.95); color: #2c2a26;
+    border: 2px solid var(--accent, #d98a1f);
+    box-shadow: 0 6px 18px rgba(40, 50, 60, 0.25);
+    font: 700 1rem 'Figtree Variable', system-ui, sans-serif; text-decoration: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; visibility: hidden; transform: translateY(-8px);
+    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+  }
+  .chip[data-show='true'] { opacity: 1; visibility: visible; transform: none; transition: opacity 0.25s ease, transform 0.25s ease; }
+  .scene[data-night='true'] .chip { background: rgba(22, 27, 43, 0.95); color: #f1ece0; }
+  .chip__key { font: 600 0.8rem 'Inconsolata Variable', monospace; border: 1px solid currentColor; border-radius: 4px; padding: 0 0.25rem; opacity: 0.7; }
+  .scene[data-touch='true'] .chip__key { display: none; }
+  .scene:has(.menu:not([hidden])) .chip { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) { .chip, .chip[data-show='true'] { transition: none; transform: none; } }
+  :global(html[data-motion='reduce']) .chip { transition: none; transform: none; }
+  @media (max-width: 520px) {
+    .chip { top: calc(4.1rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); max-width: calc(100vw - 1.6rem); }
+  }
+
+  /* ---------- the map: a round window on the streets, bottom right, clear of the card ---------- */
+  .minimap {
+    position: absolute;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    width: 9.5rem;
+    height: 9.5rem;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 6px 18px rgba(40, 50, 60, 0.25);
+    pointer-events: none;
+  }
+  .minimap[hidden] { display: none; }
+  .minimap canvas { width: 100%; height: 100%; display: block; }
+  .scene[data-night='true'] .minimap { border-color: rgba(241, 236, 224, 0.35); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+  /* on a touch screen the pedals hold the bottom right, so the map sits on top of them */
+  .scene[data-touch='true'] .minimap { right: 1.1rem; bottom: calc(10.2rem + env(safe-area-inset-bottom)); width: 7.5rem; height: 7.5rem; }
+  /* a phone on its side has no height to stack the map over the pedals, so it goes over the
+     wheel instead, bottom left, and the card on the right only has to clear the pedals */
+  @media (max-height: 520px) {
+    .scene[data-touch='true'] .minimap { right: auto; left: calc(1.1rem + env(safe-area-inset-left)); bottom: calc(6.6rem + env(safe-area-inset-bottom)); width: 6.5rem; height: 6.5rem; }
+    .scene[data-touch='true'] .card { max-height: calc(100dvh - 4.8rem - 10.4rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  }
+  .hud__btn[hidden] { display: none; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
 
   /* ---------- the two always-on controls, and the menu behind one of them ---------- */
   .hud { position: absolute; top: 1.4rem; right: 1.4rem; display: flex; gap: 0.5rem; }
@@ -635,19 +782,44 @@ import '@superjackfruit/vibekit/fonts.css';
   .hud__btn[aria-pressed='false'] .hud__wave { display: none; }
 
   .env.menu {
-    top: 4.9rem; right: 1.4rem; left: auto;
+    top: calc(4.9rem + env(safe-area-inset-top)); right: calc(1.4rem + env(safe-area-inset-right)); left: auto;
+    /* never taller than the screen below the buttons: what doesn't fit scrolls inside the panel */
+    max-height: calc(100dvh - 4.9rem - 0.8rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto; overscroll-behavior: contain;
     display: grid; grid-template-columns: auto auto; align-items: center; justify-items: start;
     gap: 0.6rem 1rem; padding: 1rem 1.1rem; border-radius: 14px;
     background: rgba(250, 247, 240, 0.94); box-shadow: 0 10px 30px rgba(40, 50, 60, 0.2); backdrop-filter: blur(6px);
   }
   .env.menu[hidden], .env__group[hidden], .visited[hidden] { display: none; }
-  /* the menu and the card share the top of a phone; while the menu is open it has the room */
-  .scene:has(#menu:not([hidden])) .card { visibility: hidden; }
+  /* while the menu is open it has the room: the card, the map and the pedals step aside */
+  .scene:has(.menu:not([hidden])) :is(.card, .minimap, .touch) { visibility: hidden; }
+  .menu__key { font: 600 0.75rem 'Inconsolata Variable', monospace; border: 1px solid currentColor; border-radius: 4px; padding: 0 0.25rem; opacity: 0.6; }
+  .scene[data-touch='true'] .menu__key { display: none; }
+  .scene .env.menu button#minimap-switch { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+  /* on a touch screen every control in the menu is a full fingertip, 44px */
+  .scene[data-touch='true'] .env.menu button:not(.menu__car) { min-width: 2.75rem; height: 2.75rem; }
+  .scene[data-touch='true'] .env.menu :global(button.menu__paint) { width: 2.75rem; height: 2.75rem; }
+  .scene[data-touch='true'] .menu__suite a { display: inline-flex; align-items: center; min-height: 2.75rem; }
   @media (max-width: 640px) {
-    .hud { top: 0.8rem; right: 0.8rem; }
-    .env.menu { top: 4.2rem; right: 0.8rem; left: 0.8rem; justify-content: start; }
+    .hud { top: calc(0.8rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); }
+    .env.menu {
+      top: calc(4.2rem + env(safe-area-inset-top)); right: calc(0.8rem + env(safe-area-inset-right)); left: calc(0.8rem + env(safe-area-inset-left));
+      max-height: calc(100dvh - 4.2rem - 0.8rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      justify-content: start;
+      /* a phone is too narrow for label and control side by side: each label sits over its control */
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.3rem;
+      overflow-x: hidden;
+    }
+    .env.menu > .menu__label:not(:first-child) { margin-top: 0.45rem; }
+    /* each place: its name on one line, its links in a row under it */
+    .place__name { flex: 1 1 100%; }
+    .menu__places li { gap: 0 1rem; }
+    .menu__volume { width: 100%; }
   }
   .menu__label { font-size: 1.15rem; color: rgba(44, 42, 38, 0.7); }
+  .menu__volume { width: min(12rem, 52vw); height: 2rem; margin: 0; accent-color: #d98a1f; cursor: pointer; }
+  .scene[data-touch='true'] .menu__volume { height: 2.75rem; }
   .menu .env__group { background: rgba(40, 50, 60, 0.05); }
   .env__auto { width: auto !important; padding: 0 0.7rem !important; font: 600 1.05rem 'Figtree Variable', system-ui, sans-serif; }
   .menu__label--wide, .menu__cars, .menu__car-note { grid-column: 1 / -1; }
@@ -671,8 +843,6 @@ import '@superjackfruit/vibekit/fonts.css';
   /* the driving legend is for the first few seconds; after that it's clutter */
   .hint.faded { opacity: 0; }
 
-  /* the card and the keyboard legend share the bottom of the screen; the card wins */
-  .scene:has(.card[data-open='true']) .hint { opacity: 0; }
   .hint { transition: opacity 0.2s ease; }
 
   /* a phone has room for the controls and the card, not for the chrome around them */
@@ -680,19 +850,26 @@ import '@superjackfruit/vibekit/fonts.css';
     .credit { display: none; }
     .env { top: 0.8rem; right: 0.8rem; left: 0.8rem; justify-content: center; }
     .env { gap: 0.25rem; flex-wrap: nowrap; }
-    .scene[data-touch='true'] .env button { width: 2.35rem; height: 2.35rem; }
-    .scene[data-touch='true'] .env button svg { width: 1.2rem; height: 1.2rem; }
+    .scene[data-touch='true'] .env button:not(.menu__car) { width: 2.75rem; height: 2.75rem; }
+    .scene[data-touch='true'] .env button svg { width: 1.3rem; height: 1.3rem; }
   }
-  /* a phone: a short sheet across the width, and the description waits for a tap */
-  @media (max-width: 520px) {
-    .card { left: 0.8rem; right: 0.8rem; width: auto; padding: 0.55rem 0.8rem; }
+  /* A small screen, either way up: the card folds to its name and "more", so it hides as
+     little of the road as it can; "more" opens the rest, scrolling inside a capped height. */
+  @media (max-width: 520px), (max-height: 520px) {
+    .card { padding: 0.55rem 0.8rem; }
     .card__logo { width: 1.9rem; height: 1.9rem; }
-    .card__desc { display: none; }
+    .card:not([data-expanded='true']) :is(.card__tagline, .card__status, .card__desc, .card__actions) { display: none; }
     .card[data-expanded='true'] .card__desc { display: block; }
-    /* the car sits centre-bottom and the pedals take the corners, so on a phone
-       the card is a strip at the top, just under the sound/menu buttons */
-    .card, .scene[data-touch='true'] .card { top: calc(3.9rem + env(safe-area-inset-top)); bottom: auto; }
-    .card { transform: translateY(-12px); }
+    .card__more { margin: 0.15rem 0 0; }
+  }
+  /* a phone held upright: the card spans the width under the buttons */
+  @media (max-width: 520px) {
+    .card, .scene[data-touch='true'] .card {
+      top: calc(4.1rem + env(safe-area-inset-top));
+      left: calc(0.8rem + env(safe-area-inset-left)); right: calc(0.8rem + env(safe-area-inset-right)); width: auto;
+      /* opened, it may take the top 40% of the screen and no more: the road stays in view */
+      max-height: min(40dvh, calc(100dvh - 4.1rem - 15rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+    }
     /* the pedals, a third smaller: still >= 44px to hit, and clear of Safari's bottom bar */
     .touch { padding: 0 0.8rem calc(0.8rem + env(safe-area-inset-bottom)); }
     .touch__wheel { width: min(10rem, 38vw); height: 3.2rem; }
@@ -701,6 +878,8 @@ import '@superjackfruit/vibekit/fonts.css';
     .touch__pedals { gap: 0.4rem; }
     .touch__btn--gas { width: 3.9rem; height: 3.9rem; font-size: 1.4rem; }
     .touch__btn--brake, .touch__btn--nitro { width: 2.85rem; height: 2.85rem; font-size: 1rem; }
+    /* a phone's pedals are a third smaller, so the map comes down to just above them */
+    .minimap, .scene[data-touch='true'] .minimap { right: 0.8rem; bottom: calc(7.6rem + env(safe-area-inset-bottom)); width: 6.25rem; height: 6.25rem; }
   }
   @media (max-width: 640px) {
     .hint { font-size: 1.2rem; bottom: 1.2rem; }
@@ -845,46 +1024,111 @@ import '@superjackfruit/vibekit/fonts.css';
   window.addEventListener('village:ready', followClock);
   setInterval(followClock, 60_000);
 
-  // the menu: one button opens everything that isn't driving
+  // ---------- the two panels: settings (the menu button) and places (the map button) ----------
+  // One open at a time. A click anywhere else or Esc puts it away; while it's open, Tab and
+  // Shift+Tab go round it and its button, and the arrow keys walk its controls; closing hands
+  // focus back to the button that opened it.
   const menu = document.getElementById('menu')!;
   const menuBtn = document.getElementById('menu-toggle')!;
-  const setMenu = (open: boolean) => {
-    menu.hidden = !open;
-    menuBtn.setAttribute('aria-expanded', String(open));
+  const placesPanel = document.getElementById('places-panel')!;
+  const mapBtn = document.getElementById('map-toggle')!;
+  const panels = [
+    { el: menu, btn: menuBtn },
+    { el: placesPanel, btn: mapBtn },
+  ];
+  const openPanel = () => panels.find((p) => !p.el.hidden) ?? null;
+  const itemsOf = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('button, a, input')].filter((x) => x.offsetParent !== null);
+  /** open one panel (or none); `refocus: false` leaves focus with the page instead of the button */
+  const setPanel = (el: HTMLElement | null, refocus = true) => {
+    for (const p of panels) {
+      const open = p.el === el;
+      if (p.el.hidden === !open) continue;
+      const hadFocus = p.el.contains(document.activeElement);
+      p.el.hidden = !open;
+      p.btn.setAttribute('aria-expanded', String(open));
+      if (open) p.el.scrollTop = 0;
+      else if (hadFocus) {
+        if (refocus) p.btn.focus();
+        else (document.activeElement as HTMLElement | null)?.blur();
+      }
+    }
   };
-  menuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setMenu(menu.hidden);
-  });
-  // a click anywhere else, or Escape, puts it away
+  const setMenu = (open: boolean) => setPanel(open ? menu : null);
+  for (const p of panels) {
+    p.btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setPanel(p.el.hidden ? p.el : null);
+    });
+  }
   document.addEventListener('pointerdown', (e) => {
-    if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn && !menuBtn.contains(e.target as Node)) setMenu(false);
+    const p = openPanel();
+    if (p && !p.el.contains(e.target as Node) && !p.btn.contains(e.target as Node)) setPanel(null);
   });
-  // Esc toggles it; opened from the keyboard, focus goes to its first control and
-  // the arrow keys walk the controls; closing hands focus back to the menu button
-  const menuItems = () => [...menu.querySelectorAll<HTMLElement>('button, a')].filter((el) => el.offsetParent !== null);
   window.addEventListener('keydown', (e) => {
+    const p = openPanel();
     if (e.key === 'Escape') {
       if (!keysPanel.hidden) return;
-      if (menu.hidden) {
-        if (isTyping(e)) return;
-        setMenu(true);
-        menuItems()[0]?.focus();
+      if (p) {
+        setPanel(null);
+        p.btn.focus();
       } else {
-        setMenu(false);
-        menuBtn.focus();
+        // Esc with nothing open brings up the settings, as it always has
+        if (isTyping(e)) return;
+        setPanel(menu);
+        itemsOf(menu)[0]?.focus();
       }
       return;
     }
-    if (menu.hidden || !menu.contains(document.activeElement)) return;
+    if (!p) return;
+    if (e.key === 'Tab') {
+      const ring = [p.btn, ...itemsOf(p.el)];
+      const i = ring.indexOf(document.activeElement as HTMLElement);
+      e.preventDefault();
+      ring[(i + (e.shiftKey ? -1 : 1) + ring.length) % ring.length]?.focus();
+      return;
+    }
+    if (!p.el.contains(document.activeElement)) return;
+    // a slider's arrows move the slider
+    if ((document.activeElement as HTMLInputElement).type === 'range') return;
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step) return;
     e.preventDefault();
-    e.stopImmediatePropagation(); // walking the menu isn't driving
-    const items = menuItems();
+    e.stopImmediatePropagation(); // walking a panel isn't driving
+    const items = itemsOf(p.el);
     const i = items.indexOf(document.activeElement as HTMLElement);
     items[(i + step + items.length) % items.length]?.focus();
   }, { capture: true });
+
+  // ---------- volume: two sliders, remembered per visitor ----------
+  // The page keeps the numbers and tells the scene; the scene's audio only applies them to
+  // sound that is already playing, so a slider moved before the first gesture starts nothing.
+  {
+    const DEFAULTS = { music: 70, sound: 100 } as const;
+    const sliders = [...document.querySelectorAll<HTMLInputElement>('input[data-volume]')];
+    const key = (bus: string) => `village:volume:${bus}`;
+    const send = (input: HTMLInputElement) => {
+      input.setAttribute('aria-valuetext', `${input.value}%`);
+      window.dispatchEvent(new CustomEvent('village:volume', { detail: { bus: input.dataset.volume, level: Number(input.value) / 100 } }));
+    };
+    for (const input of sliders) {
+      const bus = input.dataset.volume as keyof typeof DEFAULTS;
+      let v: number = DEFAULTS[bus];
+      try {
+        const saved = localStorage.getItem(key(bus));
+        if (saved !== null && Number.isFinite(Number(saved))) v = Math.min(100, Math.max(0, Number(saved)));
+      } catch {}
+      input.value = String(v);
+      input.setAttribute('aria-valuetext', `${v}%`);
+      input.addEventListener('input', () => {
+        send(input);
+        try { localStorage.setItem(key(bus), input.value); } catch {}
+      });
+      // the arrow keys move the slider, not the car
+      input.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    // the scene listens once it's up
+    window.addEventListener('village:ready', () => sliders.forEach(send));
+  }
 
   // sound: the one switch that's always to hand, the same as pressing m
   const soundBtn = document.getElementById('sound-toggle')!;
@@ -1008,6 +1252,71 @@ import '@superjackfruit/vibekit/fonts.css';
     showMore();
   }) as EventListener);
 
+  // ---------- place cards on or off, and the chip that stands in for them ----------
+  const scene = document.querySelector<HTMLElement>('.scene')!;
+  const cardsBtn = document.getElementById('cards-toggle')!;
+  const cardsState = document.getElementById('cards-state')!;
+  const chip = document.getElementById('place-chip') as HTMLAnchorElement;
+  const chipName = document.getElementById('chip-name')!;
+  const chipHow = document.getElementById('chip-how')!;
+  let cardsOn = true;
+  try { cardsOn = localStorage.getItem('village:cards') !== 'off'; } catch {}
+  const showCards = (on: boolean) => {
+    cardsOn = on;
+    scene.dataset.cards = on ? 'on' : 'off';
+    cardsBtn.setAttribute('aria-pressed', String(on));
+    cardsState.textContent = on ? 'shown' : 'hidden';
+    syncChip();
+  };
+  // the chip shows the card's place and its first link, and only while the cards are off
+  function syncChip(): void {
+    const show = !cardsOn && card.dataset.open === 'true' && !!githubEl.getAttribute('href');
+    if (show) {
+      chipName.textContent = nameEl.textContent;
+      chip.href = githubEl.href;
+      chip.style.setProperty('--accent', card.style.getPropertyValue('--accent'));
+      chipHow.textContent = window.matchMedia('(pointer: coarse)').matches
+        ? ', tap to open'
+        : `, press Enter to open it${demoEl.hidden ? '' : ', or P for the second link'}`;
+    }
+    chip.dataset.show = String(show);
+    chip.tabIndex = show ? 0 : -1;
+  }
+  // the chip opens what the card's first link would, Captain Jack's sheet included
+  chip.addEventListener('click', (e) => {
+    e.preventDefault();
+    githubEl.click();
+  });
+  cardsBtn.addEventListener('click', () => {
+    showCards(!cardsOn);
+    try { localStorage.setItem('village:cards', cardsOn ? 'on' : 'off'); } catch {}
+  });
+  window.addEventListener('village:station', () => syncChip());
+  showCards(cardsOn);
+
+  // ---------- the places list: drive there, ticks for the ones visited ----------
+  placesPanel.addEventListener('click', (e) => {
+    const go = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-jump]');
+    if (go) {
+      window.dispatchEvent(new CustomEvent('village:jump', { detail: go.dataset.jump }));
+      // focus goes back to the page, not the map button, so Enter at the house opens its link
+      setPanel(null, false);
+      return;
+    }
+    const ask = (e.target as HTMLElement).closest('a[data-ask]');
+    if (ask) {
+      e.preventDefault();
+      setPanel(null, false);
+      window.dispatchEvent(new CustomEvent('sjl-ask', { detail: {} }));
+    }
+  });
+  window.addEventListener('village:visited', ((e: CustomEvent<{ slugs?: string[] }>) => {
+    const seen = new Set(e.detail.slugs ?? []);
+    for (const li of placesPanel.querySelectorAll<HTMLElement>('.menu__places li[data-slug]')) {
+      li.querySelector<HTMLElement>('.place__tick')!.hidden = !seen.has(li.dataset.slug!);
+    }
+  }) as EventListener);
+
   // "more" opens the whole description (scrolling inside the card if it's long), and closes it again
   const moreBtn = document.getElementById('card-more')!;
   const setExpanded = (open: boolean) => {
@@ -1016,10 +1325,13 @@ import '@superjackfruit/vibekit/fonts.css';
     moreBtn.textContent = open ? 'less ▴' : 'more ▾';
   };
   // only offered when there's more to read than the card already shows
+  // on a small screen the card is folded to its name, so "more" is always there to open it
+  const folded = window.matchMedia('(max-width: 520px), (max-height: 520px)');
   const showMore = () => {
-    const phone = getComputedStyle(descEl).display === 'none';
-    moreBtn.hidden = !descEl.textContent || (!phone && descEl.scrollHeight <= descEl.clientHeight + 1);
+    const overflows = !!descEl.textContent && descEl.scrollHeight > descEl.clientHeight + 1;
+    moreBtn.hidden = !(folded.matches || card.dataset.expanded === 'true' || overflows);
   };
+  folded.addEventListener?.('change', showMore);
   moreBtn.addEventListener('click', () => setExpanded(card.dataset.expanded !== 'true'));
 
   // visited counter
@@ -1045,6 +1357,36 @@ import '@superjackfruit/vibekit/fonts.css';
     welcomeFill.style.width = `${pct}%`;
     welcomeBar.setAttribute('aria-valuenow', String(pct));
   }) as EventListener);
+
+  // ---------- the minimap: shown once the village is up, unless it was put away last time ----------
+  // its switch lives in the map button's panel; N flips it directly
+  {
+    const map = document.getElementById('minimap')!;
+    const sw = document.getElementById('minimap-switch')!;
+    const state = document.getElementById('minimap-state')!;
+    const KEY = 'village:minimap';
+    const reflect = (on: boolean) => {
+      sw.setAttribute('aria-pressed', String(on));
+      state.textContent = on ? 'shown' : 'hidden';
+    };
+    const show = (on: boolean) => {
+      map.hidden = !on;
+      reflect(on);
+      try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch {}
+    };
+    window.addEventListener('village:ready', () => {
+      let on = true;
+      try { on = localStorage.getItem(KEY) !== 'off'; } catch {}
+      mapBtn.hidden = false;
+      map.hidden = !on;
+      reflect(on);
+    });
+    sw.addEventListener('click', () => show(map.hidden));
+    window.addEventListener('keydown', (e) => {
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'n' || mapBtn.hidden) return;
+      show(map.hidden);
+    });
+  }
 
   window.addEventListener('village:ready', () => {
     ready = true;

@@ -39,6 +39,13 @@ export interface StreetSpec {
   startCulDeSac?: number;
   /** a branch whose far end runs back into the spine instead of stopping */
   rejoins?: boolean;
+  /**
+   * The cell a branch leaves from, and the one it runs into, when they aren't
+   * on the spine: a back street between two crossings (streets.mjs). Either
+   * may be a cell no other street has laid yet; it becomes a junction tile.
+   */
+  from?: Cell;
+  to?: Cell;
 }
 
 export interface RoadSegment {
@@ -77,6 +84,9 @@ export interface RoadNetwork {
    * guards use this so nothing lands in a street, including the next one over.
    */
   onRibbon(x: number, z: number, clearance?: number): boolean;
+  /** every road tile's middle, and every turning circle, in metres: what a map needs to draw */
+  tiles: Array<{ x: number; z: number }>;
+  circles: Array<{ x: number; z: number; r: number }>;
 }
 
 /** the four tile shapes, by which sides they open onto, before rotation */
@@ -166,15 +176,17 @@ export async function createRoads(
     const first = spec.cells[0];
     // the spine cell this street leaves from is its neighbour on the spine
     const near = (c: Cell) => (m: Cell) => Math.abs(m[0] - c[0]) + Math.abs(m[1] - c[1]) === 1;
-    const from = main.cells.find(near(first))!;
+    const from = spec.from ?? main.cells.find(near(first))!;
     const last = spec.cells[spec.cells.length - 1];
-    const to = spec.rejoins ? main.cells.find((m) => m !== from && near(last)(m)) : undefined;
+    const to = spec.to ?? (spec.rejoins ? main.cells.find((m) => m !== from && near(last)(m)) : undefined);
     chain([from, ...spec.cells, ...(to ? [to] : [])]);
     const seg = segment(spec.id, path(spec.cells, from, to), spec.culDeSac);
-    const idx = main.cells.indexOf(from);
-    const t = Math.min(1, Math.max(0, ((idx + 0.5) * TILE) / mainSeg.length));
-    const out = centre(first).sub(centre(from));
-    junctions.push({ id: spec.id, t, side: mainSeg.perp(t).dot(out) >= 0 ? 1 : -1 });
+    const idx = main.cells.findIndex((m) => m[0] === from[0] && m[1] === from[1]);
+    if (idx >= 0) {
+      const t = Math.min(1, Math.max(0, ((idx + 0.5) * TILE) / mainSeg.length));
+      const out = centre(first).sub(centre(from));
+      junctions.push({ id: spec.id, t, side: mainSeg.perp(t).dot(out) >= 0 ? 1 : -1 });
+    }
     return seg;
   });
   // a street's ends are dead ends: the one open side carries straight on
@@ -189,9 +201,13 @@ export async function createRoads(
   }
 
   // ---------- lay the tiles ----------
+  // Instanced: one InstancedMesh per tile shape and part, so a town of back
+  // streets costs the same few draw calls as the spine alone.
   const protos = new Map<string, T.Group>();
   for (const sh of SHAPES) protos.set(sh.model, await loadAsset(sh.model));
   const scale = TILE / KIT_TILE;
+  const placements = new Map<string, T.Matrix4[]>();
+  const tileAt = new THREE.Object3D();
   for (const [k, sides] of open) {
     const [cx, cz] = k.split(',').map(Number);
     const want = [...sides].sort().join('|');
@@ -200,18 +216,36 @@ export async function createRoads(
       if (placed || sh.dirs.length !== sides.size) continue;
       for (let q = 0; q < 4 && !placed; q++) {
         if (sh.dirs.map((d) => key(...turn(d, q))).sort().join('|') !== want) continue;
-        const tile = protos.get(sh.model)!.clone();
-        tile.scale.setScalar(scale);
-        tile.rotation.y = (q * Math.PI) / 2;
+        tileAt.scale.setScalar(scale);
+        tileAt.rotation.y = (q * Math.PI) / 2;
         // in the kit the tarmac sits 0.07 units up the tile and the kerb 0.1;
         // sink the tile so the tarmac is just above the grass (the car drives
         // at y = 0) and the kerb stands a kerb's height proud of it
-        tile.position.set(cx * TILE, TILE_Y - ASPHALT_KIT_Y * scale, cz * TILE);
-        tile.traverse(prepare);
-        scene.add(tile);
+        tileAt.position.set(cx * TILE, TILE_Y - ASPHALT_KIT_Y * scale, cz * TILE);
+        tileAt.updateMatrix();
+        if (!placements.has(sh.model)) placements.set(sh.model, []);
+        placements.get(sh.model)!.push(tileAt.matrix.clone());
         placed = true;
       }
     }
+  }
+
+  for (const [model, mats] of placements) {
+    const proto = protos.get(model)!;
+    proto.updateMatrixWorld(true);
+    proto.traverse((o) => {
+      const mesh = o as T.Mesh;
+      if (!mesh.isMesh) return;
+      // the part's own place in the tile (meshopt's dequantising scale included) rides in each instance
+      const part = mesh.matrixWorld;
+      const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, mats.length);
+      const m = new THREE.Matrix4();
+      mats.forEach((tile, i) => im.setMatrixAt(i, m.multiplyMatrices(tile, part)));
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere();
+      prepare(im);
+      scene.add(im);
+    });
   }
 
   // ---------- footpaths ----------
@@ -323,7 +357,8 @@ export async function createRoads(
   const inCircle = (x: number, z: number, pad: number) =>
     circles.some((c) => (x - c.x) ** 2 + (z - c.z) ** 2 <= (c.r + pad) ** 2);
   const all = [mainSeg, ...branches];
-  const samples: Array<{ x: number; z: number }> = [];
+  // every cell's middle too, so a crossing between back streets counts as road
+  const samples: Array<{ x: number; z: number }> = cells.map(([cx, cz]) => ({ x: cx * TILE, z: cz * TILE }));
   for (const seg of all) {
     const n = Math.max(60, Math.round(seg.length / 1.5));
     for (let i = 0; i <= n; i++) {
@@ -345,5 +380,7 @@ export async function createRoads(
     },
     isPaved: (x, z, margin = 0.6) => inCell(x, z, margin - 0.6) || inCircle(x, z, margin - 0.6),
     onRibbon: (x, z, clearance = 0) => inCell(x, z, clearance) || inCircle(x, z, clearance),
+    tiles: cells.map(([cx, cz]) => ({ x: cx * TILE, z: cz * TILE })),
+    circles,
   };
 }

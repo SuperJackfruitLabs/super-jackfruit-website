@@ -8,6 +8,8 @@ import type { RoadSegment } from './road';
 
 const LAMP_HEIGHT = 4.2;
 const SPACING = 22;
+/** the id prefix streets.mjs gives the back streets */
+const BACK_STREET = 'lane-';
 
 export interface Blocker {
   x: number;
@@ -132,9 +134,10 @@ export async function createLamps(
   const lampScale = LAMP_HEIGHT / (protoDims.y || 1);
   let li = 0;
   for (const seg of segments) {
-    // narrow lanes get their lamps closer in, and more often
+    // narrow lanes get their lamps closer in, and more often; the back streets
+    // (streets.mjs) only the odd one, so a town of them doesn't cost a forest of poles
     const kerb = seg.width / 2 + 1.3;
-    const spacing = seg.id === 'main' ? SPACING : SPACING * 0.8;
+    const spacing = seg.id === 'main' ? SPACING : seg.id.startsWith(BACK_STREET) ? SPACING * 2.2 : SPACING * 0.8;
     const step = spacing / seg.length;
     for (let t = 0.04; t < 0.97; t += step) {
       const c = seg.curve.getPointAt(t);
@@ -195,8 +198,10 @@ export async function createLamps(
     poles: () => poles,
 
     update(nightFactor: number, px: number, pz: number): void {
+      // by day the glows are off, and drawing nothing costs nothing
       for (const g of glows) {
         (g as T.Sprite).material.opacity = nightFactor * 0.8;
+        g.visible = nightFactor > 0.01;
       }
       if (nightFactor <= 0.05 || heads.length === 0) {
         for (const pl of lightPool) pl.intensity = 0;

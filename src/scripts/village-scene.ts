@@ -30,6 +30,14 @@ import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
 import { ALL_VILLAGE_MODELS, HOUSE_MODELS } from '../data/village-models';
 import { createAmbient, type Chimney } from './village/ambient';
+import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
+import { layStreets } from './village/streets.mjs';
+import { createMinimap } from './village/minimap';
+import { createSpatialAudio } from './village/spatial-audio';
+import { createMotion } from './village/motion';
+
+/** the id prefix of every back street, so the named streets can be told apart */
+const BACK_STREET = 'lane-';
 import { restoreVisits } from './village/visits.mjs';
 
 /** GLBs the village pulls in — used to keep the loading bar honest early on */
@@ -128,15 +136,37 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     ...run(2, -18, 0, -18),
     ...run(0, -19, 0, -25),
   ];
+  const NAMED = [
+    // straight on at the first bend, back into the main street where it returns
+    { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
+    { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
+    { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
+  ];
+  // The back streets: a knocked-about grid over the open ground either side
+  // (streets.mjs), joined to the spine only where it has no suite house, sign
+  // or turning pointer to cut through. The cells the named streets' turning
+  // circles and the square stand on count as taken.
+  const backStreets = layStreets({
+    seed: 16,
+    prefix: BACK_STREET,
+    taken: [
+      ...MAIN_CELLS, ...NAMED.flatMap((b) => b.cells),
+      [0, 2], [0, 3], [12, -13], [13, -13], [-7, -21], [-8, -21],
+      [0, -26], [0, -27], [0, -28], [1, -26], [1, -27], [-1, -26], [-1, -27],
+    ],
+    regions: [
+      // west of the spine, from the start down past the Odd Shop
+      { x0: -13, x1: -4, z0: 3, z1: -30, connect: [{ from: [0, -9], dir: [-1, 0] }, { from: [0, -24], dir: [-1, 0] }] },
+      // east of the suite, north of the first bend
+      { x0: 4, x1: 13, z0: 3, z1: -8, connect: [{ from: [3, -10], dir: [0, 1] }] },
+      // east of the square, south of MCP Alley
+      { x0: 5, x1: 13, z0: -17, z1: -30, connect: [{ from: [3, -18], dir: [0, -1] }] },
+    ],
+  });
   const road = await createRoads(
     THREE, scene, props.loadAsset,
     { id: 'main', cells: MAIN_CELLS, culDeSac: 13, startCulDeSac: 9 } /* the far end is the village square */,
-    [
-      // straight on at the first bend, back into the main street where it returns
-      { id: 'straight-on', cells: run(0, -11, 0, -17), culDeSac: 0, rejoins: true },
-      { id: 'mcp-alley', cells: run(4, -13, 11, -13), culDeSac: 9 },
-      { id: 'odd-shop', cells: run(-1, -21, -6, -21), culDeSac: 9 },
-    ],
+    [...NAMED, ...backStreets],
     (o) => {
       if ((o as import('three').Mesh).isMesh) o.receiveShadow = true;
     }
@@ -179,6 +209,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // wait for this batch to finish before they were even requested, which cost
   // half a second of dead air on the wire for nothing.
   for (const name of ALL_VILLAGE_MODELS) void props.loadGltf(name);
+  for (const name of TRAFFIC_MODELS.slice(0, quality.settings.traffic)) void props.loadGltf(name);
 
   const [houses, driveway, planter, flowers, bushes, rocks, oaks, fallOaks, spruces, deadTrees, bigRocks, forestRocks] =
     await Promise.all([
@@ -532,6 +563,58 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
+  // ---------- the back streets: ordinary neighbours, gardens and trees ----------
+  // Both sides of each street, every so often, kept off every street's tarmac,
+  // clear of the houses already standing and inside the hedge.
+  for (const seg of road.branches) {
+    if (!seg.id.startsWith(BACK_STREET) || seg.length < 24) continue;
+    const half = seg.width / 2;
+    for (let t = 9 / seg.length; t < 1 - 9 / seg.length; t += (17 + rand() * 6) / seg.length) {
+      const c = seg.curve.getPointAt(t);
+      const tan = seg.curve.getTangentAt(t);
+      for (const sd of [1, -1]) {
+        const n = seg.perp(t).multiplyScalar(sd);
+        const faceRoad = Math.atan2(-n.x, -n.z);
+        const hx = c.x + n.x * (half + 7.6);
+        const hz = c.z + n.z * (half + 7.6);
+        const inside = Math.abs(hx) < 140 && hz > Z_END - 18 && hz < Z_START + 14;
+        if (rand() < 0.82 && inside && !road.onRibbon(hx, hz, 3.2) && clearOfHouses(hx, hz, 12)) {
+          putHouse(hx, hz, faceRoad, 6.6 + rand() * 1.8);
+          const dx = c.x + n.x * (half + 2.6);
+          const dz = c.z + n.z * (half + 2.6);
+          if (rand() < 0.5 && !road.onRibbon(dx, dz, 1.4)) props.place(driveway, 3.0, dx, dz, faceRoad);
+          const ix = c.x + n.x * (half + 4.4) + tan.x * 2.4;
+          const iz = c.z + n.z * (half + 4.4) + tan.z * 2.4;
+          if (rand() < 0.25 && !road.onRibbon(ix, iz, 1)) idleSpots.push({ x: ix, z: iz, facing: faceRoad });
+        } else if (inside && !road.onRibbon(hx, hz, 3) && clearOfHouses(hx, hz, 7)) {
+          // an empty plot: a garden tree, and a bush by the pavement
+          seasonalTree(Math.floor(rand() * 100), 2.8 + rand() * 1.6, hx, hz, rand() * 6.28);
+        }
+        // a garden between this house and the next
+        const gx = c.x + n.x * (half + 5.2) + tan.x * 8.5;
+        const gz = c.z + n.z * (half + 5.2) + tan.z * 8.5;
+        if (rand() < 0.5 && !road.onRibbon(gx, gz, 1.2) && clearOfHouses(gx, gz, 5)) {
+          props.place(bushes[Math.floor(rand() * bushes.length)], 1.1 + rand() * 0.7, gx, gz, rand() * 6.28, false, 0.02);
+        }
+      }
+    }
+  }
+
+  // the middles of the blocks: back gardens, a tree or two in each
+  {
+    const blocks = [[-135, -35, 35, -305], [35, 135, 35, -85], [45, 135, -165, -305]];
+    const wanted = Math.round(quality.settings.bgTrees * 0.6);
+    for (let i = 0, tries = 0; i < wanted && tries < wanted * 12; tries++) {
+      const [x0, x1, z0, z1] = blocks[tries % blocks.length];
+      const x = x0 + rand() * (x1 - x0);
+      const z = z1 + rand() * (z0 - z1);
+      const d = road.distTo(x, z);
+      if (d < 10.5 || d > 26 || road.onRibbon(x, z, 3) || !clearOfHouses(x, z, 8)) continue;
+      seasonalTree(Math.floor(rand() * 100), 2.6 + rand() * 2.2, x, z, rand() * 6.28);
+      i++;
+    }
+  }
+
   // ---------- the village square: HQ, about, contact kiosk ----------
   // the square sits at the END of the road — the drive's destination
   // The square is where the road ENDS, so it has to swallow the road end
@@ -707,6 +790,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           bx, bz, towardRoad ? along : along + Math.PI, portrait
         );
       }
+      jumps.set('captain-jack', before(road.main, bestT, 14));
       stations.push({
         kind: 'info', accent: '#173d83', x: sx, z: sz, reach: 8,
         info: {
@@ -725,6 +809,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const colours = byDistrict('agent-works').map((p) => p.accent ?? '#d98a1f');
     const gap = 46;
     for (const seg of road.all) {
+      if (seg.id.startsWith(BACK_STREET)) continue; // the named streets are the ones dressed up
       const half = seg.width / 2;
       for (let d = 30; d < seg.length - 12; d += gap) {
         const t = d / seg.length;
@@ -862,6 +947,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }, rand);
 
   mark('npcs');
+  const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows);
+  mark('traffic');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
   let carChoice = loadChoice();
@@ -872,9 +959,19 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     car.teleport(p.x, p.z, Math.atan2(tan.x, tan.z));
   }
   const startJump = before(road.main, startT, 0);
+  // a jump leaves the old neighbourhood behind: everyone pooled is placed round the new spot
+  const teleport = (x: number, z: number, h: number): void => {
+    car.teleport(x, z, h);
+    npcs.reseed();
+    traffic.reseed();
+  };
   mark('car');
   const audio = createAudio();
   audio.setEngine(car.spec.engine);
+  // the other cars and the chatting neighbours, in 3D; a smaller pool of voices on a weaker device
+  const low = quality.settings.tier === 'low';
+  const spatial = createSpatialAudio(audio, { motors: low ? 3 : 5, talk: low ? 1 : 2 });
+  const listener = { x: 0, y: 0, z: 0, fx: 0, fz: 1 };
   const input = createInput(canvas, audio.ensure);
 
   // ---------- the garage: the menu picks, C cycles ----------
@@ -904,9 +1001,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
-      if (to) car.teleport(to.x, to.z, to.h);
+      if (to) teleport(to.x, to.z, to.h);
     });
   }
+  // the menu's places list: drive straight to one
+  window.addEventListener('village:jump', ((e: CustomEvent<string>) => {
+    const to = e.detail === 'start' ? startJump : jumps.get(e.detail);
+    if (to) teleport(to.x, to.z, to.h);
+  }) as EventListener);
+  window.addEventListener('village:volume', ((e: CustomEvent<{ bus: 'music' | 'sound'; level: number }>) => {
+    if (e.detail.bus === 'music' || e.detail.bus === 'sound') audio.setVolume(e.detail.bus, e.detail.level);
+  }) as EventListener);
   window.addEventListener('village:audio', ((e: CustomEvent<{ channel: string; on: boolean }>) => {
     audio.setChannel(e.detail.channel, e.detail.on);
   }) as EventListener);
@@ -956,8 +1061,23 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
   } catch {}
   setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
+    window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length, slugs: [...visited] } }));
   }, 500);
+
+  // ---------- the minimap ----------
+  // the suite's houses in their colours, the lab's square and Captain Jack's house
+  const mapCanvas = document.getElementById('minimap-canvas');
+  const minimap = mapCanvas instanceof HTMLCanvasElement
+    ? createMinimap(mapCanvas, road, bounds, [
+      ...stations
+        .filter((st) => st.kind === 'project' && st.project && suiteSlugs.includes(st.project.slug))
+        .map((st) => ({ x: st.x, z: st.z, color: st.project!.accent ?? st.accent, slug: st.project!.slug, kind: 'suite' as const })),
+      { x: plaza.x, z: plaza.z, color: '#8a5a1a', kind: 'hq' as const },
+      ...stations
+        .filter((st) => st.info?.title === 'Captain Jack')
+        .map((st) => ({ x: st.x, z: st.z, color: st.accent, kind: 'guide' as const })),
+    ], () => visited)
+    : null;
 
   // ---------- driving surface ----------
   // the asphalt and the paved square are smooth; everything else is dirt
@@ -966,7 +1086,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     !road.isPaved(x, z, PAVED_MARGIN) && Math.hypot(x - plaza.x, z - plaza.z) > PLAZA_R;
 
   const carCtx = {
-    resolve: props.resolve,
+    // the world, then the other cars: either can knock the car back
+    resolve: (pos: import('three').Vector3, radius: number) => {
+      const a = props.resolve(pos, radius);
+      const b = traffic.resolve(pos, radius);
+      return { x: a.x + b.x, z: a.z + b.z, depth: Math.max(a.depth, b.depth) };
+    },
     offRoad,
     bounds,
   };
@@ -979,6 +1104,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const fwd = new THREE.Vector3();
   const desiredCam = new THREE.Vector3();
   const desiredTarget = new THREE.Vector3();
+  // the chase camera's mount and look point, as offsets from the car
+  const CAM_RATE = 2.6;
+  const LOOK_RATE = 4.5;
+  const camOffset = camPos.clone().sub(car.root.position);
+  const lookOffset = camTarget.clone().sub(car.root.position);
   camera.position.copy(camPos);
 
   // Compile every shader before the first frame: left to the first render,
@@ -987,6 +1117,25 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   await renderer.compileAsync(scene, camera);
   renderer.render(scene, camera);
   mark('compile');
+
+  // what the camera can see, for the pooled actors: they only come and go off-screen
+  const frustum = new THREE.Frustum();
+  const projScreen = new THREE.Matrix4();
+  const viewSphere = new THREE.Sphere();
+  const inView = (x: number, z: number, r: number): boolean => {
+    // past the fog's far edge nothing can be seen, frustum or not
+    if (Math.hypot(x - camera.position.x, z - camera.position.z) - r > 150) return false;
+    viewSphere.center.set(x, 1, z);
+    viewSphere.radius = r;
+    return frustum.intersectsSphere(viewSphere);
+  };
+
+  const trafficPlayer = { x: 0, z: 0, heading: 0, speed: 0 };
+
+  // reduced motion stills the village's own motion; this clock stops while it's on, so
+  // the signs, trees, birds and smoke hold where they are instead of snapping back
+  const motion = createMotion();
+  let ambientT = 0;
 
   const timer = new THREE.Timer();
   let framesTimed = 0;
@@ -1006,7 +1155,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     audio.engine(car.speed, nitro);
 
     // nitro widens the lens as the surge builds
-    const targetFov = 50 + 8 * Math.max(0, (car.speed - 11 * 0.7) / (18 - 11 * 0.7));
+    const still = motion.reduced;
+    const ambientDt = still ? 0 : dt;
+    ambientT += ambientDt;
+    const targetFov = still ? 50 : 50 + 8 * Math.max(0, (car.speed - 11 * 0.7) / (18 - 11 * 0.7));
     if (Math.abs(camera.fov - targetFov) > 0.05) {
       camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 5);
       camera.updateProjectionMatrix();
@@ -1015,18 +1167,28 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     const nightFactor = env.update(dt);
     lamps.update(nightFactor, car.root.position.x, car.root.position.z);
     boards.applyNight(nightFactor);
-    boards.tick(t);
+    boards.tick(ambientT);
     // the page's own chrome (the station card) goes dark with the village
     const night = sceneEl?.dataset.night === 'true' ? nightFactor > 0.45 : nightFactor > 0.55;
     if (sceneEl && String(night) !== sceneEl.dataset.night) sceneEl.dataset.night = String(night);
     for (const m of windowMats) m.emissiveIntensity = nightFactor * 1.6;
     car.applyNight(nightFactor);
 
-    props.updateSway(t);
-    npcs.update(dt, car.root.position.x, car.root.position.z);
-    ambient.update(dt, t, nightFactor);
+    props.updateSway(ambientT);
+    props.updateCulling(camera.position.x, camera.position.z);
+    // last frame's view is close enough to tell what's on screen
+    projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreen);
+    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView);
+    trafficPlayer.x = car.root.position.x;
+    trafficPlayer.z = car.root.position.z;
+    trafficPlayer.heading = car.heading;
+    trafficPlayer.speed = car.speed;
+    traffic.update(dt, trafficPlayer, inView, still);
+    traffic.applyNight(nightFactor);
+    ambient.update(ambientDt, ambientT, nightFactor);
     for (const cloud of clouds) {
-      cloud.position.x += dt * 0.6;
+      cloud.position.x += ambientDt * 0.6;
       if (cloud.position.x > 150) cloud.position.x = -150;
     }
 
@@ -1056,32 +1218,54 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         try {
           localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
         } catch {}
-        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length } }));
+        window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length, slugs: [...visited] } }));
         if (visited.size === suiteSlugs.length) fx.celebrate(plaza.x, plaza.z);
       }
     }
 
     fx.update(dt, nightFactor, car.root.position.x, car.root.position.z, car.heading);
+    minimap?.update(car.root.position.x, car.root.position.z, car.heading, night, traffic.cars(), !still);
 
     // chase camera: sits behind the car's heading, lags softly into corners,
-    // and looks ahead of the car rather than at it
+    // and looks ahead of the car rather than at it.
+    // The lag is eased on the camera's offset FROM the car, not on its place in
+    // the world. A world-space follower trails by speed × dt per frame, so with
+    // uneven frame times it surged back and forth behind the car; relative to
+    // the car a steady drive holds the camera still and only turns are eased.
+    // The old follower's pull-back at speed (speed / rate behind the mount, and
+    // the look point the same way) is put back in explicitly, so the framing
+    // at any speed is what it was.
     fwd.set(Math.sin(car.heading), 0, Math.cos(car.heading));
-    desiredCam.copy(car.root.position).addScaledVector(fwd, -8.4);
-    desiredCam.y += 4.1;
-    camPos.lerp(desiredCam, Math.min(1, dt * 2.6));
+    const along = Math.max(0, car.speed);
+    desiredCam.copy(fwd).multiplyScalar(-(8.4 + along / CAM_RATE));
+    desiredCam.y = 4.1;
+    camOffset.lerp(desiredCam, 1 - Math.exp(-dt * CAM_RATE));
+    camPos.copy(car.root.position).add(camOffset);
     camera.position.copy(camPos);
-    if (car.shake > 0.001) {
+    if (car.shake > 0.001 && !still) {
       // a knock rattles the mount, not the car
       const s = car.shake * 0.14;
       camera.position.x += (Math.random() - 0.5) * s;
       camera.position.y += (Math.random() - 0.5) * s;
       camera.position.z += (Math.random() - 0.5) * s;
     }
-    desiredTarget.copy(car.root.position).addScaledVector(fwd, 4.5);
-    desiredTarget.y += 1.3;
-    camTarget.lerp(desiredTarget, Math.min(1, dt * 4.5));
+    desiredTarget.copy(fwd).multiplyScalar(4.5 - along / LOOK_RATE);
+    desiredTarget.y = 1.3;
+    lookOffset.lerp(desiredTarget, 1 - Math.exp(-dt * LOOK_RATE));
+    camTarget.copy(car.root.position).add(lookOffset);
     camera.lookAt(camTarget);
     env.follow(camera.position, car.root.position);
+    listener.x = camera.position.x;
+    listener.y = camera.position.y;
+    listener.z = camera.position.z;
+    {
+      const lx = camTarget.x - camera.position.x;
+      const lz = camTarget.z - camera.position.z;
+      const len = Math.hypot(lx, lz) || 1;
+      listener.fx = lx / len;
+      listener.fz = lz / len;
+    }
+    spatial.update(dt, listener, traffic.cars(), npcs.conversations);
 
     renderer.render(scene, camera);
 
@@ -1100,7 +1284,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   (window as any).__village = {
     tier: () => quality.settings.tier,
-    drawCalls: () => ({ instanced: props.drawCallCount(), frame: renderer.info.render.calls }),
+    drawCalls: () => ({ instanced: props.drawCallCount(), frame: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
     pos: () => ({
       x: +car.root.position.x.toFixed(2),
       z: +car.root.position.z.toFixed(2),
@@ -1110,6 +1294,8 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     colliders: () => props.colliderCount(),
     timings: () => timings,
     npcs: () => npcs.list(),
+    chats: () => npcs.conversations(),
+    sound: () => ({ ...spatial.counts(), levels: audio.levels() }),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     // nothing should be standing in the road; this is how that gets checked
     audit: () => {
@@ -1160,7 +1346,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           end: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) },
         };
       }),
-    teleport: (x: number, z: number, h = Math.PI) => car.teleport(x, z, h),
+    teleport: (x: number, z: number, h = Math.PI) => teleport(x, z, h),
+    pool: () => ({ walkers: npcs.poolStats() }),
+    motion: () => ({ reduced: motion.reduced, ambientT: +ambientT.toFixed(2), fov: +camera.fov.toFixed(1) }),
+    traffic: () => traffic.debug(),
     fx: () => fx.counts(),
   };
 
