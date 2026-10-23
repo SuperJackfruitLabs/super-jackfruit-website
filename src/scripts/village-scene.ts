@@ -979,6 +979,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const fwd = new THREE.Vector3();
   const desiredCam = new THREE.Vector3();
   const desiredTarget = new THREE.Vector3();
+  // the chase camera's mount and look point, as offsets from the car
+  const CAM_RATE = 2.6;
+  const LOOK_RATE = 4.5;
+  const camOffset = camPos.clone().sub(car.root.position);
+  const lookOffset = camTarget.clone().sub(car.root.position);
   camera.position.copy(camPos);
 
   // Compile every shader before the first frame: left to the first render,
@@ -1064,11 +1069,20 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     fx.update(dt, nightFactor, car.root.position.x, car.root.position.z, car.heading);
 
     // chase camera: sits behind the car's heading, lags softly into corners,
-    // and looks ahead of the car rather than at it
+    // and looks ahead of the car rather than at it.
+    // The lag is eased on the camera's offset FROM the car, not on its place in
+    // the world. A world-space follower trails by speed × dt per frame, so with
+    // uneven frame times it surged back and forth behind the car; relative to
+    // the car a steady drive holds the camera still and only turns are eased.
+    // The old follower's pull-back at speed (speed / rate behind the mount, and
+    // the look point the same way) is put back in explicitly, so the framing
+    // at any speed is what it was.
     fwd.set(Math.sin(car.heading), 0, Math.cos(car.heading));
-    desiredCam.copy(car.root.position).addScaledVector(fwd, -8.4);
-    desiredCam.y += 4.1;
-    camPos.lerp(desiredCam, Math.min(1, dt * 2.6));
+    const along = Math.max(0, car.speed);
+    desiredCam.copy(fwd).multiplyScalar(-(8.4 + along / CAM_RATE));
+    desiredCam.y = 4.1;
+    camOffset.lerp(desiredCam, 1 - Math.exp(-dt * CAM_RATE));
+    camPos.copy(car.root.position).add(camOffset);
     camera.position.copy(camPos);
     if (car.shake > 0.001) {
       // a knock rattles the mount, not the car
@@ -1077,9 +1091,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       camera.position.y += (Math.random() - 0.5) * s;
       camera.position.z += (Math.random() - 0.5) * s;
     }
-    desiredTarget.copy(car.root.position).addScaledVector(fwd, 4.5);
-    desiredTarget.y += 1.3;
-    camTarget.lerp(desiredTarget, Math.min(1, dt * 4.5));
+    desiredTarget.copy(fwd).multiplyScalar(4.5 - along / LOOK_RATE);
+    desiredTarget.y = 1.3;
+    lookOffset.lerp(desiredTarget, 1 - Math.exp(-dt * LOOK_RATE));
+    camTarget.copy(car.root.position).add(lookOffset);
     camera.lookAt(camTarget);
     env.follow(camera.position, car.root.position);
 
