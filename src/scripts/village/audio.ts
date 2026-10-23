@@ -6,6 +6,9 @@
 //   skid    — filtered noise whose gain follows how much the tyres are scrubbing
 //   thud    — a one-shot knock when the car hits something
 //   music   — "Where Was I" by yd (CC0, opengameart.org), plain <audio>
+//   world   — a bus for everything out in the village (the other cars, the
+//             neighbours chatting; spatial-audio.ts), under the same mute and
+//             the same sound toggle as the engine
 import { CARS, type EngineSound } from './cars';
 
 const MUSIC_URL = '/assets/village/music.m4a';
@@ -46,6 +49,8 @@ export interface AudioBus {
   skid(level: number): void;
   /** one-shot body knock, 0..1 */
   thud(force: number): void;
+  /** the context and the world bus, once the first gesture has started sound; null before */
+  world(): { ctx: AudioContext; out: AudioNode } | null;
 }
 
 export function createAudio(): AudioBus {
@@ -59,6 +64,7 @@ export function createAudio(): AudioBus {
   let playingUrl = '';
   const buffers = new Map<string, Promise<AudioBuffer>>();
   let skidGain: GainNode | null = null;
+  let worldBus: GainNode | null = null;
   let sfxBus: GainNode | null = null;
   let noise: AudioBuffer | null = null;
   let music: HTMLAudioElement | null = null;
@@ -141,6 +147,9 @@ export function createAudio(): AudioBus {
     sfxBus.gain.value = 1;
     sfxBus.connect(comp);
     noise = makeNoise(actx);
+    worldBus = actx.createGain();
+    worldBus.gain.value = engineOn ? 1 : 0;
+    worldBus.connect(comp);
 
     // tyre scrub: a loop that is always running and always silent until the
     // rubber actually starts complaining
@@ -209,6 +218,7 @@ export function createAudio(): AudioBus {
         else if (on) startMusic();
       } else if (channel === 'engine') {
         engineOn = on;
+        if (ctx && worldBus) worldBus.gain.setTargetAtTime(on ? 1 : 0, ctx.currentTime, 0.05);
       }
     },
 
@@ -247,6 +257,10 @@ export function createAudio(): AudioBus {
       if (!ctx || !skidGain) return;
       const target = muted || !engineOn ? 0 : Math.min(1, level) * 0.055;
       skidGain.gain.setTargetAtTime(target, ctx.currentTime, 0.05);
+    },
+
+    world() {
+      return ctx && worldBus && !muted ? { ctx, out: worldBus } : null;
     },
 
     thud(force: number): void {

@@ -33,6 +33,7 @@ import { createAmbient, type Chimney } from './village/ambient';
 import { createTraffic, TRAFFIC_MODELS } from './village/traffic';
 import { layStreets } from './village/streets.mjs';
 import { createMinimap } from './village/minimap';
+import { createSpatialAudio } from './village/spatial-audio';
 
 /** the id prefix of every back street, so the named streets can be told apart */
 const BACK_STREET = 'lane-';
@@ -975,6 +976,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   mark('car');
   const audio = createAudio();
   audio.setEngine(car.spec.engine);
+  // the other cars and the chatting neighbours, in 3D; a smaller pool of voices on a weaker device
+  const low = quality.settings.tier === 'low';
+  const spatial = createSpatialAudio(audio, { motors: low ? 3 : 5, talk: low ? 1 : 2 });
+  const listener = { x: 0, y: 0, z: 0, fx: 0, fz: 1 };
   const input = createInput(canvas, audio.ensure);
 
   // ---------- the garage: the menu picks, C cycles ----------
@@ -1241,6 +1246,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     camTarget.copy(car.root.position).add(lookOffset);
     camera.lookAt(camTarget);
     env.follow(camera.position, car.root.position);
+    listener.x = camera.position.x;
+    listener.y = camera.position.y;
+    listener.z = camera.position.z;
+    {
+      const lx = camTarget.x - camera.position.x;
+      const lz = camTarget.z - camera.position.z;
+      const len = Math.hypot(lx, lz) || 1;
+      listener.fx = lx / len;
+      listener.fz = lz / len;
+    }
+    spatial.update(dt, listener, traffic.cars(), npcs.conversations);
 
     renderer.render(scene, camera);
 
@@ -1270,6 +1286,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     timings: () => timings,
     npcs: () => npcs.list(),
     chats: () => npcs.conversations(),
+    sound: () => spatial.counts(),
     ambient: () => ({ chimneys: chimneys.length, ...ambient.debug() }),
     // nothing should be standing in the road; this is how that gets checked
     audit: () => {
