@@ -943,7 +943,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   }, rand);
 
   mark('npcs');
-  const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows);
+  // traffic lights where the two district streets meet the spine
+  const signalAt = ['mcp-alley', 'odd-shop'].map((id) => {
+    const seg = road.get(id);
+    const p = seg.curve.getPointAt(0);
+    const tan = seg.curve.getTangentAt(0);
+    return { x: p.x - tan.x * 5, z: p.z - tan.z * 5 };
+  });
+  const traffic = await createTraffic(
+    THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows,
+    signalAt, props.addOrientedCollider
+  );
   mark('traffic');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 

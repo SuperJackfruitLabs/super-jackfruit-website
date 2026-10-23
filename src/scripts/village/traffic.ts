@@ -47,6 +47,7 @@ import type { RoadNetwork, RoadSegment } from './road';
 import { TILE } from './road';
 import { createPool, type ActorPool, type PoolActor, type SpawnRules } from './pool';
 import { freeAcc, brake, stopAt, bendSpeed, makeCurve, curveAt } from './idm.mjs';
+import { signalPhase } from './signals.mjs';
 
 /** the Kenney cars that live here; the first `count` of them are used */
 export const TRAFFIC_MODELS = ['car-sedan', 'car-taxi', 'car-van', 'car-truck', 'car-sports', 'car-sedan', 'car-taxi', 'car-van', 'car-sedan', 'car-taxi'];
@@ -88,6 +89,17 @@ interface Lane {
   path: Path;
   /** the ways off this lane, by where along it they leave; the last group is the lane's end */
   groups: Array<{ at: number; moves: Move[]; end: boolean }>;
+  /** signal stop lines along it, in order */
+  stops: Array<{ s: number; signal: Signal; main: boolean }>;
+}
+
+/** a junction with traffic lights; its phase is signalPhase(clock, approach, offset) */
+interface Signal {
+  x: number;
+  z: number;
+  offset: number;
+  /** the lamps of every head facing each approach, so they light together */
+  lamps: Record<'main' | 'side', Record<'red' | 'amber' | 'green', T.MeshBasicMaterial>>;
 }
 
 interface Move {
@@ -143,7 +155,7 @@ export interface Traffic {
   reseed(): void;
   /** for the engine sounds: where each car is, and how fast it goes */
   cars(): ReadonlyArray<{ id: number; x: number; z: number; speed: number; active: boolean }>;
-  debug(): { lanes: number; moves: number; cars: Array<{ x: number; z: number; speed: number; lane: string; why: string }>; pool: { placed: number; reseeds: number } };
+  debug(): { lanes: number; moves: number; signals: Array<{ x: number; z: number; main: string; side: string; stops: number }>; cars: Array<{ x: number; z: number; speed: number; lane: string; why: string }>; pool: { placed: number; reseeds: number } };
 }
 
 function softBlob(size: number, inner: string, outer: string): HTMLCanvasElement {
@@ -184,7 +196,10 @@ export async function createTraffic(
   load: (name: string) => Promise<LoadedGltf>,
   road: RoadNetwork,
   count: number,
-  shadows: boolean
+  shadows: boolean,
+  /** junction middles that get traffic lights */
+  signalAt: Array<{ x: number; z: number }>,
+  addCollider: (x: number, z: number, hx: number, hz: number, rotY: number) => void
 ): Promise<Traffic> {
   // ---------- paths ----------
   function pathFrom(pts: Array<{ x: number; z: number }>, aLat = DRIVER.aLat): Path {
@@ -272,7 +287,7 @@ export async function createTraffic(
         const p = seg.perp(t);
         return { x: probe.x + p.x * LANE * dir, z: probe.z + p.z * LANE * dir };
       });
-      lanes.push({ id: `${seg.id}${dir > 0 ? '+' : '-'}`, seg, dir, path: pathFrom(pts), groups: [] });
+      lanes.push({ id: `${seg.id}${dir > 0 ? '+' : '-'}`, seg, dir, path: pathFrom(pts), groups: [], stops: [] });
     }
   }
   const reverseOf = (l: Lane) => lanes.find((o) => o.seg === l.seg && o.dir !== l.dir)!;
@@ -292,6 +307,56 @@ export async function createTraffic(
       if (!junctions.some((o) => Math.hypot(o.x - j.x, o.z - j.z) < 1)) junctions.push(j);
     }
   }
+  // ---------- traffic lights ----------
+  const signals: Signal[] = [];
+  const iron = new THREE.MeshLambertMaterial({ color: 0x2d2f33 });
+  const housing = new THREE.MeshLambertMaterial({ color: 0x1d1f22 });
+  const LAMP_ON = { red: 0xff3b2f, amber: 0xffb020, green: 0x37d67a } as const;
+  const dim = (hex: number) => new THREE.Color(hex).multiplyScalar(0.16);
+  const poleGeo = new THREE.CylinderGeometry(0.07, 0.08, 3.1, 8);
+  const headGeo = new THREE.BoxGeometry(0.42, 1.12, 0.3);
+  const lampGeo = new THREE.CircleGeometry(0.12, 14);
+  function buildSignal(j: { x: number; z: number }, offset: number): Signal {
+    const set = () => ({
+      red: new THREE.MeshBasicMaterial({ color: dim(LAMP_ON.red) }),
+      amber: new THREE.MeshBasicMaterial({ color: dim(LAMP_ON.amber) }),
+      green: new THREE.MeshBasicMaterial({ color: dim(LAMP_ON.green) }),
+    });
+    return { x: j.x, z: j.z, offset, lamps: { main: set(), side: set() } };
+  }
+  function signalHead(sig: Signal, main: boolean, x: number, z: number, facing: number): void {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(poleGeo, iron);
+    pole.position.y = 1.55;
+    const head = new THREE.Mesh(headGeo, housing);
+    head.position.y = 3.1 + 0.5;
+    g.add(pole, head);
+    const lamps = sig.lamps[main ? 'main' : 'side'];
+    (['red', 'amber', 'green'] as const).forEach((k, i) => {
+      const lamp = new THREE.Mesh(lampGeo, lamps[k]);
+      lamp.position.set(0, 3.6 + 0.34 - i * 0.34, 0.152);
+      g.add(lamp);
+    });
+    g.position.set(x, 0, z);
+    g.rotation.y = facing;
+    g.traverse((o) => { if ((o as T.Mesh).isMesh) (o as T.Mesh).castShadow = shadows; });
+    scene.add(g);
+    addCollider(x, z, 0.2, 0.2, 0);
+  }
+  /** the wall clock, so every visitor's lights agree */
+  const clock = () => Date.now() / 1000;
+  function lightSignals(): void {
+    const now = clock();
+    for (const sig of signals) {
+      for (const approach of ['main', 'side'] as const) {
+        const phase = signalPhase(now, approach === 'main', sig.offset);
+        for (const k of ['red', 'amber', 'green'] as const) {
+          sig.lamps[approach][k].color.set(k === phase ? LAMP_ON[k] : dim(LAMP_ON[k]).getHex());
+        }
+      }
+    }
+  }
+
   const moves: Move[] = [];
   const inBox = (j: { x: number; z: number }, x: number, z: number) =>
     Math.abs(x - j.x) <= TILE / 2 + 0.3 && Math.abs(z - j.z) <= TILE / 2 + 0.3;
@@ -310,6 +375,21 @@ export async function createTraffic(
       if (i0 < 0) continue;
       if (i0 > 0) arrive.push({ lane: l, s: p.ss[i0] });
       if (i1 < p.ss.length - 1) leave.push({ lane: l, s: p.ss[i1] });
+    }
+    const lit = signalAt.find((q) => Math.hypot(q.x - j.x, q.z - j.z) < TILE / 2);
+    if (lit) {
+      const signal = buildSignal(j, signals.length * 11);
+      signals.push(signal);
+      for (const a of arrive) {
+        const main = a.lane.seg === road.main;
+        a.lane.stops.push({ s: a.s - 0.6, signal, main });
+        a.lane.stops.sort((p, q) => p.s - q.s);
+        // a head on the kerb at the stop line, facing the drivers it stops
+        const p = pathPoint(a.lane.path, a.s - 1);
+        const hx = Math.sin(p.h), hz = Math.cos(p.h);
+        const kerb = TILE / 2 - LANE + 1.1; // from the lane's middle out past the kerb
+        signalHead(signal, main, p.x - hz * kerb, p.z + hx * kerb, p.h + Math.PI);
+      }
     }
     for (const a of arrive) {
       for (const b of leave) {
@@ -631,6 +711,16 @@ export async function createTraffic(
       const lead = leader(c.lane, c.s, c, LOOKAHEAD);
       if (lead) note(brake(DRIVER, c.speed, lead.d - c.half - lead.c.half, lead.c.speed), 'car');
       cap = bendCap(c.lane.path, c.s, 30);
+      // the next signal ahead on this lane: stop for red, and for amber if there's room to
+      for (const stop of c.lane.stops) {
+        const d = stop.s - c.s - c.half;
+        if (d < -0.5) continue;
+        if (d > LOOKAHEAD) break;
+        const phase = signalPhase(clock(), stop.main, stop.signal.offset);
+        const hold = stopAt(DRIVER, c.speed, Math.max(0.1, d), 0.6);
+        if (phase === 'red' || (phase === 'amber' && freeAcc(DRIVER, c.speed, v0) + hold > -DRIVER.b)) note(hold, 'red light');
+        break;
+      }
       const m = c.next;
       if (m) {
         const toTurn = m.at - c.s;
@@ -729,6 +819,7 @@ export async function createTraffic(
   let night = -1;
   return {
     update(dt, player, inView, slow): void {
+      lightSignals();
       pool.update(player.x, player.z, player.heading, inView);
       buildOccupancy();
       for (const c of cars) if (c.active) sweep(c);
@@ -795,6 +886,11 @@ export async function createTraffic(
     debug: () => ({
       lanes: lanes.length,
       moves: moves.length,
+      signals: signals.map((g) => ({
+        x: +g.x.toFixed(1), z: +g.z.toFixed(1),
+        main: signalPhase(clock(), true, g.offset), side: signalPhase(clock(), false, g.offset),
+        stops: lanes.reduce((n, l) => n + l.stops.filter((q) => q.signal === g).length, 0),
+      })),
       cars: cars.filter((c) => c.active).map((c) => ({
         x: +c.x.toFixed(1), z: +c.z.toFixed(1), speed: +c.speed.toFixed(2),
         lane: c.move ? `${c.move.from.id}→${c.move.to.id}` : c.lane.id, why: c.why,
