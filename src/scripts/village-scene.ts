@@ -1167,6 +1167,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     car.applyNight(nightFactor);
 
     props.updateSway(t);
+    props.updateCulling(camera.position.x, camera.position.z);
     // last frame's view is close enough to tell what's on screen
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen);
@@ -1275,7 +1276,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
   (window as any).__village = {
     tier: () => quality.settings.tier,
-    drawCalls: () => ({ instanced: props.drawCallCount(), frame: renderer.info.render.calls }),
+    drawCalls: () => ({ instanced: props.drawCallCount(), frame: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
     pos: () => ({
       x: +car.root.position.x.toFixed(2),
       z: +car.root.position.z.toFixed(2),
