@@ -23,7 +23,7 @@ interface Shell {
 export interface Fx {
   celebrate(x: number, z: number): void;
   launchShell(px: number, pz: number, heading: number): void;
-  update(dt: number, nightFactor: number, px: number, pz: number, heading: number): void;
+  update(dt: number, nightFactor: number, px: number, pz: number, heading: number, reduced?: boolean): void;
   counts(): { rising: number; bursts: number };
 }
 
@@ -48,6 +48,7 @@ export function createFx(THREE: Three, scene: T.Scene): Fx {
 
   const bursts: Burst[] = [];
   const rising: Shell[] = [];
+  const celebrationTimers = new Set<ReturnType<typeof setTimeout>>();
   let shellTimer = 3 + Math.random() * 4;
 
   function burst(
@@ -122,12 +123,29 @@ export function createFx(THREE: Three, scene: T.Scene): Fx {
     rising.push({ sprite, peak, palette: [a, a, a, b, b, 0xffffff] });
   }
 
+  const clearEffects = () => {
+    for (const timer of celebrationTimers) clearTimeout(timer);
+    celebrationTimers.clear();
+    for (const shell of rising) {
+      scene.remove(shell.sprite);
+      shell.sprite.material.dispose();
+    }
+    rising.length = 0;
+    for (const firework of bursts) {
+      scene.remove(firework.points);
+      firework.points.geometry.dispose();
+      (firework.points.material as T.PointsMaterial).dispose();
+    }
+    bursts.length = 0;
+  };
+
   return {
     launchShell,
 
     celebrate(x: number, z: number): void {
       for (let b = 0; b < 7; b++) {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          celebrationTimers.delete(timer);
           burst(
             x + (Math.random() - 0.5) * 14,
             14 + Math.random() * 8,
@@ -135,10 +153,15 @@ export function createFx(THREE: Three, scene: T.Scene): Fx {
             { palette: [SHELL_HUES[b % SHELL_HUES.length], 0xffffff] }
           );
         }, b * 420);
+        celebrationTimers.add(timer);
       }
     },
 
-    update(dt, nightFactor, px, pz, heading): void {
+    update(dt, nightFactor, px, pz, heading, reduced = false): void {
+      if (reduced) {
+        clearEffects();
+        return;
+      }
       if (nightFactor > 0.55) {
         shellTimer -= dt;
         // one at a time — a shell waits until the sky is clear again

@@ -16,6 +16,7 @@
 // Setting a volume before the first gesture only remembers it: sound still
 // starts on that gesture, never on a slider.
 import { CARS, type EngineSound } from './cars';
+import { musicMuted } from './audio-state.mjs';
 
 const MUSIC_URL = '/assets/village/music.m4a';
 
@@ -242,14 +243,14 @@ export function createAudio(): AudioBus {
         if (muted) ctx.suspend();
         else ctx.resume();
       }
-      if (music) music.muted = muted;
+      if (music) music.muted = musicMuted(muted, musicOn);
       return muted;
     },
 
     setChannel(channel: string, on: boolean): void {
       if (channel === 'music') {
         musicOn = on;
-        if (music) music.muted = !on;
+        if (music) music.muted = musicMuted(muted, musicOn);
         else if (on) startMusic();
       } else if (channel === 'engine') {
         engineOn = on;

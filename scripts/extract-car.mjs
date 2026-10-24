@@ -17,22 +17,28 @@ const io = new NodeIO();
 const doc = await io.read(SRC);
 const scene = doc.getRoot().listScenes()[0];
 
-// find the paint variant anywhere in the tree, then keep only the branch it
-// sits on — every other root child is another car or its decal
+// find the paint variant anywhere in the tree, then keep only its branch
 let variant = null;
 scene.traverse((node) => {
   if (!variant && norm(node.getName()) === KEEP) variant = node;
 });
 if (!variant) throw new Error(`offroad-car: no node named ${KEEP}`);
 
-const keepRoot = new Set();
-for (let n = variant; n; n = n.getParentNode?.()) keepRoot.add(n);
-
 let dropped = 0;
-for (const child of scene.listChildren()) {
-  if (keepRoot.has(child)) continue;
-  child.dispose();
-  dropped++;
+let branch = variant;
+for (let parent = variant.getParentNode(); parent; parent = parent.getParentNode()) {
+  for (const child of parent.listChildren()) {
+    if (child === branch) continue;
+    child.dispose();
+    dropped++;
+  }
+  branch = parent;
+}
+
+for (const child of variant.listChildren()) {
+  if (!/^Cylinder/.test(child.getName()) || child.getTranslation()[1] > -0.5) continue;
+  const [x, , z] = child.getTranslation();
+  child.setName(`wheel-${z > 0 ? 'front' : 'back'}-${x > 0 ? 'right' : 'left'}`);
 }
 
 await doc.transform(prune(), dedup());

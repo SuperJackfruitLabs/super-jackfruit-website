@@ -1,7 +1,5 @@
-// Every model the village needs, in one place, because two things need the
-// list: the scene (to request them all in a single wave) and the page (to
-// preload them, so the browser starts fetching at HTML-parse time instead of
-// waiting for three.js to download, parse and run first).
+// Every model the village needs, in one place. The scene requests this wave
+// after its lazy-loaded renderer and loaders are ready.
 export const HOUSE_MODELS = [
   'building-type-a',
   'building-type-c',
@@ -68,7 +66,7 @@ export const ALL_VILLAGE_MODELS = [
  * hard (see public/_headers) — bump this whenever `npm run assets` regenerates
  * them, or returning visitors keep the old ones for a week.
  */
-export const ASSET_VERSION = '2026-10-22a';
+export const ASSET_VERSION = '2026-10-24f';
 
 export const modelUrl = (name: string): string =>
   `/assets/village/${name}.glb?v=${ASSET_VERSION}`;

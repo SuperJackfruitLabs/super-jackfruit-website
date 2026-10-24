@@ -2,7 +2,7 @@
 // suite's own Motion choice (vibekit writes data-motion="reduce" on <html>).
 //
 // Reduced, the village keeps everything that is the visitor's doing (the
-// car, its suspension, the people stepping aside) and stills what moves on
+// car, its suspension, people dodging or parachuting) and stills what moves on
 // its own: swinging signs and flags, swaying trees, drifting clouds, birds and
 // smoke, the camera's knock and the nitro lens; the traffic creeps; the map
 // stops turning. Read live, so changing either setting applies at once.

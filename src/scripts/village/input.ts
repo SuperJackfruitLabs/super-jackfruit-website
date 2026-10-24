@@ -21,6 +21,10 @@ export interface Input {
   keys: Set<string>;
 }
 
+export function villageControlsBlocked(): boolean {
+  return !!document.querySelector('#welcome[data-open="true"], #menu:not([hidden]), #places-panel:not([hidden]), #keys:not([hidden])');
+}
+
 export function createInput(canvas: HTMLCanvasElement, onFirstGesture: () => void): Input {
   const keys = new Set<string>();
   const state: InputState = { ix: 0, iz: 0, nitro: false };
@@ -40,6 +44,10 @@ export function createInput(canvas: HTMLCanvasElement, onFirstGesture: () => voi
 
   window.addEventListener('keydown', (e) => {
     if (isTyping(e)) return;
+    if (villageControlsBlocked()) {
+      keys.clear();
+      return;
+    }
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
     keys.add(e.key.toLowerCase());
     onFirstGesture();
@@ -64,6 +72,12 @@ export function createInput(canvas: HTMLCanvasElement, onFirstGesture: () => voi
   return {
     keys,
     read(): InputState {
+      if (villageControlsBlocked()) {
+        keys.clear();
+        state.ix = state.iz = 0;
+        state.nitro = false;
+        return state;
+      }
       let ix = 0;
       let iz = 0;
       if (keys.has('w') || keys.has('arrowup')) iz -= 1;

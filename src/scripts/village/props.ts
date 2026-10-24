@@ -17,6 +17,7 @@
 import type * as T from 'three';
 import type { GltfLoaderLike, Three } from './types';
 import { modelUrl } from '../../data/village-models';
+import { circleOverlapsBox, createCollisionGrid } from './collision-grid.mjs';
 
 export interface ColliderBox {
   cx: number;
@@ -63,6 +64,8 @@ export interface Props {
   updateCulling(x: number, z: number): void;
   /** resolves the player circle out of every solid; mutates `pos` */
   resolve(pos: T.Vector3, radius: number): Impact;
+  /** whether a circle at this point misses every solid */
+  isClear(x: number, z: number, radius: number): boolean;
   colliderCount(): number;
   drawCallCount(): number;
 }
@@ -114,6 +117,7 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
   const metricsCache = new Map<T.Group, Metrics>();
   const queues = new Map<string, Queue>();
   const colliders: ColliderBox[] = [];
+  const collisionGrid = createCollisionGrid();
   const seasonMeshes: Record<Season, T.Object3D[]> = { summer: [], autumn: [] };
   // one shared uniform object, referenced by every swaying material
   const swayTime = { value: 0 };
@@ -155,6 +159,9 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
     })();
 
     pending.set(name, p);
+    void p.catch(() => {
+      if (pending.get(name) === p) pending.delete(name);
+    });
     return p;
   }
 
@@ -178,14 +185,16 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
   ): void {
     const c = Math.cos(rotY);
     const sn = Math.sin(rotY);
-    colliders.push({
+    const collider = {
       cx: x + localCx * c + localCz * sn,
       cz: z - localCx * sn + localCz * c,
       hx,
       hz,
       cos: c,
       sin: sn,
-    });
+    };
+    colliders.push(collider);
+    collisionGrid.add(collider);
   }
 
   const tmpPos = new THREE.Vector3();
@@ -402,7 +411,7 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
       for (let pass = 0; pass < 2; pass++) {
         const px = pos.x;
         const pz = pos.z;
-        for (const c of colliders) {
+        for (const c of collisionGrid.query(px, pz, radius)) {
           const wx = px - c.cx;
           const wz = pz - c.cz;
           const reach = c.hx + c.hz + 4;
@@ -446,6 +455,9 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
       }
       return impact;
     },
+
+    isClear: (x, z, radius) =>
+      !collisionGrid.query(x, z, radius).some((c) => circleOverlapsBox(x, z, radius, c)),
 
     colliderCount: () => colliders.length,
     drawCallCount: () => drawCalls,

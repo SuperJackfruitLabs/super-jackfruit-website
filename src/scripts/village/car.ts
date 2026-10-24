@@ -14,7 +14,9 @@ import type { Three } from './types';
 import type { Impact, LoadedGltf } from './props';
 import type { InputState } from './input';
 import type { AudioBus } from './audio';
-import { carById, type CarChoice, type CarSpec, type Handling } from './cars';
+import { carById, carStyle, type CarChoice, type CarSpec, type Handling } from './cars';
+import { createLatestChoice } from './latest-choice.mjs';
+import { finishVehicle, type CarEnvironment } from './car-finish';
 
 // Handling lives per car in cars.ts; only reverse is the same for all.
 const MAX_REVERSE = 4;
@@ -29,6 +31,7 @@ export interface CarCtx {
   /** pushes the car out of anything solid; mutates the position */
   resolve(pos: T.Vector3, radius: number): Impact;
   offRoad(x: number, z: number): boolean;
+  reducedMotion: boolean;
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
@@ -76,6 +79,13 @@ interface Model {
   paint: Array<{ mat: T.MeshStandardMaterial; base: T.Color }>;
   /** the materials the picker repaints; empty for a car that comes as it is */
   paintMats: T.MeshStandardMaterial[];
+  atlasPaints: Array<{ mat: T.MeshStandardMaterial; source: T.Texture; channel: string; generated?: T.Texture }>;
+  /** cloned by rig(); geometry and textures remain owned by the loader cache */
+  materials: T.Material[];
+  headlights: T.MeshStandardMaterial[];
+  brakeLights: T.MeshStandardMaterial[];
+  policeRed: T.MeshStandardMaterial[];
+  policeBlue: T.MeshStandardMaterial[];
   wheelRadius: number;
   /** root-space extents, for where the lights and exhaust go */
   halfW: number;
@@ -86,18 +96,71 @@ interface Model {
 
 const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-/**
- * Rig a freshly cloned model. The off-roader is a three-paint showroom (see
- * scripts/extract-car.mjs) whose wheels are "Cylinder" nodes; Kenney's cars
- * are a body plus four "wheel-front-left"-style nodes.
- */
-function rig(THREE: Three, spec: CarSpec, gltf: LoadedGltf): Model {
+const hsv = (r: number, g: number, b: number): [number, number, number] => {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  let h = 0;
+  if (delta) {
+    if (max === r) h = ((g - b) / delta) % 6;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+  }
+  return [(h / 6 + 1) % 1, max ? delta / max : 0, max / 255];
+};
+
+const fromHsv = (h: number, s: number, v: number): [number, number, number] => {
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  const rgb = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
+  return rgb.map((x) => Math.round(x * 255)) as [number, number, number];
+};
+
+function recolorAtlas(THREE: Three, source: T.Texture, channel: string, hex: string): T.Texture {
+  const image = source.image as CanvasImageSource & { width: number; height: number };
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const value = Number.parseInt(hex.slice(1), 16);
+  const [th, ts, tv] = hsv((value >> 16) & 255, (value >> 8) & 255, value & 255);
+  for (let i = 0; i < pixels.data.length; i += 4) {
+    const [r, g, b, a] = pixels.data.slice(i, i + 4);
+    const match = channel === 'blue'
+      ? b > 50 && b > r * 1.2 && b > g * 1.1
+      : r > 50 && r > g * 1.3 && r > b * 1.3;
+    if (!match) continue;
+    const [, , v] = hsv(r, g, b);
+    pixels.data.set(fromHsv(th, ts, v * tv), i);
+    pixels.data[i + 3] = a;
+  }
+  ctx.putImageData(pixels, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = source.colorSpace;
+  texture.wrapS = source.wrapS;
+  texture.wrapT = source.wrapT;
+  texture.magFilter = source.magFilter;
+  texture.minFilter = source.minFilter;
+  texture.anisotropy = source.anisotropy;
+  texture.repeat.copy(source.repeat);
+  texture.offset.copy(source.offset);
+  texture.flipY = source.flipY;
+  return texture;
+}
+
+/** Rig a freshly cloned model with four independently pivoted wheel nodes. */
+function rig(THREE: Three, spec: CarSpec, gltf: LoadedGltf, env: CarEnvironment): Model {
   const src = gltf.scene.clone(true);
   let variant: T.Object3D = src;
   if (spec.id === 'offroad') {
     let found: T.Object3D | undefined;
     src.traverse((o: T.Object3D) => {
-      if (!found && norm(o.name) === 'cube5') found = o; // the olive-green paint
+      if (!found && norm(o.name) === 'cube5') found = o;
     });
     if (!found) throw new Error('offroad-car: paint variant not found');
     found.position.x = 0;
@@ -107,25 +170,33 @@ function rig(THREE: Three, spec: CarSpec, gltf: LoadedGltf): Model {
 
   const car = new THREE.Group();
   car.add(variant);
+  if (spec.id !== 'offroad' && spec.id !== 'race') finishVehicle(THREE, car, env);
   const paint: Model['paint'] = [];
   const paintMats: T.MeshStandardMaterial[] = [];
+  const atlasPaints: Model['atlasPaints'] = [];
+  const materials: T.Material[] = [];
+  const headlights: T.MeshStandardMaterial[] = [];
+  const brakeLights: T.MeshStandardMaterial[] = [];
+  const policeRed: T.MeshStandardMaterial[] = [];
+  const policeBlue: T.MeshStandardMaterial[] = [];
   car.traverse((o) => {
     const mesh = o as T.Mesh;
     if (!mesh.isMesh) return;
     mesh.castShadow = true;
-    // materials are shared with the loader's cache; repainting one car must
-    // not repaint the next time it's picked
-    if (Array.isArray(mesh.material)) mesh.material = mesh.material.map((m) => m.clone());
-    else mesh.material = mesh.material.clone();
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.push(...mats);
     for (const m of mats) {
       const std = m as T.MeshStandardMaterial;
       if (!('emissive' in std)) continue;
-      // a textured palette glows through its own texture, not as a flat wash
-      if (std.map) std.emissiveMap = std.map;
-      paint.push({ mat: std, base: std.map ? new THREE.Color(1, 1, 1) : std.color.clone() });
-      // the off-roader's body paint is its olive material
-      if (spec.paints.length && norm(std.name) === 'material') paintMats.push(std);
+      const role = std.userData.carRole;
+      if (role === 'paint') paint.push({ mat: std, base: std.color.clone() });
+      if (role === 'headlight') headlights.push(std);
+      if (role === 'taillight') brakeLights.push(std);
+      if (role === 'police-red') policeRed.push(std);
+      if (role === 'police-blue') policeBlue.push(std);
+      const channel = std.userData.carPaintChannel;
+      if (spec.paints.length && channel && std.map) atlasPaints.push({ mat: std, source: std.map, channel });
+      else if (spec.paints.length && (role === 'paint' || norm(std.name) === 'material')) paintMats.push(std);
     }
   });
 
@@ -166,6 +237,12 @@ function rig(THREE: Three, spec: CarSpec, gltf: LoadedGltf): Model {
     wheels,
     paint,
     paintMats,
+    atlasPaints,
+    materials,
+    headlights,
+    brakeLights,
+    policeRed,
+    policeBlue,
     wheelRadius,
     halfW: (size.x / 2) * scale,
     front: box.max.z * scale,
@@ -178,11 +255,13 @@ export async function createCar(
   THREE: Three,
   load: (name: string) => Promise<LoadedGltf>,
   scene: T.Scene,
-  choice: CarChoice
+  choice: CarChoice,
+  env: CarEnvironment
 ): Promise<Car> {
   let spec = carById(choice.car);
+  let style = carStyle(spec, choice.style);
   let h: Handling = spec.handling;
-  let model = rig(THREE, spec, await load(spec.model));
+  let model = rig(THREE, spec, await load(style.model), env);
 
   const body = new THREE.Group();
   body.add(model.car);
@@ -190,6 +269,15 @@ export async function createCar(
   root.add(body);
   root.position.set(0, 0, 8);
   scene.add(root);
+
+  const contactTexture = new THREE.CanvasTexture(softBlob(64, 'rgba(0,0,0,0.75)', 'rgba(0,0,0,0)'));
+  const contactShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: contactTexture, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+  );
+  contactShadow.position.y = 0.035;
+  contactShadow.renderOrder = 1;
+  root.add(contactShadow);
 
   // ---------- nitro exhaust ----------
   const flameTex = new THREE.CanvasTexture(
@@ -241,6 +329,7 @@ export async function createCar(
   function fit(): void {
     const m = model;
     const s = m.car.scale.x;
+    contactShadow.scale.set(m.halfW * 2 + 0.5, 1, m.front - m.rear + 0.55);
     rearOffsets = m.wheels.filter((w) => !w.front).map((w) => ({ x: w.x * s, z: w.z * s }));
     if (rearOffsets.length === 0) rearOffsets.push({ x: -0.45, z: -0.95 }, { x: 0.45, z: -0.95 });
     const lx = m.halfW * 0.62;
@@ -262,6 +351,12 @@ export async function createCar(
       mat.color.set(hex);
       const p = model.paint.find((q) => q.mat === mat);
       if (p) p.base.copy(mat.color);
+    }
+    for (const target of model.atlasPaints) {
+      target.generated?.dispose();
+      target.generated = paintIdx === 0 ? undefined : recolorAtlas(THREE, target.source, target.channel, hex);
+      target.mat.map = target.generated ?? target.source;
+      target.mat.needsUpdate = true;
     }
   }
   repaint(choice.paint);
@@ -373,7 +468,7 @@ export async function createCar(
   let shake = 0;
   let lastImpactAt = -10;
 
-  let choosing = 0;
+  const choices = createLatestChoice();
   const api: Car = {
     root,
     speed,
@@ -385,17 +480,23 @@ export async function createCar(
 
     async choose(next: CarChoice): Promise<void> {
       const nextSpec = carById(next.car);
-      if (nextSpec.id === spec.id) {
+      const nextStyle = carStyle(nextSpec, next.style);
+      const ticket = choices.begin();
+      if (nextSpec.id === spec.id && nextStyle.id === style.id) {
         repaint(next.paint);
         return;
       }
-      const ticket = ++choosing;
-      const gltf = await load(nextSpec.model);
-      if (ticket !== choosing) return; // a later pick won the race
-      body.remove(model.car);
+      const gltf = await load(nextStyle.model);
+      if (!choices.isLatest(ticket)) return;
+      const nextModel = rig(THREE, nextSpec, gltf, env);
+      const previous = model;
+      body.remove(previous.car);
+      for (const material of previous.materials) material.dispose();
+      for (const target of previous.atlasPaints) target.generated?.dispose();
       spec = nextSpec;
+      style = nextStyle;
       h = spec.handling;
-      model = rig(THREE, spec, gltf);
+      model = nextModel;
       body.add(model.car);
       fit();
       repaint(next.paint);
@@ -413,8 +514,10 @@ export async function createCar(
       const on = nightFactor > 0.25;
       // a touch of its own colour back into the paint, so the car stays legible
       // against a dark road without looking lit from nowhere
-      for (const p of model.paint) p.mat.emissive.copy(p.base).multiplyScalar(0.26 * nightFactor);
-      for (const h of headlights) h.intensity = nightFactor * 120;
+      for (const p of model.paint) p.mat.emissive.copy(p.base).multiplyScalar(0.18 * nightFactor);
+      for (const lamp of model.headlights) lamp.emissiveIntensity = 0.35 + nightFactor * 2.2;
+      for (const lamp of model.brakeLights) lamp.emissiveIntensity = 0.35 + nightFactor * 1.2;
+      for (const h of headlights) h.intensity = nightFactor * 40;
       lightSprites.forEach((sp, i) => {
         sp.material.opacity = on ? (i < 2 ? 0.85 : 0.7) * nightFactor : 0;
       });
@@ -425,6 +528,11 @@ export async function createCar(
       const steer = -input.ix; // right key steers right (heading decreases visually)
       const nitro = input.nitro && throttle > 0.05;
       const prevSpeed = speed;
+      const braking = (throttle < -0.05 && speed > 0.2) || (throttle > 0.05 && speed < -0.2);
+      for (const lamp of model.brakeLights) lamp.emissiveIntensity = braking ? 3.2 : 0.35 + lastNight * 1.2;
+      const redOn = ctx.reducedMotion || Math.sin(t * 5) > 0;
+      for (const lamp of model.policeRed) lamp.emissiveIntensity = redOn ? 2.4 : 0.25;
+      for (const lamp of model.policeBlue) lamp.emissiveIntensity = redOn ? 0.25 : 2.4;
 
       const topSpeed = nitro ? h.nitroMax : h.maxSpeed;
       if (speed > topSpeed + 0.01) {

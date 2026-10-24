@@ -75,8 +75,9 @@ for the exact scripts.
 
 `npm run assets` extracts and compresses the existing model kit. It is an asset
 rebuild step, not a prerequisite for every development session. Preserve asset
-attributions, including Kenney kits, Han66st's car and the audio credits shown
-in the village. The [Kenney NPC license](assets-src/npc-kit/KENNEY-LICENSE.txt)
+attributions, including Kenney kits, Han66st's vehicles, eddyboa's F1 and the audio credits shown
+in the village. The [authored vehicle sources](assets-src/authored-cars/LICENSE.txt),
+[Kenney NPC license](assets-src/npc-kit/KENNEY-LICENSE.txt)
 and source credits record third-party terms; the repository does not currently
 declare a repository-wide license.
 

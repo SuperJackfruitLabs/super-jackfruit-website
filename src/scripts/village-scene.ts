@@ -22,9 +22,10 @@ import { createProps } from './village/props';
 import { createBoards } from './village/boards';
 import { createLamps } from './village/lamps';
 import { createCar } from './village/car';
+import { createCarEnvironment } from './village/car-finish';
 import { CARS, loadChoice, saveChoice, type CarChoice } from './village/cars';
 import { createAudio } from './village/audio';
-import { createInput, isTyping } from './village/input';
+import { createInput, isTyping, villageControlsBlocked } from './village/input';
 import { createFx } from './village/fx';
 import { createQuality, type QualitySettings } from './village/quality';
 import { createNpcs, type IdleSpot } from './village/npcs';
@@ -94,6 +95,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
   const scene = new THREE.Scene();
+  const carEnvironment = createCarEnvironment(THREE, renderer);
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
 
   // deterministic layout randomness — the village looks the same every visit
@@ -292,10 +294,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     });
   }
 
+  // These Kenney houses have their front doors on local -Z. `facing` always
+  // points from the house toward the road, so the model turns to face -n.
+  const HOUSE_FRONT = Math.PI;
   const houseBoxes: Array<{ x: number; z: number; facing: number; hx: number; hz: number }> = [];
   function putHouse(x: number, z: number, facing: number, size: number, pick?: (typeof houses)[number]): void {
     const proto = pick ?? houses[Math.floor(rand() * houses.length)];
-    props.place(proto, size, x, z, facing, 'box');
+    props.place(proto, size, x, z, facing + HOUSE_FRONT, 'box');
     houseCenters.push({ x, z });
     const dims = props.scaledSize(proto, size);
     houseBoxes.push({ x, z, facing, hx: dims.x / 2, hz: dims.z / 2 });
@@ -636,7 +641,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     // HQ stands just past the far kerb of the square, facing back down the road
     const faceP = Math.atan2(plaza.c.x - plaza.x, plaza.c.z - plaza.z);
-    props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP, 'box');
+    props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP + HOUSE_FRONT, 'box');
 
     // the lab's sign spans the road where it opens into the square
     const hqx = plaza.c.x;
@@ -944,15 +949,15 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const npcs = await createNpcs(THREE, scene, props.loadGltf, road.all, idleSpots, {
     walkers: quality.settings.npcWalkers,
     idlers: quality.settings.npcIdlers,
-  }, rand);
+  }, rand, { isPaved: road.isPaved, isClear: props.isClear });
 
   mark('npcs');
-  const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows);
+  const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows, carEnvironment);
   mark('traffic');
   const ambient = createAmbient(THREE, scene, chimneys, quality.settings.birds, rand);
 
   let carChoice = loadChoice();
-  const car = await createCar(THREE, props.loadGltf, scene, carChoice);
+  const car = await createCar(THREE, props.loadGltf, scene, carChoice, carEnvironment);
   {
     const p = road.main.curve.getPointAt(startT);
     const tan = road.main.curve.getTangentAt(startT);
@@ -973,32 +978,49 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const spatial = createSpatialAudio(audio, { motors: low ? 3 : 5, talk: low ? 1 : 2 });
   const listener = { x: 0, y: 0, z: 0, fx: 0, fz: 1 };
   const input = createInput(canvas, audio.ensure);
+  window.addEventListener('village:gesture', audio.ensure);
 
   // ---------- the garage: the menu picks, C cycles ----------
-  const chooseCar = (next: CarChoice): void => {
-    carChoice = next;
-    saveChoice(next);
-    void car.choose(next).then(() => audio.setEngine(car.spec.engine));
-    window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: next }));
+  let carRequest = 0;
+  const chooseCar = async (next: CarChoice): Promise<void> => {
+    const request = ++carRequest;
+    window.dispatchEvent(new CustomEvent('village:car-loading', { detail: next }));
+    try {
+      await car.choose(next);
+      if (request !== carRequest) return;
+      carChoice = next;
+      saveChoice(next);
+      audio.setEngine(car.spec.engine);
+      window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: next }));
+    } catch (error) {
+      console.error('[village] car load failed', error);
+      if (request === carRequest) window.dispatchEvent(new CustomEvent('village:car-failed', { detail: next }));
+    }
   };
-  window.addEventListener('village:car', ((e: CustomEvent<CarChoice>) => chooseCar(e.detail)) as EventListener);
+  window.addEventListener('village:car', ((e: CustomEvent<CarChoice>) => void chooseCar(e.detail)) as EventListener);
   window.addEventListener('keydown', (e) => {
-    if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'c') return;
+    if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.key.toLowerCase() !== 'c') return;
     const i = CARS.findIndex((c) => c.id === carChoice.car);
-    chooseCar({ car: CARS[(i + 1) % CARS.length].id, paint: 0 });
+    void chooseCar({ car: CARS[(i + 1) % CARS.length].id, paint: 0 });
   });
   window.dispatchEvent(new CustomEvent('village:car-chosen', { detail: carChoice }));
   const fx = createFx(THREE, scene);
 
   // ---------- page wiring ----------
+  const toggleMute = () => {
+    const muted = audio.toggleMute();
+    window.dispatchEvent(new CustomEvent('village:mute-changed', { detail: { on: !muted } }));
+  };
+  window.addEventListener('village:mute', toggleMute);
   window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'm') audio.toggleMute();
+    if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.key.toLowerCase() !== 'm') return;
+    toggleMute();
   });
   // desktop shortcuts for getting around: 1–6 the suite in order, H the lab, R the start
   if (!(window.matchMedia?.('(pointer: coarse)').matches ?? false)) {
     const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'salaam', 'agentpod'];
     window.addEventListener('keydown', (e) => {
-      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
       if (to) teleport(to.x, to.z, to.h);
@@ -1093,6 +1115,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       return { x: a.x + b.x, z: a.z + b.z, depth: Math.max(a.depth, b.depth) };
     },
     offRoad,
+    get reducedMotion() { return motion.reduced; },
     bounds,
   };
 
@@ -1138,15 +1161,17 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   let ambientT = 0;
 
   const timer = new THREE.Timer();
+  document.addEventListener('visibilitychange', () => timer.update());
   let framesTimed = 0;
   const sceneEl = canvas.closest<HTMLElement>('.scene');
   renderer.setAnimationLoop((now) => {
     const frameStart = performance.now();
     timer.update(now);
-    const dt = Math.min(0.05, timer.getDelta());
+    const frameDt = timer.getDelta();
+    const dt = Math.min(0.05, frameDt);
     const t = timer.getElapsed();
 
-    quality.monitor(dt, applyQuality);
+    if (!document.hidden) quality.monitor(frameDt, applyQuality);
 
     const state = input.read();
     car.update(dt, t, state, carCtx, audio);
@@ -1179,12 +1204,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     // last frame's view is close enough to tell what's on screen
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen);
-    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView);
     trafficPlayer.x = car.root.position.x;
     trafficPlayer.z = car.root.position.z;
     trafficPlayer.heading = car.heading;
     trafficPlayer.speed = car.speed;
     traffic.update(dt, trafficPlayer, inView, still);
+    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView, still, car.speed, traffic.cars());
     traffic.applyNight(nightFactor);
     ambient.update(ambientDt, ambientT, nightFactor);
     for (const cloud of clouds) {
@@ -1219,11 +1244,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
           localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]));
         } catch {}
         window.dispatchEvent(new CustomEvent('village:visited', { detail: { count: visited.size, total: suiteSlugs.length, slugs: [...visited] } }));
-        if (visited.size === suiteSlugs.length) fx.celebrate(plaza.x, plaza.z);
+        if (!still && visited.size === suiteSlugs.length) fx.celebrate(plaza.x, plaza.z);
       }
     }
 
-    fx.update(dt, nightFactor, car.root.position.x, car.root.position.z, car.heading);
+    fx.update(ambientDt, nightFactor, car.root.position.x, car.root.position.z, car.heading, still);
     minimap?.update(car.root.position.x, car.root.position.z, car.heading, night, traffic.cars(), !still);
 
     // chase camera: sits behind the car's heading, lags softly into corners,
