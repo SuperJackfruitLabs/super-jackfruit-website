@@ -1,5 +1,15 @@
 const cellKey = (x, z) => `${x},${z}`;
 
+export function circleOverlapsBox(x, z, radius, c) {
+  const wx = x - c.cx;
+  const wz = z - c.cz;
+  const lx = wx * c.cos - wz * c.sin;
+  const lz = wx * c.sin + wz * c.cos;
+  const dx = lx - Math.max(-c.hx, Math.min(c.hx, lx));
+  const dz = lz - Math.max(-c.hz, Math.min(c.hz, lz));
+  return dx * dx + dz * dz < radius * radius;
+}
+
 /** A uniform broad-phase grid for oriented boxes in the XZ plane. */
 export function createCollisionGrid(cellSize = 12) {
   if (!(cellSize > 0)) throw new RangeError('cellSize must be positive');

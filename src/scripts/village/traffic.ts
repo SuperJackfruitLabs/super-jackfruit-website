@@ -742,9 +742,9 @@ export async function createTraffic(
       if (Math.abs(nightFactor - night) < 0.002) return;
       night = nightFactor;
       const on = nightFactor > 0.25 ? nightFactor : 0;
-      headMat.opacity = on * 0.9;
+      headMat.opacity = on * 0.65;
       tailMat.opacity = on * 0.8;
-      beamMat.opacity = on * 0.32;
+      beamMat.opacity = on * 0.16;
       // by day the lamps are off and cost no draw calls
       for (const c of cars) {
         for (const sp of [...c.lights.heads, ...c.lights.tails, c.lights.pool]) sp.visible = on > 0;

@@ -17,7 +17,7 @@
 import type * as T from 'three';
 import type { GltfLoaderLike, Three } from './types';
 import { modelUrl } from '../../data/village-models';
-import { createCollisionGrid } from './collision-grid.mjs';
+import { circleOverlapsBox, createCollisionGrid } from './collision-grid.mjs';
 
 export interface ColliderBox {
   cx: number;
@@ -64,6 +64,8 @@ export interface Props {
   updateCulling(x: number, z: number): void;
   /** resolves the player circle out of every solid; mutates `pos` */
   resolve(pos: T.Vector3, radius: number): Impact;
+  /** whether a circle at this point misses every solid */
+  isClear(x: number, z: number, radius: number): boolean;
   colliderCount(): number;
   drawCallCount(): number;
 }
@@ -453,6 +455,9 @@ export function createProps(THREE: Three, scene: T.Scene, loader: GltfLoaderLike
       }
       return impact;
     },
+
+    isClear: (x, z, radius) =>
+      !collisionGrid.query(x, z, radius).some((c) => circleOverlapsBox(x, z, radius, c)),
 
     colliderCount: () => colliders.length,
     drawCallCount: () => drawCalls,

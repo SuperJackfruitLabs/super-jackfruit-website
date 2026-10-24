@@ -1,0 +1,45 @@
+Authored vehicle sources
+
+The Han66st models and eddyboa's Low-poly Vintage F1 are licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+https://sketchfab.com/Han66st
+
+lowpoly_sedan__wagon.glb
+  Lowpoly Sedan & Wagon
+  https://sketchfab.com/3d-models/lowpoly-sedan-wagon-e11a46478c674b279fe9d299b2125c30
+
+generic_sport_car_low_poly.glb
+  Generic Sport Car Low Poly
+  https://sketchfab.com/3d-models/generic-sport-car-low-poly-7ad3bfb2bd7449c19698fc7d0592a601
+
+low_poly_hongkong_taxi.glb
+  Low Poly Hongkong Taxi
+  https://sketchfab.com/3d-models/low-poly-hongkong-taxi-52f3e00f0f2a4c4a894c3082639d4431
+
+han66st_-_indonesian_police_car_free.glb
+  Han66st - Indonesian Police Car (Free)
+  https://sketchfab.com/3d-models/han66st-indonesian-police-car-free-f548bd218ba94711b16cf1aeeee028ff
+
+lowpoly_mpvsuv.glb
+  Lowpoly MPV/SUV
+  https://sketchfab.com/3d-models/lowpoly-mpvsuv-cc118f44b28f4ac8b54ed76fe969a49f
+
+l300_pickup.glb
+  L300 Pickup
+  https://sketchfab.com/3d-models/l300-pickup-24e13a998f2b4944aa2d9a680c837981
+
+Changes for the village: select one vehicle from each multi-vehicle file,
+regroup geometry, normalize position and orientation, establish wheel pivots,
+and assign material roles. The original files in this directory are unchanged.
+
+The off-roader is Han66st's Low poly Japan Offroad Car, also CC BY 4.0:
+https://sketchfab.com/3d-models/low-poly-japan-offroad-car-5bde8c57de3d4be880ed6457f88636ad
+Its unchanged source is assets-src/offroad-car-kit.glb.
+
+low-poly_vintage_f1.glb
+  Low-poly Vintage F1 by eddyboa (CC BY 4.0)
+  https://sketchfab.com/eddyboa
+  https://sketchfab.com/3d-models/low-poly-vintage-f1-b1e1b872826a4a4893532a5e251c8be9
+
+The previous Kenney and procedural vehicles remain archived under assets-src.

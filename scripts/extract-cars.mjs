@@ -15,7 +15,6 @@ const CARS = {
   sedan: 'car-sedan',
   'sedan-sports': 'car-sports',
   taxi: 'car-taxi',
-  police: 'car-police',
   van: 'car-van',
   truck: 'car-truck',
   race: 'car-race',

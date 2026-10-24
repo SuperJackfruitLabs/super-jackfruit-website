@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCollisionGrid } from '../src/scripts/village/collision-grid.mjs';
+import { circleOverlapsBox, createCollisionGrid } from '../src/scripts/village/collision-grid.mjs';
 
 function box(cx, cz, hx, hz, rotY = 0) {
   return { cx, cz, hx, hz, cos: Math.cos(rotY), sin: Math.sin(rotY) };
@@ -95,6 +95,19 @@ test('multi-cell candidates are unique and retain insertion order', () => {
   ];
   const grid = gridFor(colliders);
   assert.deepEqual(grid.query(0, 0, 12), colliders);
+});
+
+test('circle clearance respects rotated boxes and their edges', () => {
+  const rotated = box(-3, 5, 4, 1, Math.PI / 4);
+  const localToWorld = (x, z) => ({
+    x: rotated.cx + x * rotated.cos + z * rotated.sin,
+    z: rotated.cz - x * rotated.sin + z * rotated.cos,
+  });
+  const inside = localToWorld(3.9, 0.9);
+  const clear = localToWorld(5, 0);
+  assert.equal(circleOverlapsBox(inside.x, inside.z, 0.25, rotated), true);
+  assert.equal(circleOverlapsBox(clear.x, clear.z, 0.25, rotated), false);
+  assert.equal(circleOverlapsBox(1.26, 0, 0.25, box(0, 0, 1, 1)), false);
 });
 
 test('a centre inside a rotated box still exits through the nearest local face', () => {

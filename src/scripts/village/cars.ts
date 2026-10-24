@@ -1,8 +1,8 @@
 // The garage: every car you can drive, how it handles, and how it sounds.
 //
-// The off-roader is "Low poly Japan Offroad Car" by Han66st (CC-BY-4.0); the
-// rest are Kenney's Car Kit (CC0). One model file per car, fetched only when
-// someone picks it, so the village still downloads a single car on arrival.
+// The off-roader and five replacements are Han66st's authored models (CC-BY-4.0);
+// the race car is eddyboa's Low-poly Vintage F1 (CC-BY-4.0). Selected styles
+// load on demand, so the village downloads one car on arrival.
 
 /** How a car drives. The off-roader's numbers are the village's originals. */
 export interface Handling {
@@ -47,19 +47,22 @@ export interface EngineSound {
   gain: number;
 }
 
+export interface CarStyle {
+  id: string;
+  name: string;
+  model: string;
+}
+
 export interface CarSpec {
   id: string;
   name: string;
   /** shown under the picker */
   note: string;
   model: string;
+  styles?: CarStyle[];
   /** body length in the village, m */
   length: number;
-  /**
-   * Paints the picker offers, as replacements for the model's paint material.
-   * Kenney's cars paint through a shared texture palette, so they come as they
-   * are and this stays empty.
-   */
+  /** original finish first, then selective body-paint alternatives */
   paints: string[];
   /** picker thumbnail */
   thumb: string;
@@ -110,20 +113,24 @@ export const CARS: CarSpec[] = [
     name: 'Sedan Corollary',
     note: 'A steady all-rounder.',
     model: 'car-sedan',
+    styles: [
+      { id: 'sedan', name: 'Sedan', model: 'car-sedan' },
+      { id: 'wagon', name: 'Wagon', model: 'car-sedan-wagon' },
+    ],
     thumb: '/assets/village/cars/sedan.webp',
     length: 3.0,
-    paints: [],
+    paints: ['#8b0000', '#ecece8', '#2c5d8a', '#30343a'],
     handling: { ...BASE, bodyK: 110, bodyC: 15 },
     engine: { ...PETROL, idleRate: 0.75, rateSpan: 1.05, tone: 4200 },
   },
   {
     id: 'sports',
-    name: 'Sports SupraCharge',
+    name: 'Sports Apex',
     note: 'Quicker, with sharper steering.',
     model: 'car-sports',
     thumb: '/assets/village/cars/sports.webp',
     length: 3.0,
-    paints: [],
+    paints: ['#e76c00', '#ecece8', '#24272b', '#2c5d8a'],
     handling: { ...BASE, maxSpeed: 14, nitroMax: 21, accel: 12, steer: 2.15, grip: 31, bodyK: 140, bodyC: 18 },
     engine: { ...PETROL, idleRate: 0.85, rateSpan: 1.4, gearSpan: 7.5, grit: 0.25, gain: 1.1 },
   },
@@ -134,40 +141,33 @@ export const CARS: CarSpec[] = [
     model: 'car-taxi',
     thumb: '/assets/village/cars/taxi.webp',
     length: 3.0,
-    paints: [],
+    paints: ['#d92d27', '#f2b632', '#1b8b68', '#3478b9'],
     handling: { ...BASE, bodyK: 100, bodyC: 14 },
     engine: { ...PETROL, idleRate: 0.72, rateSpan: 1.0, tone: 3600 },
-  },
-  {
-    id: 'police',
-    name: 'Police Vic-Tory',
-    note: 'Fast in a straight line.',
-    model: 'car-police',
-    thumb: '/assets/village/cars/police.webp',
-    length: 3.2,
-    paints: [],
-    handling: { ...BASE, maxSpeed: 13, nitroMax: 20, accel: 10.5, grip: 26, bodyK: 120, bodyC: 16 },
-    engine: { ...PETROL, idleRate: 0.6, rateSpan: 1.25, gearSpan: 7, tone: 3200, grit: 0.35, gain: 1.15 },
   },
   {
     id: 'van',
     name: 'Van Transit-Ion',
     note: 'Heavier, with wider turns.',
     model: 'car-van',
+    styles: [
+      { id: 'mpv', name: 'MPV', model: 'car-van' },
+      { id: 'suv', name: 'SUV', model: 'car-van-suv' },
+    ],
     thumb: '/assets/village/cars/van.webp',
     length: 3.3,
-    paints: [],
+    paints: ['#989898', '#a52323', '#e4e2dc', '#2c5d8a'],
     handling: { ...BASE, maxSpeed: 10, accel: 7, steer: 1.6, grip: 18, bodyK: 75, bodyC: 11, knock: 0.7 },
     engine: { ...PETROL, idleRate: 0.55, rateSpan: 0.9, gearSpan: 5, tone: 2400, grit: 0.2 },
   },
   {
     id: 'truck',
-    name: 'Truck HiLuxury',
+    name: 'Pickup L300',
     note: 'The heaviest: slow and hard to stop.',
     model: 'car-truck',
     thumb: '/assets/village/cars/truck.webp',
     length: 3.7,
-    paints: [],
+    paints: ['#1a1a1a', '#a52323', '#e4e2dc', '#2c5d8a'],
     handling: { ...BASE, maxSpeed: 9, nitroMax: 14, accel: 5.5, nitroAccel: 11, brake: 11, drag: 2.4, steer: 1.45, grip: 16, bodyK: 65, bodyC: 10, knock: 0.45 },
     engine: { ...PETROL, idleRate: 0.42, rateSpan: 0.7, gearSpan: 4, tone: 1500, grit: 0.55, gain: 1.3 },
   },
@@ -178,7 +178,7 @@ export const CARS: CarSpec[] = [
     model: 'car-race',
     thumb: '/assets/village/cars/race.webp',
     length: 3.1,
-    paints: [],
+    paints: ['#dc2525', '#2964c7', '#22946f', '#e97b24'],
     handling: { ...BASE, maxSpeed: 16, nitroMax: 24, accel: 14, nitroAccel: 22, steer: 2.3, grip: 38, bodyK: 170, bodyC: 22, knock: 1.2 },
     engine: { ...PETROL, idleRate: 1.0, rateSpan: 1.6, gearSpan: 9, tone: 9000, grit: 0.4, gain: 1.1 },
   },
@@ -187,9 +187,13 @@ export const CARS: CarSpec[] = [
 export const carById = (id: string | null | undefined): CarSpec =>
   CARS.find((c) => c.id === id) ?? CARS[0];
 
+export const carStyle = (spec: CarSpec, id: string | null | undefined): CarStyle =>
+  spec.styles?.find((style) => style.id === id) ?? spec.styles?.[0] ?? { id: 'factory', name: 'Factory', model: spec.model };
+
 export interface CarChoice {
   car: string;
   paint: number;
+  style?: string;
 }
 
 const KEY = 'village:car';
@@ -199,7 +203,7 @@ export function loadChoice(): CarChoice {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
     const spec = carById(v?.car);
     const paint = Number.isInteger(v?.paint) && v.paint >= 0 && v.paint < spec.paints.length ? v.paint : 0;
-    return { car: spec.id, paint };
+    return { car: spec.id, paint, ...(spec.styles ? { style: carStyle(spec, v?.style).id } : {}) };
   } catch {
     return { car: CARS[0].id, paint: 0 };
   }

@@ -75,6 +75,8 @@ import '@superjackfruit/vibekit/fonts.css';
           </button>
         ))}
       </div>
+      <span class="menu__label" id="style-label" hidden>Style</span>
+      <div class="env__group" id="style-row" role="group" aria-label="Style" hidden></div>
       <span class="menu__label" id="paint-label" hidden>Paint</span>
       <div class="env__group menu__paints" id="paint-row" role="group" aria-label="Paint" hidden></div>
       <p class="menu__car-note" id="car-note" aria-live="polite"></p>
@@ -142,7 +144,7 @@ import '@superjackfruit/vibekit/fonts.css';
       <div class="env__group" id="tilt-row" hidden>
         <button type="button" id="tilt-toggle" class="env__auto" aria-pressed="false" title="Tilt to steer (experimental)">tilt to steer (experimental)</button>
       </div>
-      <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · off-roader: Han66st (CC-BY, sketchfab) · cars: Kenney (CC0) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
+      <p class="menu__credit">music: yd · engine: qubodup (CC-BY, opengameart) · off-roader & cars: Han66st (CC-BY, sketchfab) · F1: eddyboa (CC-BY, sketchfab) · roads: KayKit (CC0) · houses, people: Kenney (CC0)</p>
     </div>
 
 
@@ -906,11 +908,13 @@ import '@superjackfruit/vibekit/fonts.css';
 
 <script>
   import { isTyping } from '../scripts/village/input';
-  import { CARS, carById, type CarChoice } from '../scripts/village/cars';
+  import { CARS, carById, carStyle, type CarChoice } from '../scripts/village/cars';
 
   // ---------- the garage ----------
   {
     const row = document.getElementById('car-row');
+    const styles = document.getElementById('style-row');
+    const styleLabel = document.getElementById('style-label');
     const paints = document.getElementById('paint-row');
     const paintLabel = document.getElementById('paint-label');
     const note = document.getElementById('car-note');
@@ -924,9 +928,13 @@ import '@superjackfruit/vibekit/fonts.css';
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-car]');
       if (btn && (btn.dataset.car !== current.car || requested !== current.car)) pick({ car: btn.dataset.car!, paint: 0 });
     });
+    styles?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-style]');
+      if (btn) pick({ ...current, style: btn.dataset.style });
+    });
     paints?.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-paint]');
-      if (btn) pick({ car: current.car, paint: Number(btn.dataset.paint) });
+      if (btn) pick({ ...current, paint: Number(btn.dataset.paint) });
     });
     // the scene says what's being driven — at start (the remembered car) and after every pick or C
     window.addEventListener('village:car-chosen', ((e: CustomEvent<CarChoice>) => {
@@ -936,6 +944,20 @@ import '@superjackfruit/vibekit/fonts.css';
       row?.querySelectorAll<HTMLButtonElement>('[data-car]').forEach((b) =>
         b.setAttribute('aria-pressed', String(b.dataset.car === spec.id))
       );
+      const activeStyle = carStyle(spec, current.style);
+      if (styles && styleLabel) {
+        const has = (spec.styles?.length ?? 0) > 1;
+        styles.hidden = styleLabel.hidden = !has;
+        styles.replaceChildren(...(spec.styles ?? []).map((style) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'env__auto';
+          b.dataset.style = style.id;
+          b.textContent = style.name;
+          b.setAttribute('aria-pressed', String(style.id === activeStyle.id));
+          return b;
+        }));
+      }
       if (note) note.textContent = `${spec.name}: ${spec.note}`;
       const has = spec.paints.length > 1;
       if (paints && paintLabel) {

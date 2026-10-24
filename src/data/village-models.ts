@@ -66,7 +66,7 @@ export const ALL_VILLAGE_MODELS = [
  * hard (see public/_headers) — bump this whenever `npm run assets` regenerates
  * them, or returning visitors keep the old ones for a week.
  */
-export const ASSET_VERSION = '2026-10-24b';
+export const ASSET_VERSION = '2026-10-24f';
 
 export const modelUrl = (name: string): string =>
   `/assets/village/${name}.glb?v=${ASSET_VERSION}`;

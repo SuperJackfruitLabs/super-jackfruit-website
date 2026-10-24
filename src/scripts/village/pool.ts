@@ -48,6 +48,8 @@ export interface PoolOptions<A extends PoolActor> {
   budget: number;
   /** a focus that moves further than this in one frame counts as a teleport */
   jumpDistance?: number;
+  /** actors in a temporary state the pool must leave alone */
+  pinned?(actor: A): boolean;
   /** puts the actor somewhere that obeys the rules; false if it found nowhere */
   place(actor: A, rules: SpawnRules): boolean;
 }
@@ -101,6 +103,7 @@ export function createPool<A extends PoolActor>(o: PoolOptions<A>): ActorPool<A>
       for (let scanned = 0; scanned < n && budget > 0; scanned++) {
         const a = o.actors[cursor];
         cursor = (cursor + 1) % n;
+        if (o.pinned?.(a)) continue;
         if (a.active) {
           const d = Math.hypot(a.x - focusX, a.z - focusZ);
           if (d <= keep && d >= clear) continue;

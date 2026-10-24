@@ -16,7 +16,7 @@ export function createCarEnvironment(THREE: Three, renderer: T.WebGLRenderer): C
 const roleOf = (material: T.Material): string => {
   if (material.userData.carRole) return material.userData.carRole;
   const name = material.name.replace(/[^a-z0-9]/gi, '').toLowerCase();
-  if (name === 'material' || name.startsWith('carpaint')) return 'paint';
+  if (name.startsWith('carpaint')) return 'paint';
   if (name.startsWith('carglass')) return 'glass';
   if (name.startsWith('carrubber')) return 'rubber';
   if (name.startsWith('carmetal')) return 'metal';

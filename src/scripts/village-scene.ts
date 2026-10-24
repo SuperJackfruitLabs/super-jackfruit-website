@@ -294,10 +294,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     });
   }
 
+  // These Kenney houses have their front doors on local -Z. `facing` always
+  // points from the house toward the road, so the model turns to face -n.
+  const HOUSE_FRONT = Math.PI;
   const houseBoxes: Array<{ x: number; z: number; facing: number; hx: number; hz: number }> = [];
   function putHouse(x: number, z: number, facing: number, size: number, pick?: (typeof houses)[number]): void {
     const proto = pick ?? houses[Math.floor(rand() * houses.length)];
-    props.place(proto, size, x, z, facing, 'box');
+    props.place(proto, size, x, z, facing + HOUSE_FRONT, 'box');
     houseCenters.push({ x, z });
     const dims = props.scaledSize(proto, size);
     houseBoxes.push({ x, z, facing, hx: dims.x / 2, hz: dims.z / 2 });
@@ -638,7 +641,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
 
     // HQ stands just past the far kerb of the square, facing back down the road
     const faceP = Math.atan2(plaza.c.x - plaza.x, plaza.c.z - plaza.z);
-    props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP, 'box');
+    props.place(houses[7], 13, plaza.x + plaza.n.x * 18, plaza.z + plaza.n.z * 18, faceP + HOUSE_FRONT, 'box');
 
     // the lab's sign spans the road where it opens into the square
     const hqx = plaza.c.x;
@@ -946,7 +949,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   const npcs = await createNpcs(THREE, scene, props.loadGltf, road.all, idleSpots, {
     walkers: quality.settings.npcWalkers,
     idlers: quality.settings.npcIdlers,
-  }, rand);
+  }, rand, { isPaved: road.isPaved, isClear: props.isClear });
 
   mark('npcs');
   const traffic = await createTraffic(THREE, scene, props.loadGltf, road, quality.settings.traffic, quality.settings.shadows, carEnvironment);
@@ -1201,12 +1204,12 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     // last frame's view is close enough to tell what's on screen
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen);
-    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView, still);
     trafficPlayer.x = car.root.position.x;
     trafficPlayer.z = car.root.position.z;
     trafficPlayer.heading = car.heading;
     trafficPlayer.speed = car.speed;
     traffic.update(dt, trafficPlayer, inView, still);
+    npcs.update(dt, car.root.position.x, car.root.position.z, car.heading, inView, still, car.speed, traffic.cars());
     traffic.applyNight(nightFactor);
     ambient.update(ambientDt, ambientT, nightFactor);
     for (const cloud of clouds) {

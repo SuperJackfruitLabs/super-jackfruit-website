@@ -5,8 +5,9 @@
 // crowd of them costs an AnimationMixer each and no skinning at all.
 //
 // Walkers pace the pavement along the road spine and stand aside when the car
-// comes past; idlers wait in their front gardens. Mixers only tick for the
-// villagers near enough to see moving.
+// comes past; idlers wait in their front gardens. A car that catches one launches
+// them into a parachute descent toward a clear nearby landing. Mixers only tick
+// for the villagers near enough to see moving.
 //
 // The walkers are a fixed pool (pool.ts) that follows the visitor: one left far
 // behind, out of sight, is moved to a pavement somewhere ahead, so a small
@@ -53,6 +54,24 @@ const WALKER_SPAWN_MAX = 85;
 export { NPC_MODELS } from '../../data/village-models';
 import { NPC_MODELS } from '../../data/village-models';
 import { FOOTPATH, KERB_TOP } from './road';
+import { chooseLanding, createFlight, sampleFlight, sweptContact } from './npc-flight.mjs';
+
+const CONTACT_RADIUS = 1.35;
+const CONTACT_SPEED = 0.75;
+const LANDING_COOLDOWN = 1.5;
+
+export interface VehicleHazard {
+  id: number;
+  x: number;
+  z: number;
+  speed: number;
+  active: boolean;
+}
+
+export interface NpcSafety {
+  isPaved(x: number, z: number, margin?: number): boolean;
+  isClear(x: number, z: number, radius: number): boolean;
+}
 
 export interface IdleSpot {
   x: number;
@@ -65,9 +84,22 @@ export interface NpcCounts {
   idlers: number;
 }
 
+export interface NpcSnapshot {
+  x: number;
+  y: number;
+  z: number;
+  walker: boolean;
+  yielding: boolean;
+  talking: boolean;
+  phase: 'grounded' | 'launch' | 'parachute';
+  canopy: number;
+  landing: { x: number; z: number } | null;
+  clock: number;
+}
+
 export interface Npcs {
   /** `inView` is the camera's frustum test, so recycling happens off-screen */
-  update(dt: number, carX: number, carZ: number, carHeading: number, inView: SpawnRules['inView'], reduced?: boolean): void;
+  update(dt: number, carX: number, carZ: number, carHeading: number, inView: SpawnRules['inView'], reduced?: boolean, carSpeed?: number, vehicles?: ReadonlyArray<VehicleHazard>): void;
   /** the car was teleported: place the walkers round its new spot */
   reseed(): void;
   /** recycling activity since the last call */
@@ -76,7 +108,7 @@ export interface Npcs {
   conversations(): Array<{ id: number; x: number; z: number; started: number }>;
   count(): number;
   /** where everyone is and what they're doing — for the debug hook */
-  list(): Array<{ x: number; z: number; walker: boolean; yielding: boolean; talking: boolean; clock: number }>;
+  list(): NpcSnapshot[];
 }
 
 interface Villager extends PoolActor {
@@ -103,6 +135,20 @@ interface Villager extends PoolActor {
   sociable: number;
   /** the sidestep from the car, eased in and back out, and the hop that goes with it */
   dodge: { x: number; z: number; tx: number; tz: number; hop: number };
+  index: number;
+  parachute: T.Group;
+  canopy: T.Mesh;
+  contactCooldown: number;
+  flight: {
+    elapsed: number;
+    x: number;
+    y: number;
+    z: number;
+    apex: number;
+    landing: { x: number; y: number; z: number };
+    phase: 'launch' | 'parachute';
+    canopy: number;
+  } | null;
 }
 
 export async function createNpcs(
@@ -112,7 +158,8 @@ export async function createNpcs(
   segments: RoadSegment[],
   idleSpots: IdleSpot[],
   counts: NpcCounts,
-  rand: () => number
+  rand: () => number,
+  safety: NpcSafety
 ): Promise<Npcs> {
   const wanted = counts.walkers + counts.idlers;
   if (wanted === 0) {
@@ -149,6 +196,16 @@ export async function createNpcs(
   );
 
   const villagers: Villager[] = [];
+  const canopyGeometry = new THREE.SphereGeometry(1.15, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+  const canopyMaterials = [0xffc857, 0xef6461].map((color) => new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
+  const ropeGeometry = new THREE.BufferGeometry();
+  ropeGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+    -1.05, 2.05, 0, -0.25, 1.05, 0,
+    1.05, 2.05, 0, 0.25, 1.05, 0,
+    0, 2.05, -1.05, 0, 1.05, -0.25,
+    0, 2.05, 1.05, 0, 1.05, 0.25,
+  ], 3));
+  const ropeMaterial = new THREE.LineBasicMaterial({ color: 0x4a4037 });
 
   function spawn(isWalker: boolean, index: number): Villager {
     const proto = loaded[index % loaded.length];
@@ -159,6 +216,14 @@ export async function createNpcs(
     // a wrapper carries position and facing, so the model's own offset stays put
     const holder = new THREE.Group();
     holder.add(root);
+    const parachute = new THREE.Group();
+    const canopy = new THREE.Mesh(canopyGeometry, canopyMaterials[index % canopyMaterials.length]);
+    canopy.position.y = 2.05;
+    canopy.scale.set(0, 0.55, 0);
+    canopy.castShadow = true;
+    parachute.add(canopy, new THREE.LineSegments(ropeGeometry, ropeMaterial));
+    parachute.visible = false;
+    holder.add(parachute);
     scene.add(holder);
 
     const mixer = new THREE.AnimationMixer(root);
@@ -199,6 +264,11 @@ export async function createNpcs(
       chat: null,
       sociable: rand() * 20,
       dodge: { x: 0, z: 0, tx: 0, tz: 0, hop: 0 },
+      index,
+      parachute,
+      canopy,
+      contactCooldown: 0,
+      flight: null,
     };
   }
 
@@ -268,6 +338,7 @@ export async function createNpcs(
     spawnMax: WALKER_SPAWN_MAX,
     budget: 1,
     farView: 70,
+    pinned: (v) => !!v.flight,
     place: placeWalker,
   });
 
@@ -293,9 +364,9 @@ export async function createNpcs(
   let sinceMeet = 0;
   function meet(carX: number, carZ: number): void {
     for (const a of villagers) {
-      if (!a.active || !a.isWalker || a.chat || a.yielding || clock < a.sociable) continue;
+      if (!a.active || !a.isWalker || a.flight || a.chat || a.yielding || clock < a.sociable) continue;
       for (const b of villagers) {
-        if (b === a || !b.active || b.chat || clock < b.sociable) continue;
+        if (b === a || !b.active || b.flight || b.chat || clock < b.sociable) continue;
         const reach = b.isWalker ? MEET_WALKERS : MEET_GARDEN;
         const d = Math.hypot(a.x - b.x, a.z - b.z);
         if (d > reach || d < 0.6) continue;
@@ -327,9 +398,53 @@ export async function createNpcs(
     v.root.rotation.y += d * Math.min(1, dt * 5);
   };
 
+  let hazards: VehicleHazard[] = [];
+  const previousHazards = new Map<number, { x: number; z: number }>();
+
+  function safeLanding(v: Villager, x: number, z: number): boolean {
+    if (safety.isPaved(x, z, 0.4) || !safety.isClear(x, z, 0.5)) return false;
+    if (hazards.some((h) => Math.hypot(x - h.x, z - h.z) < 3)) return false;
+    return villagers.every((other) => {
+      if (other === v || !other.active) return true;
+      if (Math.hypot(x - other.x, z - other.z) < 0.9) return false;
+      const reserved = other.flight?.landing;
+      return !reserved || Math.hypot(x - reserved.x, z - reserved.z) >= 0.9;
+    });
+  }
+
+  function launch(v: Villager): void {
+    const origin = { x: v.root.position.x, y: v.root.position.y, z: v.root.position.z, home: { ...v.home } };
+    const landing = chooseLanding(origin, (x: number, z: number) => safeLanding(v, x, z), v.index);
+    if (!landing) return;
+    if (v.chat) endChat(v);
+    v.flight = Object.assign(createFlight(origin, landing), { phase: 'launch' as const, canopy: 0 });
+    v.parachute.visible = false;
+    v.yielding = false;
+    v.stopped = true;
+    v.idle.enabled = true;
+    v.idle.setEffectiveWeight(1);
+    v.walk?.setEffectiveWeight(0);
+  }
+
+  function resetFlights(): void {
+    previousHazards.clear();
+    for (const v of villagers) {
+      if (!v.flight) continue;
+      v.root.position.set(v.flight.x, v.flight.y, v.flight.z);
+      v.x = v.flight.x;
+      v.z = v.flight.z;
+      v.flight = null;
+      v.parachute.visible = false;
+      v.dodge = { x: 0, z: 0, tx: 0, tz: 0, hop: 0 };
+    }
+  }
+
   return {
     count: () => villagers.length,
-    reseed: () => pool.reseed(),
+    reseed: () => {
+      resetFlights();
+      pool.reseed();
+    },
     poolStats: () => pool.takeStats(),
 
     conversations: () => {
@@ -344,16 +459,24 @@ export async function createNpcs(
     list: () =>
       villagers.map((v) => ({
         x: +v.root.position.x.toFixed(2),
+        y: +v.root.position.y.toFixed(2),
         z: +v.root.position.z.toFixed(2),
         walker: v.isWalker,
         yielding: v.yielding,
         talking: !!v.chat,
+        phase: v.flight?.phase ?? 'grounded',
+        canopy: +(v.flight?.canopy ?? 0).toFixed(2),
+        landing: v.flight ? { x: +v.flight.landing.x.toFixed(2), z: +v.flight.landing.z.toFixed(2) } : null,
         clock: +v.mixer.time.toFixed(2),
       })),
 
-    update(dt, carX, carZ, carHeading, inView, reduced = false): void {
+    update(dt, carX, carZ, carHeading, inView, reduced = false, carSpeed = 0, vehicles = []): void {
       const autonomousDt = reduced ? 0 : dt;
       clock += autonomousDt;
+      hazards = [
+        { id: -1, x: carX, z: carZ, speed: carSpeed, active: true },
+        ...vehicles.filter((v) => v.active),
+      ];
       pool.update(carX, carZ, carHeading, inView);
       sinceMeet += autonomousDt;
       if (sinceMeet > 0.25) {
@@ -361,6 +484,34 @@ export async function createNpcs(
         meet(carX, carZ);
       }
       for (const v of villagers) {
+        v.contactCooldown = Math.max(0, v.contactCooldown - dt);
+        if (v.flight) {
+          const point = sampleFlight(v.flight, dt);
+          v.root.position.set(point.x, point.y, point.z);
+          v.x = point.x;
+          v.z = point.z;
+          v.parachute.visible = point.phase === 'parachute' && !point.landed;
+          v.canopy.scale.set(Math.max(0.001, point.canopy), 0.55, Math.max(0.001, point.canopy));
+          if (Math.hypot(v.x - carX, v.z - carZ) < ANIMATE_RADIUS) v.mixer.update(autonomousDt);
+          if (point.landed) {
+            const end = v.flight.landing;
+            if (v.isWalker) {
+              v.dodge.x = v.dodge.tx = end.x - v.home.x;
+              v.dodge.z = v.dodge.tz = end.z - v.home.z;
+              v.dodge.hop = 0;
+            } else {
+              v.home = { ...end };
+              v.dodge = { x: 0, z: 0, tx: 0, tz: 0, hop: 0 };
+            }
+            v.flight = null;
+            v.parachute.visible = false;
+            v.contactCooldown = LANDING_COOLDOWN;
+          } else {
+            v.flight.phase = point.phase === 'parachute' ? 'parachute' : 'launch';
+            v.flight.canopy = point.canopy;
+            continue;
+          }
+        }
         // a chat ends on time, when the car comes, or when the other one was recycled away
         if (v.chat) {
           const o = v.chat.with;
@@ -433,10 +584,25 @@ export async function createNpcs(
         v.x = v.root.position.x;
         v.z = v.root.position.z;
 
+        if (!v.flight && v.contactCooldown <= 0) {
+          for (const h of hazards) {
+            if (Math.abs(h.speed) < CONTACT_SPEED) continue;
+            const previous = previousHazards.get(h.id) ?? h;
+            const travel = Math.hypot(h.x - previous.x, h.z - previous.z);
+            const ax = travel <= 4 ? previous.x : h.x;
+            const az = travel <= 4 ? previous.z : h.z;
+            if (sweptContact(ax, az, h.x, h.z, v.x, v.z, CONTACT_RADIUS)) {
+              launch(v);
+              break;
+            }
+          }
+        }
+
         if (Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < ANIMATE_RADIUS) {
           v.mixer.update(autonomousDt);
         }
       }
+      for (const h of hazards) previousHazards.set(h.id, { x: h.x, z: h.z });
     },
   };
 }
