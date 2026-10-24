@@ -77,7 +77,7 @@ import '@superjackfruit/vibekit/fonts.css';
       </div>
       <span class="menu__label" id="paint-label" hidden>Paint</span>
       <div class="env__group menu__paints" id="paint-row" role="group" aria-label="Paint" hidden></div>
-      <p class="menu__car-note" id="car-note"></p>
+      <p class="menu__car-note" id="car-note" aria-live="polite"></p>
 
       <span class="menu__label">Suite</span>
       <div class="menu__suite">
@@ -146,7 +146,7 @@ import '@superjackfruit/vibekit/fonts.css';
     </div>
 
 
-    <div class="welcome" id="welcome" data-open="true">
+    <div class="welcome" id="welcome" data-open="true" tabindex="-1">
       <div class="welcome__card">
         <h1>Super Jackfruit Labs</h1>
         <p class="welcome__sub">six tools for working with agents — drive through the suite</p>
@@ -161,14 +161,18 @@ import '@superjackfruit/vibekit/fonts.css';
         >
           <span class="welcome__fill" id="welcome-fill"></span>
         </div>
-        <p class="welcome__hint" id="welcome-hint">loading the village…</p>
+        <p class="welcome__hint" id="welcome-hint" role="status">loading the village…</p>
+        <div class="welcome__actions" id="welcome-actions" hidden>
+          <button type="button" id="retry-village">retry</button>
+          <button type="button" id="places-fallback">browse places</button>
+        </div>
         <a class="welcome__skip" href="/">or skip the drive: the suite as a page →</a>
       </div>
     </div>
 
     <!-- on-screen driving, for anyone without a keyboard -->
     <div class="touch" id="touch" hidden>
-      <div class="touch__wheel" id="touch-steer" aria-label="steer">
+      <div class="touch__wheel" id="touch-steer" role="slider" tabindex="0" aria-label="Steering" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0">
         <span class="touch__knob" id="touch-knob"></span>
         <span class="touch__wheel-label">steer</span>
       </div>
@@ -180,7 +184,7 @@ import '@superjackfruit/vibekit/fonts.css';
     </div>
 
     <!-- every desktop shortcut in one place; ? opens it, Esc or ? closes it -->
-    <div class="keys" id="keys" role="dialog" aria-label="Keyboard shortcuts" hidden>
+    <div class="keys" id="keys" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabindex="-1" hidden>
       <h2>Keys</h2>
       <dl>
         <dt>W A S D / arrows</dt><dd>drive · steer · brake &amp; reverse</dd>
@@ -208,7 +212,7 @@ import '@superjackfruit/vibekit/fonts.css';
       </a>
     </div>
 
-    <aside class="card" id="station-card" data-open="false" aria-live="polite">
+    <aside class="card" id="station-card" data-open="false" aria-live="polite" aria-hidden="true" inert>
       <img id="card-logo" class="card__logo" alt="" width="48" height="48" hidden />
       <h2 id="card-name"></h2>
       <p class="card__tagline" id="card-tagline"></p>
@@ -595,6 +599,20 @@ import '@superjackfruit/vibekit/fonts.css';
 
   .welcome__hint[data-ready='true'] { animation: welcome-pulse 1.6s ease-in-out infinite; }
 
+  .welcome__actions { display: flex; justify-content: center; gap: 0.75rem; margin-top: 1rem; }
+  .welcome__actions[hidden] { display: none; }
+  .welcome__actions button {
+    border: 1px solid rgba(44, 42, 38, 0.35);
+    border-radius: 999px;
+    padding: 0.6rem 1rem;
+    background: #fffaf0;
+    color: #2c2a26;
+    font: inherit;
+    cursor: pointer;
+  }
+  .welcome__actions button:hover { border-color: #d98a1f; }
+  .welcome__actions button:focus-visible { outline: 3px solid #d98a1f; outline-offset: 2px; }
+
   @keyframes welcome-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
   @media (prefers-reduced-motion: reduce) {
@@ -887,7 +905,6 @@ import '@superjackfruit/vibekit/fonts.css';
 </style>
 
 <script>
-  import { initVillageScene } from '../scripts/village-scene';
   import { isTyping } from '../scripts/village/input';
   import { CARS, carById, type CarChoice } from '../scripts/village/cars';
 
@@ -898,10 +915,14 @@ import '@superjackfruit/vibekit/fonts.css';
     const paintLabel = document.getElementById('paint-label');
     const note = document.getElementById('car-note');
     let current: CarChoice = { car: CARS[0].id, paint: 0 };
-    const pick = (next: CarChoice) => window.dispatchEvent(new CustomEvent('village:car', { detail: next }));
+    let requested = current.car;
+    const pick = (next: CarChoice) => {
+      requested = next.car;
+      window.dispatchEvent(new CustomEvent('village:car', { detail: next }));
+    };
     row?.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-car]');
-      if (btn && btn.dataset.car !== current.car) pick({ car: btn.dataset.car!, paint: 0 });
+      if (btn && (btn.dataset.car !== current.car || requested !== current.car)) pick({ car: btn.dataset.car!, paint: 0 });
     });
     paints?.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-paint]');
@@ -910,6 +931,7 @@ import '@superjackfruit/vibekit/fonts.css';
     // the scene says what's being driven — at start (the remembered car) and after every pick or C
     window.addEventListener('village:car-chosen', ((e: CustomEvent<CarChoice>) => {
       current = e.detail;
+      requested = current.car;
       const spec = carById(current.car);
       row?.querySelectorAll<HTMLButtonElement>('[data-car]').forEach((b) =>
         b.setAttribute('aria-pressed', String(b.dataset.car === spec.id))
@@ -932,11 +954,25 @@ import '@superjackfruit/vibekit/fonts.css';
         );
       }
     }) as EventListener);
+    window.addEventListener('village:car-loading', ((e: CustomEvent<CarChoice>) => {
+      if (note) note.textContent = `loading ${carById(e.detail.car).name}…`;
+    }) as EventListener);
+    window.addEventListener('village:car-failed', ((e: CustomEvent<CarChoice>) => {
+      if (note) note.textContent = `couldn't load ${carById(e.detail.car).name} — choose it again to retry`;
+    }) as EventListener);
   }
 
   const canvas = document.getElementById('village-canvas');
   if (canvas instanceof HTMLCanvasElement) {
-    initVillageScene(canvas).catch((e) => console.error(e));
+    void import('../scripts/village-scene')
+      .then(({ initVillageScene }) => initVillageScene(canvas))
+      .then((started) => {
+        if (!started) throw new Error('WebGL is unavailable');
+      })
+      .catch((error) => {
+        console.error('[village] initialization failed', error);
+        window.dispatchEvent(new CustomEvent('village:failed'));
+      });
   }
 
   const STATUS_COPY: Record<string, string> = {
@@ -963,6 +999,16 @@ import '@superjackfruit/vibekit/fonts.css';
   const tagsEl = document.getElementById('card-tags')!;
   const githubEl = document.getElementById('card-github') as HTMLAnchorElement;
   const demoEl = document.getElementById('card-demo') as HTMLAnchorElement;
+  const setCardOpen = (open: boolean) => {
+    if (!open && card.contains(document.activeElement)) document.getElementById('menu-toggle')!.focus();
+    card.dataset.open = String(open);
+    card.inert = !open;
+    card.setAttribute('aria-hidden', String(!open));
+  };
+  const setLinkTarget = (link: HTMLAnchorElement, url: string) => {
+    if (url.startsWith('/')) link.removeAttribute('target');
+    else link.target = '_blank';
+  };
   // The village has no frame around it, so it mounts the frame's Captain Jack sheet itself;
   // the sheet answers sjl-ask, as it does on every other page of the site.
   import('@superjackfruit/frontdoor/client').then(({ mountJack }) => mountJack({ product: 'lab' })).catch((e) => console.warn('[village] Captain Jack', e));
@@ -1053,7 +1099,6 @@ import '@superjackfruit/vibekit/fonts.css';
       }
     }
   };
-  const setMenu = (open: boolean) => setPanel(open ? menu : null);
   for (const p of panels) {
     p.btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1065,6 +1110,7 @@ import '@superjackfruit/vibekit/fonts.css';
     if (p && !p.el.contains(e.target as Node) && !p.btn.contains(e.target as Node)) setPanel(null);
   });
   window.addEventListener('keydown', (e) => {
+    if (welcome.dataset.open === 'true') return;
     const p = openPanel();
     if (e.key === 'Escape') {
       if (!keysPanel.hidden) return;
@@ -1136,12 +1182,9 @@ import '@superjackfruit/vibekit/fonts.css';
     soundBtn.setAttribute('aria-pressed', String(on));
     soundBtn.setAttribute('aria-label', on ? 'Sound on. Mute' : 'Sound off. Unmute');
   };
-  soundBtn.addEventListener('click', () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' }));
-  });
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'm') showSound(soundBtn.getAttribute('aria-pressed') !== 'true');
-  });
+  const requestMute = () => window.dispatchEvent(new CustomEvent('village:mute'));
+  soundBtn.addEventListener('click', requestMute);
+  window.addEventListener('village:mute-changed', ((e: CustomEvent<{ on: boolean }>) => showSound(e.detail.on)) as EventListener);
 
   // the driving legend fades once the visitor has had a few seconds with it
   const hint = document.querySelector('.hint');
@@ -1183,7 +1226,7 @@ import '@superjackfruit/vibekit/fonts.css';
 
   window.addEventListener('village:station', ((e: CustomEvent<StationDetail | null>) => {
     if (!e.detail) {
-      card.dataset.open = 'false';
+      setCardOpen(false);
       return;
     }
     setExpanded(false);
@@ -1203,14 +1246,16 @@ import '@superjackfruit/vibekit/fonts.css';
       tagsEl.textContent = '';
       githubEl.textContent = info.links[0]?.label ?? '';
       githubEl.href = info.links[0]?.url ?? '#';
+      setLinkTarget(githubEl, githubEl.getAttribute('href') ?? '#');
       if (info.links[1]) {
         demoEl.textContent = info.links[1].label;
         demoEl.href = info.links[1].url;
+        setLinkTarget(demoEl, info.links[1].url);
         demoEl.hidden = false;
       } else {
         demoEl.hidden = true;
       }
-      card.dataset.open = 'true';
+      setCardOpen(true);
       showMore();
       return;
     }
@@ -1235,20 +1280,18 @@ import '@superjackfruit/vibekit/fonts.css';
         ? `visit ${new URL(project.github).host} →`
         : 'view source →';
     githubEl.href = project.github;
-    if (internal) githubEl.removeAttribute('target');
-    else githubEl.target = '_blank';
+    setLinkTarget(githubEl, project.github);
     if (project.demo) {
       const page = project.demo.startsWith('/');
       demoEl.textContent = page ? 'about it here →' : suite ? 'read the docs →' : 'live demo →';
       demoEl.href = project.demo;
-      if (page) demoEl.removeAttribute('target');
-      else demoEl.target = '_blank';
+      setLinkTarget(demoEl, project.demo);
       demoEl.hidden = false;
     } else {
       demoEl.hidden = true;
     }
     card.style.setProperty('--status-color', STATUS_COLOR[project.status] ?? '#3f9e3f');
-    card.dataset.open = 'true';
+    setCardOpen(true);
     showMore();
   }) as EventListener);
 
@@ -1350,7 +1393,80 @@ import '@superjackfruit/vibekit/fonts.css';
   const welcomeBar = document.getElementById('welcome-bar')!;
   const welcomeFill = document.getElementById('welcome-fill')!;
   const welcomeHint = document.getElementById('welcome-hint')!;
+  const welcomeActions = document.getElementById('welcome-actions')!;
   let ready = false;
+  let initialized = false;
+  let failureReturnFocus: HTMLElement | null = null;
+
+  const setDriveControlsEnabled = (enabled: boolean) => {
+    placesPanel.querySelectorAll<HTMLButtonElement>('button[data-jump]').forEach((button) => (button.disabled = !enabled));
+    document.getElementById('minimap-switch')!.toggleAttribute('disabled', !enabled);
+  };
+  const setBackgroundInert = (inert: boolean) => {
+    document.querySelectorAll<HTMLElement>('.hud, #touch, #place-chip').forEach((el) => (el.inert = inert));
+    card.inert = inert || card.dataset.open !== 'true';
+  };
+
+  const showWelcome = () => {
+    setBackgroundInert(true);
+    welcome.inert = false;
+    welcome.removeAttribute('aria-hidden');
+    welcome.dataset.open = 'true';
+  };
+  showWelcome();
+
+  const markReady = () => {
+    const recovering = welcome.dataset.open === 'true' && !welcomeActions.hidden;
+    ready = true;
+    setDriveControlsEnabled(true);
+    mapBtn.hidden = false;
+    welcomeActions.hidden = true;
+    welcomeFill.style.width = '100%';
+    welcomeBar.setAttribute('aria-valuenow', '100');
+    welcomeBar.hidden = true;
+    welcomeHint.textContent = isTouch ? 'tap to enter' : 'press any key or tap to enter';
+    welcomeHint.dataset.ready = 'true';
+    showWelcome();
+    if (recovering) welcome.focus();
+  };
+
+  const showFailure = (message = 'the village could not start — retry, or browse the places instead') => {
+    failureReturnFocus = welcome.dataset.open === 'false' ? document.activeElement as HTMLElement | null : null;
+    ready = false;
+    setDriveControlsEnabled(false);
+    keysPanel.hidden = true;
+    setPanel(null, false);
+    mapBtn.hidden = false;
+    document.getElementById('minimap')!.hidden = true;
+    welcomeBar.hidden = true;
+    welcomeHint.dataset.ready = 'false';
+    welcomeHint.textContent = message;
+    welcomeActions.hidden = false;
+    showWelcome();
+    document.getElementById('retry-village')!.focus();
+  };
+
+  document.getElementById('retry-village')!.addEventListener('click', () => location.reload());
+  document.getElementById('places-fallback')!.addEventListener('click', () => {
+    welcome.dataset.open = 'false';
+    welcome.inert = true;
+    welcome.setAttribute('aria-hidden', 'true');
+    setBackgroundInert(false);
+    setPanel(placesPanel);
+    itemsOf(placesPanel)[0]?.focus();
+  });
+  window.addEventListener('village:failed', () => showFailure());
+  if (canvas instanceof HTMLCanvasElement) {
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      showFailure('graphics paused — restore the context or retry');
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      if (!initialized) return;
+      markReady();
+      window.dispatchEvent(new CustomEvent('village:minimap-restore'));
+    });
+  }
 
   window.addEventListener('village:loading', ((e: CustomEvent<number>) => {
     const pct = Math.round(e.detail * 100);
@@ -1374,36 +1490,43 @@ import '@superjackfruit/vibekit/fonts.css';
       reflect(on);
       try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch {}
     };
-    window.addEventListener('village:ready', () => {
+    const restore = () => {
       let on = true;
       try { on = localStorage.getItem(KEY) !== 'off'; } catch {}
-      mapBtn.hidden = false;
       map.hidden = !on;
       reflect(on);
-    });
+    };
+    window.addEventListener('village:ready', restore);
+    window.addEventListener('village:minimap-restore', restore);
     sw.addEventListener('click', () => show(map.hidden));
     window.addEventListener('keydown', (e) => {
-      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'n' || mapBtn.hidden) return;
+      if (!ready || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'n' || mapBtn.hidden) return;
       show(map.hidden);
     });
   }
 
   window.addEventListener('village:ready', () => {
-    ready = true;
-    welcomeFill.style.width = '100%';
-    welcomeBar.setAttribute('aria-valuenow', '100');
-    welcomeBar.hidden = true;
-    welcomeHint.textContent = isTouch ? 'tap to enter' : 'press any key or tap to enter';
-    welcomeHint.dataset.ready = 'true';
+    initialized = true;
+    markReady();
   });
 
-  function enterVillage() {
-    if (!ready) return;
+  function enterVillage(e: Event) {
+    if (!ready || welcome.dataset.open === 'false') return;
+    window.dispatchEvent(new CustomEvent('village:gesture'));
+    e.preventDefault();
+    e.stopImmediatePropagation();
     welcome.dataset.open = 'false';
-    window.removeEventListener('keydown', enterVillage);
-    welcome.removeEventListener('pointerdown', enterVillage);
+    welcome.inert = true;
+    welcome.setAttribute('aria-hidden', 'true');
+    setBackgroundInert(false);
+    const returnFocus = failureReturnFocus;
+    failureReturnFocus = null;
+    if (returnFocus) {
+      const target = returnFocus.isConnected && returnFocus.getClientRects().length > 0 ? returnFocus : menuBtn;
+      target.focus();
+    }
   }
-  window.addEventListener('keydown', enterVillage);
+  window.addEventListener('keydown', enterVillage, true);
   welcome.addEventListener('pointerdown', enterVillage);
 
   // ---------- on-screen driving ----------
@@ -1425,12 +1548,16 @@ import '@superjackfruit/vibekit/fonts.css';
     const wheel = document.getElementById('touch-steer')!;
     const knob = document.getElementById('touch-knob')!;
     let steerPointer: number | null = null;
+    const setSteer = (value: number) => {
+      touchState.steer = Math.max(-1, Math.min(1, value));
+      knob.style.transform = `translateX(${touchState.steer * 145}%)`;
+      wheel.setAttribute('aria-valuenow', String(Math.round(touchState.steer * 100)));
+      push();
+    };
     // 2.4 rather than 2.0 so full lock arrives before the thumb runs out of pad
     const readSteer = (e: PointerEvent) => {
       const r = wheel.getBoundingClientRect();
-      touchState.steer = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2.4));
-      knob.style.transform = `translateX(${touchState.steer * 145}%)`;
-      push();
+      setSteer(((e.clientX - r.left) / r.width - 0.5) * 2.4);
     };
     wheel.addEventListener('pointerdown', (e) => {
       steerPointer = e.pointerId;
@@ -1444,11 +1571,16 @@ import '@superjackfruit/vibekit/fonts.css';
       wheel.addEventListener(type, (e) => {
         if (e.pointerId !== steerPointer) return;
         steerPointer = null;
-        touchState.steer = 0;
-        knob.style.transform = 'translateX(0%)';
-        push();
+        setSteer(0);
       });
     }
+    wheel.addEventListener('keydown', (e) => {
+      const step = { ArrowLeft: -0.1, ArrowDown: -0.1, ArrowRight: 0.1, ArrowUp: 0.1 }[e.key];
+      if (step === undefined && !['Home', 'End', '0'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSteer(e.key === 'Home' ? -1 : e.key === 'End' ? 1 : e.key === '0' ? 0 : touchState.steer + step!);
+    });
 
     const hold = (el: HTMLElement, on: () => void, off: () => void) => {
       el.addEventListener('pointerdown', (e) => {
@@ -1529,12 +1661,31 @@ import '@superjackfruit/vibekit/fonts.css';
   const keysPanel = document.getElementById('keys')!;
   if (!window.matchMedia('(pointer: coarse)').matches) {
     const TIMES = ['auto', 'dawn', 'day', 'dusk', 'night'];
+    let keysReturnFocus: HTMLElement | null = null;
+    const closeKeys = () => {
+      keysPanel.hidden = true;
+      if (keysReturnFocus?.isConnected) keysReturnFocus.focus();
+      keysReturnFocus = null;
+    };
     window.addEventListener('keydown', (e) => {
-      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === '?' || (e.key === 'Escape' && !keysPanel.hidden)) {
-        keysPanel.hidden = e.key === 'Escape' ? true : !keysPanel.hidden;
+      if (welcome.dataset.open === 'true' || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!keysPanel.hidden && e.key === 'Tab') {
+        e.preventDefault();
+        keysPanel.focus();
         return;
       }
+      if (e.key === '?' || (e.key === 'Escape' && !keysPanel.hidden)) {
+        e.preventDefault();
+        if (!keysPanel.hidden) closeKeys();
+        else {
+          setPanel(null);
+          keysReturnFocus = document.activeElement as HTMLElement | null;
+          keysPanel.hidden = false;
+          keysPanel.focus();
+        }
+        return;
+      }
+      if (!keysPanel.hidden) return;
       const k = e.key.toLowerCase();
       if (k === 't') {
         const now = timeRow.querySelector<HTMLElement>('[data-active="true"]')?.dataset.time ?? 'auto';
@@ -1542,7 +1693,7 @@ import '@superjackfruit/vibekit/fonts.css';
         return;
       }
       // a focused button or link already answers Enter and Space itself
-      if (card.dataset.open !== 'true' || (document.activeElement as HTMLElement)?.closest?.('button, a')) return;
+      if (welcome.dataset.open !== 'false' || card.dataset.open !== 'true' || (document.activeElement as HTMLElement)?.closest?.('button, a')) return;
       if (e.key === 'Enter') githubEl.click();
       else if (k === 'p' && !demoEl.hidden) demoEl.click();
       else if ((k === ' ' || k === 'i') && !moreBtn.hidden) setExpanded(card.dataset.expanded !== 'true');

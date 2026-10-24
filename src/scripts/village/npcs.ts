@@ -67,7 +67,7 @@ export interface NpcCounts {
 
 export interface Npcs {
   /** `inView` is the camera's frustum test, so recycling happens off-screen */
-  update(dt: number, carX: number, carZ: number, carHeading: number, inView: SpawnRules['inView']): void;
+  update(dt: number, carX: number, carZ: number, carHeading: number, inView: SpawnRules['inView'], reduced?: boolean): void;
   /** the car was teleported: place the walkers round its new spot */
   reseed(): void;
   /** recycling activity since the last call */
@@ -351,10 +351,11 @@ export async function createNpcs(
         clock: +v.mixer.time.toFixed(2),
       })),
 
-    update(dt, carX, carZ, carHeading, inView): void {
-      clock += dt;
+    update(dt, carX, carZ, carHeading, inView, reduced = false): void {
+      const autonomousDt = reduced ? 0 : dt;
+      clock += autonomousDt;
       pool.update(carX, carZ, carHeading, inView);
-      sinceMeet += dt;
+      sinceMeet += autonomousDt;
       if (sinceMeet > 0.25) {
         sinceMeet = 0;
         meet(carX, carZ);
@@ -386,7 +387,7 @@ export async function createNpcs(
             }
           }
           if (!v.stopped) {
-            v.t += (v.dir * v.speed * dt) / v.seg.length;
+            v.t += (v.dir * v.speed * autonomousDt) / v.seg.length;
             // turn walkers round before they end up strolling down the tarmac
             const tMin = tMinOf(v.seg);
             if (v.t > 0.97) {
@@ -403,12 +404,12 @@ export async function createNpcs(
           const pavement = v.seg.width / 2 + FOOTPATH / 2;
           v.home = { x: point.x + n.x * pavement * v.side, y: KERB_TOP, z: point.z + n.z * pavement * v.side };
           v.seg.curve.getTangentAt(v.t, tangent);
-          if (!v.chat) turnTo(v, Math.atan2(tangent.x * v.dir, tangent.z * v.dir), dt * 3);
+          if (!v.chat) turnTo(v, Math.atan2(tangent.x * v.dir, tangent.z * v.dir), autonomousDt * 3);
         } else if (!v.chat) {
-          turnTo(v, v.facing, dt);
+          turnTo(v, v.facing, autonomousDt);
         }
         // in a chat: face the other one
-        if (v.chat) turnTo(v, Math.atan2(v.chat.with.x - v.x, v.chat.with.z - v.z), dt);
+        if (v.chat) turnTo(v, Math.atan2(v.chat.with.x - v.x, v.chat.with.z - v.z), autonomousDt);
 
         // in the car's way: hop aside, away from it, then drift home once it has gone
         const d = v.dodge;
@@ -433,7 +434,7 @@ export async function createNpcs(
         v.z = v.root.position.z;
 
         if (Math.hypot(v.root.position.x - carX, v.root.position.z - carZ) < ANIMATE_RADIUS) {
-          v.mixer.update(dt);
+          v.mixer.update(autonomousDt);
         }
       }
     },

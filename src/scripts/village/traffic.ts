@@ -47,6 +47,7 @@ import type { RoadNetwork, RoadSegment } from './road';
 import { TILE } from './road';
 import { createPool, type ActorPool, type PoolActor, type SpawnRules } from './pool';
 import { freeAcc, brake, stopAt, bendSpeed, makeCurve, curveAt } from './idm.mjs';
+import { finishVehicle, type CarEnvironment } from './car-finish';
 
 /** the Kenney cars that live here; the first `count` of them are used */
 export const TRAFFIC_MODELS = ['car-sedan', 'car-taxi', 'car-van', 'car-truck', 'car-sports', 'car-sedan', 'car-taxi', 'car-van', 'car-sedan', 'car-taxi'];
@@ -184,7 +185,8 @@ export async function createTraffic(
   load: (name: string) => Promise<LoadedGltf>,
   road: RoadNetwork,
   count: number,
-  shadows: boolean
+  shadows: boolean,
+  env: CarEnvironment
 ): Promise<Traffic> {
   // ---------- paths ----------
   function pathFrom(pts: Array<{ x: number; z: number }>, aLat = DRIVER.aLat): Path {
@@ -414,6 +416,7 @@ export async function createTraffic(
         m.receiveShadow = false;
       }
     });
+    finishVehicle(THREE, model, env);
     // each wheel turns about its own axle on a clean pivot (the nodes carry baked rotations)
     const wheels: T.Object3D[] = [];
     for (const child of [...model.children]) {

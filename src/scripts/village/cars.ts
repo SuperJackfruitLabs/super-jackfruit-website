@@ -96,7 +96,7 @@ const PETROL: EngineSound = {
 export const CARS: CarSpec[] = [
   {
     id: 'offroad',
-    name: 'Off-roader',
+    name: 'Off Roader Jimmy',
     note: 'Bouncy and grippy.',
     model: 'offroad-car',
     thumb: '/assets/village/cars/offroad.webp',
@@ -107,7 +107,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'sedan',
-    name: 'Sedan',
+    name: 'Sedan Corollary',
     note: 'A steady all-rounder.',
     model: 'car-sedan',
     thumb: '/assets/village/cars/sedan.webp',
@@ -118,7 +118,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'sports',
-    name: 'Sports',
+    name: 'Sports SupraCharge',
     note: 'Quicker, with sharper steering.',
     model: 'car-sports',
     thumb: '/assets/village/cars/sports.webp',
@@ -129,7 +129,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'taxi',
-    name: 'Taxi',
+    name: 'Taxi Checkers',
     note: 'A sedan with a roof sign.',
     model: 'car-taxi',
     thumb: '/assets/village/cars/taxi.webp',
@@ -140,7 +140,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'police',
-    name: 'Police',
+    name: 'Police Vic-Tory',
     note: 'Fast in a straight line.',
     model: 'car-police',
     thumb: '/assets/village/cars/police.webp',
@@ -151,7 +151,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'van',
-    name: 'Van',
+    name: 'Van Transit-Ion',
     note: 'Heavier, with wider turns.',
     model: 'car-van',
     thumb: '/assets/village/cars/van.webp',
@@ -162,7 +162,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'truck',
-    name: 'Truck',
+    name: 'Truck HiLuxury',
     note: 'The heaviest: slow and hard to stop.',
     model: 'car-truck',
     thumb: '/assets/village/cars/truck.webp',
@@ -173,7 +173,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: 'race',
-    name: 'Race',
+    name: 'Race F1-Nale',
     note: 'The fastest, and twitchy.',
     model: 'car-race',
     thumb: '/assets/village/cars/race.webp',
