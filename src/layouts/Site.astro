@@ -9,9 +9,11 @@ import { frame } from '../data/frame';
 interface Props {
   title: string;
   description?: string;
+  /** start in the dark theme unless the visitor has picked light themselves */
+  darkFirst?: boolean;
 }
 
-const { title, description = 'Super Jackfruit Labs builds six tools for working with agents, which together carry a task from ask to proof.' } = Astro.props;
+const { title, darkFirst = false, description = 'Super Jackfruit Labs builds six tools for working with agents, which together carry a task from ask to proof.' } = Astro.props;
 ---
 
 <!doctype html>
@@ -27,6 +29,20 @@ const { title, description = 'Super Jackfruit Labs builds six tools for working 
     <Seo {title} {description} />
     <slot name="head" />
     <SuiteHead product="lab" />
+    {darkFirst && (
+      <script is:inline>
+        (() => {
+          // The frame stores 'system' on a first visit, so only an explicit 'light' keeps light.
+          // Going through the frame's own controller keeps its switch, storage and hosts agreeing.
+          let pref = null;
+          try { pref = localStorage.getItem('sjl-theme-pref'); } catch {}
+          if (pref === 'light') return;
+          const early = window.__sjlFrameEarly;
+          if (early && early.theme) early.theme.set('dark');
+          else { document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.sjlTheme = 'dark'; }
+        })();
+      </script>
+    )}
   </head>
   <body>
     <!-- The frame owns the header, the light/dark switch and the footer; the page is Daylight. -->

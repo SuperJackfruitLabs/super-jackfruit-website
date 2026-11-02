@@ -1,0 +1,373 @@
+---
+/**
+ * Design prototype: the home page as a walk down the village street. The camera visits one house
+ * per product, in the order a task travels through the suite, and the day turns to evening as you
+ * scroll. All words are the current home page's and each product's own (src/data/suite.ts).
+ */
+import Site from '../layouts/Site.astro';
+import { suite, CONTACT, accentAttrs } from '../data/suite';
+
+const docs = (p: (typeof suite)[number]) => p.links.find((l) => l.label === 'Docs')!.href;
+const VERBS = ['Talk', 'plan', 'do', 'run', 'remember', 'prove'];
+const street = suite.map((p) => ({ slug: p.slug, hex: p.hex }));
+---
+
+<Site title="Super Jackfruit Labs — agent-native tools" darkFirst>
+  <meta slot="head" name="robots" content="noindex" />
+  <section class="story" id="story">
+    <div class="stage" aria-hidden="true">
+      <!-- stills of this page's own opening shot, one per theme, so the 3D fades in over the same view -->
+      <picture class="poster" data-mood="evening">
+        <source media="(max-width: 899px)" srcset="/home-street-evening-phone.webp" />
+        <img src="/home-street-evening.webp" alt="" width="1600" height="1000" />
+      </picture>
+      <picture class="poster" data-mood="night">
+        <source media="(max-width: 899px)" srcset="/home-street-night-phone.webp" />
+        <img src="/home-street-night.webp" alt="" width="1600" height="1000" />
+      </picture>
+      <canvas class="scene"></canvas>
+      <div class="veil"></div>
+    </div>
+
+    <nav class="rail" aria-label="The street">
+      {suite.map((p, i) => (
+        <a href={`#${p.slug}`} style={`--c:${p.hex}`} data-i={i + 1}>
+          <span class="dot"></span><span class="lbl">{p.name}</span>
+        </a>
+      ))}
+    </nav>
+
+    <div class="beats">
+      <header class="beat hero" data-beat="0">
+        <p class="eyebrow">Super Jackfruit Labs · agent-native tools</p>
+        <h1>Six tools for working with agents.</h1>
+        <p class="verbs">
+          {VERBS.map((v, i) => (
+            <span style={`--c:${suite[i].hex};--d:${400 + i * 110}ms`}>{v}{i < VERBS.length - 1 ? ',' : '.'}</span>
+          ))}
+        </p>
+        <p class="cue"><span>Scroll to walk the street</span><span class="arrow">↓</span></p>
+      </header>
+
+      {suite.map((p, i) => (
+        <article class="beat chapter" id={p.slug} data-beat={i + 1} {...accentAttrs(p)}>
+          <div class="card">
+            <p class="step"><span class="num">0{i + 1}</span>{p.step}</p>
+            <div class="title">
+              <img src={`/brand/${p.slug}.svg`} alt="" width="40" height="40" />
+              <h2><a href={p.site}>{p.name}</a></h2>
+              <span class="status">{p.status}{p.version ? ` · ${p.version}` : ''}</span>
+            </div>
+            <p class="headline">{p.headline}</p>
+            <p class="summary">{p.summary}</p>
+            <ul>{p.features.map((f) => <li>{f}</li>)}</ul>
+            <div class="actions">
+              <a class="btn" href={p.cta.href}>{p.cta.label}</a>
+              <a class="btn ghost" href={p.site}>{new URL(p.site).host} →</a>
+              <a class="more" href={docs(p)}>Docs</a>
+            </div>
+          </div>
+        </article>
+      ))}
+
+      <footer class="beat finale" data-beat={suite.length + 1}>
+        <div class="card dusk">
+          <p class="eyebrow">The end of the street</p>
+          <h2>That's one task, from ask to proof.</h2>
+          <div class="actions">
+            <a class="btn" href="/village">Drive through the village →</a>
+            <a class="btn ghost" href={`mailto:${CONTACT}`}>Run it with your team →</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </section>
+</Site>
+
+<script define:vars={{ street }}>
+  window.__street = street;
+</script>
+
+<script>
+  const root = document.getElementById('story')!;
+  const canvas = root.querySelector<HTMLCanvasElement>('.scene')!;
+  const beats = [...root.querySelectorAll<HTMLElement>('.beat')];
+  const rail = [...root.querySelectorAll<HTMLAnchorElement>('.rail a')];
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // f: which beat sits at the middle of the viewport, as a continuous number
+  function progress() {
+    const mid = innerHeight / 2;
+    const centres = beats.map((b) => {
+      const r = b.getBoundingClientRect();
+      return r.top + r.height / 2;
+    });
+    if (mid <= centres[0]) return 0;
+    for (let i = 1; i < centres.length; i++) {
+      if (mid <= centres[i]) return i - 1 + (mid - centres[i - 1]) / (centres[i] - centres[i - 1]);
+    }
+    return centres.length - 1;
+  }
+
+  let street: { setProgress(f: number): void } | null = null;
+  function onScroll() {
+    const f = progress();
+    street?.setProgress(f);
+    const active = Math.round(f);
+    rail.forEach((a) => a.classList.toggle('on', Number(a.dataset.i) === active));
+    root.classList.toggle('past-hero', f > 0.5);
+    root.classList.toggle('at-end', f > beats.length - 1.5);
+  }
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onScroll);
+  onScroll();
+
+  // cards rise in as they arrive
+  const io = new IntersectionObserver(
+    (es) => es.forEach((e) => e.target.classList.toggle('in', e.isIntersecting)),
+    { rootMargin: '-25% 0px -25% 0px' },
+  );
+  beats.forEach((b) => io.observe(b));
+
+  // the 3D street loads after the page has painted, and never for reduced motion
+  const gl = (() => {
+    try {
+      return !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+      return false;
+    }
+  })();
+  if (!still && gl) {
+    const start = async () => {
+      const { createStreet } = await import('../scripts/home-diorama');
+      street = await createStreet(canvas, (window as any).__street, () => root.classList.add('live'));
+      onScroll();
+    };
+    const idle = () => ('requestIdleCallback' in window ? requestIdleCallback(() => start(), { timeout: 800 }) : setTimeout(start, 200));
+    if (document.readyState === 'complete') idle();
+    else addEventListener('load', idle, { once: true });
+  }
+</script>
+
+<style is:global>
+  html { overflow-x: clip; }
+</style>
+
+<style>
+  .story {
+    position: relative;
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+  .stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    overflow: hidden;
+    background: #2d3f8f;
+  }
+  .poster, .poster img, .scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  :global(html[data-theme='dark']) .poster[data-mood='evening'],
+  :global(html:not([data-theme='dark'])) .poster[data-mood='night'] { display: none; }
+  .scene { opacity: 0; transition: opacity 1.2s ease; }
+  .story.live .scene { opacity: 1; }
+  .story.live .poster { opacity: 0; transition: opacity 1.2s ease 0.4s; }
+  /* a calm wash on the side the words sit, so text never competes with the scene:
+     left on wide screens (the scene's subject sits right), top/bottom on phones */
+  .veil {
+    --wash: color-mix(in srgb, var(--vk-color-bg) 94%, transparent);
+    --wash-soft: color-mix(in srgb, var(--vk-color-bg) 70%, transparent);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, var(--wash) 0%, var(--wash-soft) 34%, transparent 58%);
+    transition: opacity 0.8s ease;
+  }
+  .story.at-end .veil { opacity: 0; }
+
+  .beats { position: relative; margin-top: -100svh; }
+  .beat {
+    min-height: 120svh;
+    display: flex;
+    align-items: center;
+    padding: 0 max(16px, 5vw);
+    box-sizing: border-box;
+  }
+
+  /* hero */
+  .hero {
+    min-height: 100svh;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding-top: 14svh;
+  }
+  .eyebrow {
+    font-family: var(--vk-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--vk-color-muted);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--vk-font-display);
+    font-weight: 800;
+    font-size: clamp(2.6rem, 7.4vw, 6.4rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    margin: 0;
+    max-width: 12ch;
+    color: var(--vk-color-text);
+    animation: rise 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .verbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1em 0.45em;
+    margin: 1.4rem 0 0;
+    font-family: var(--vk-font-display);
+    font-weight: 700;
+    font-size: clamp(1.3rem, 2.6vw, 2.1rem);
+    letter-spacing: -0.01em;
+  }
+  .verbs span {
+    color: var(--c);
+    
+    animation: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d) both;
+  }
+  .cue {
+    margin-top: auto;
+    margin-bottom: 7svh;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--vk-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+    animation: rise 0.8s ease 1.4s both;
+  }
+  .arrow { font-size: 1.2rem; animation: bob 1.8s ease-in-out infinite; }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+  @keyframes bob { 50% { transform: translateY(6px); } }
+
+  /* chapters */
+  .card {
+    width: min(30rem, 100%);
+    background: var(--vk-color-surface);
+    border: 1px solid var(--vk-color-line);
+    border-top: 4px solid var(--vk-color-accent);
+    border-radius: 20px;
+    padding: 1.5rem 1.6rem 1.4rem;
+    box-shadow: 0 30px 60px -30px rgba(20, 16, 40, 0.45);
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+    transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .beat.in .card { opacity: 1; transform: none; }
+  .step {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 0.9rem;
+    font-family: var(--vk-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--vk-color-accent-text);
+  }
+  .num { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+  .title { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+  .title img { width: 40px; height: 40px; }
+  h2 { font-family: var(--vk-font-display); font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; margin: 0; }
+  h2 a { text-decoration: none; }
+  .status {
+    margin-left: auto;
+    font-family: var(--vk-font-mono);
+    font-size: 0.7rem;
+    color: var(--vk-color-muted);
+    border: 1px solid var(--vk-color-line);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+  }
+  .headline { font-family: var(--vk-font-display); font-size: 1.3rem; font-weight: 600; line-height: 1.25; margin: 1rem 0 0.5rem; }
+  .summary { color: var(--vk-color-muted); line-height: 1.55; margin: 0; font-size: 0.97rem; }
+  ul { margin: 1rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.45rem; font-size: 0.92rem; line-height: 1.4; }
+  li { position: relative; padding-left: 1.1rem; }
+  li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 0.45rem; height: 0.45rem; border-radius: 2px; background: var(--vk-color-accent); }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.8rem; margin-top: 1.3rem; }
+  .more { font-size: 0.9rem; color: var(--vk-color-muted); }
+
+  /* finale */
+  .finale { justify-content: center; align-items: flex-end; padding-bottom: 16svh; min-height: 130svh; }
+  .card.dusk { width: min(40rem, 100%); text-align: center; border-top-color: #ffc46b; }
+  .card.dusk h2 { margin-top: 0; }
+  .card.dusk h2 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); margin-bottom: 1.2rem; }
+  .card.dusk .actions { justify-content: center; }
+
+  /* the street map: one dot per house */
+  .rail {
+    position: fixed;
+    right: max(12px, 2vw);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  .story.past-hero:not(.at-end) .rail { opacity: 1; pointer-events: auto; }
+  /* each dot is its own fixed-size target; the name floats beside it, out of the flow, so it never shifts the column */
+  .rail a { position: relative; display: grid; place-items: center; width: 20px; height: 20px; text-decoration: none; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid var(--c); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform 0.3s ease, background 0.3s ease; }
+  .rail a.on .dot { background: var(--c); transform: scale(1.35); }
+  .lbl {
+    position: absolute;
+    right: calc(100% + 8px);
+    top: 50%;
+    white-space: nowrap;
+    font-family: var(--vk-font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: rgba(20, 18, 30, 0.7);
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    opacity: 0;
+    transform: translate(6px, -50%);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+  .rail a:hover .lbl, .rail a.on .lbl, .rail a:focus-visible .lbl { opacity: 1; transform: translate(0, -50%); }
+
+  @media (max-width: 899px) {
+    .chapter { align-items: flex-end; padding-bottom: 6svh; min-height: 130svh; }
+    .card { padding: 1.2rem 1.2rem 1.1rem; }
+    .summary, .chapter ul { display: none; }
+    .rail { top: 72px; bottom: auto; right: 50%; transform: translateX(50%); flex-direction: row; background: rgba(20, 18, 30, 0.55); padding: 8px 12px; border-radius: 999px; }
+    .lbl { display: none; }
+    .hero { padding-top: 9svh; }
+    .veil { background: linear-gradient(180deg, var(--wash) 0%, var(--wash-soft) 34%, transparent 55%); }
+    .story.past-hero .veil { background: linear-gradient(0deg, var(--wash) 0%, var(--wash-soft) 40%, transparent 62%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    h1, .verbs span, .cue, .arrow { animation: none; }
+    .card { transition: none; opacity: 1; transform: none; }
+  }
+</style>
