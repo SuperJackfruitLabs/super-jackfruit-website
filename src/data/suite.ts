@@ -177,11 +177,6 @@ export const suite: Product[] = [
   },
 ];
 
-export const coming = [
-  { name: 'Agentnagar', blurb: 'a place to watch your agents at work' },
-  { name: 'Captain Jack', blurb: 'a guide who shows you around' },
-];
-
 export const CONTACT = 'rakesh@superjackfruit.com';
 
 /** the product's colours as CSS custom properties; Site.astro maps them onto vibekit's accent tokens */
