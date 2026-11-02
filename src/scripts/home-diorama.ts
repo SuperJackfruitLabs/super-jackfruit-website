@@ -531,6 +531,7 @@ export async function createStreet(canvas: HTMLCanvasElement, products: StreetPr
   onReady();
   // development only: render one frame and hand back its pixels, for regenerating the poster stills
   if (import.meta.env.DEV) {
+    (window as unknown as { __streetState: () => unknown }).__streetState = () => ({ f: target, cam: camera.position.toArray().map((v) => +v.toFixed(1)) });
     (window as unknown as { __streetSnapshot: () => string }).__streetSnapshot = () => {
       mood = moodTarget;
       light(solve(target));
