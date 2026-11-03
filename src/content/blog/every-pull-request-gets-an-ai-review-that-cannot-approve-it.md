@@ -2,7 +2,7 @@
 title: Every pull request gets an AI review that cannot approve it
 description: A shared Claude reviewer checks pull requests for bugs, security problems and repository-rule breaches while leaving every decision to a person.
 date: 2026-11-03
-draft: true
+draft: false
 tags: [agents, code-review, ci]
 sources:
   - claim: SuperLibrary's review instructions require separate bugs, security and compliance passes, cap displayed nits at five and define repository-specific rules.
