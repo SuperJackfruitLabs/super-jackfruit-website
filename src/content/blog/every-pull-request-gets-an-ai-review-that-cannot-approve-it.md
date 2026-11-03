@@ -2,7 +2,7 @@
 title: Every pull request gets an AI review that cannot approve it
 description: A shared Claude reviewer checks pull requests for bugs, security problems and repository-rule breaches while leaving every decision to a person.
 date: 2026-11-03
-draft: false
+draft: true
 tags: [agents, code-review, ci]
 sources:
   - claim: SuperLibrary's review instructions require separate bugs, security and compliance passes, cap displayed nits at five and define repository-specific rules.
@@ -17,9 +17,9 @@ sources:
     url: https://claude.com/blog/the-ai-native-sdlc-playbook
 ---
 
-Every pull request gets another reader. That reader can point to a bug, a security problem or a broken repository rule. It cannot approve the change, block it or request changes. A person still decides.
+Every eligible pull request gets another reader. That reader can point to a bug, a security problem or a broken repository rule. It cannot approve the change, block it or request changes. A person still decides.
 
-That boundary is the interesting part of the Claude review added across the suite. The public [SuperLibrary](https://github.com/SuperJackfruitLabs/superlibrary/blob/e484a4c3a137f99ef89f18c6f15e2b47341803e6/.github/claude/claude-ci.mjs) and [SuperWitness](https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/.github/claude/claude-ci.mjs) repositories carry byte-identical copies of the shared script. Each repository then supplies its own `REVIEW.md`: one mechanism, local policy.
+That boundary is the interesting part of the Claude review. The script describes itself as a shared kit carried by every product; the public [SuperLibrary](https://github.com/SuperJackfruitLabs/superlibrary/blob/e484a4c3a137f99ef89f18c6f15e2b47341803e6/.github/claude/claude-ci.mjs) and [SuperWitness](https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/.github/claude/claude-ci.mjs) repositories expose byte-identical copies. Each repository then supplies its own `REVIEW.md`: one mechanism, local policy.
 
 This is not a new merge authority dressed up as a bot. The script posts an issue comment rather than a GitHub review verdict. Its system prompt calls the result advisory, and top-level errors become notices instead of failed CI. It supplies attention; it does not get a vote.
 
@@ -58,8 +58,6 @@ There are honest limits. Draft pull requests are skipped. A missing API key is a
 The same shared script can examine failed job metadata and bounded tails of job logs. It asks Claude to label a failure `likely flaky` or `likely real`, identify the most likely cause and return no more than three summary lines.
 
 The wording matters. This is triage, not diagnosis. The comment is read-only and explicitly says that nothing was rerun. Its job is to help a person decide where to look next, not to quietly retry jobs or declare a root cause.
-
-In a planted-bug test reported for this rollout, the review caught both planted bugs. That is a useful smoke check—and only a smoke check. Two caught defects do not establish a general success rate, prove recall or mean that the reviewer catches every bug.
 
 ## Review without transferred authority
 
