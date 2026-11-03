@@ -2,16 +2,11 @@
 
 ## Verdict
 
-**Publishable: false.**
+**Publishable: true.**
 
-The implementation claims in the article are supported by the permitted public sources after the edits recorded below. One required claim is not: none of the four repository files or Anthropic's article documents a planted-bug test or says that a review caught both planted bugs. I removed that sentence rather than publish an unsupported result and changed the frontmatter to `draft: true`.
+Every factual claim in the article is supported by the permitted public sources. The newly permitted public [Salaam pull request #120](https://github.com/SuperJackfruitLabs/salaam/pull/120) clears the previous blocker: its description says that two bugs were planted on purpose, and the advisory review comment reports both of them. The article states that result narrowly and does not extrapolate from the check to a broader accuracy claim.
 
-To clear the publication blocker, do one of the following:
-
-1. add an explicit public receipt to the permitted source set that documents the planted test and its two caught bugs, then restore a narrow sentence citing that receipt; or
-2. remove the planted-bug result from the commission and publish the corrected draft without it.
-
-The receipt need not disclose the defects, repository, or pull-request number, but it must publicly substantiate that two bugs were deliberately planted and both were reported by this reviewer. A private assertion or the commission text alone would not clear the source requirement.
+The article remains `draft: true` for the publication-approval stage. There is no factual publication blocker.
 
 ## Sources checked
 
@@ -21,6 +16,7 @@ All repository links are pinned to commits rather than a moving branch.
 - [SuperLibrary `.github/claude/claude-ci.mjs`](https://github.com/SuperJackfruitLabs/superlibrary/blob/e484a4c3a137f99ef89f18c6f15e2b47341803e6/.github/claude/claude-ci.mjs)
 - [SuperWitness `REVIEW.md`](https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/REVIEW.md)
 - [SuperWitness `.github/claude/claude-ci.mjs`](https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/.github/claude/claude-ci.mjs)
+- [Salaam pull request #120](https://github.com/SuperJackfruitLabs/salaam/pull/120)
 - [Anthropic, “The AI-native SDLC playbook”](https://claude.com/blog/the-ai-native-sdlc-playbook)
 
 The two pinned `claude-ci.mjs` files are each 600 lines and 25,391 bytes. Their SHA-256 digests both equal `8c158cf9415ee7016f662325411febe1bca144ec285fa1dace187a58f9f99db8`, confirming that the two public copies are byte-identical.
@@ -41,20 +37,27 @@ The two pinned `claude-ci.mjs` files are each 600 lines and 25,391 bytes. Their 
 | The review has explicit eligibility and size limits. | Supported. Missing key, missing required context, draft or closed pull requests, oversized post-filter diffs, and empty post-filter diffs all skip or produce a not-reviewed note. The default cap is 200 KB. | `claude-ci.mjs` lines 32–39 and 499–558. |
 | Failed-CI triage uses failed job metadata and bounded log tails, labels a result likely flaky or likely real, gives at most three summary lines, and reruns nothing. | Supported. The article correctly calls this probabilistic triage rather than diagnosis. | `claude-ci.mjs` lines 36–38 and 369–452, plus 561–579. |
 | Anthropic advocates layers of agentic review while retaining human accountability for judgment. | Supported. Anthropic describes “layers of agentic review,” reserves human review for regulated and critical code, and states that humans remain accountable for decisions requiring judgment. The article does not imply that Anthropic evaluated this implementation. | Anthropic's linked article. |
-| A planted-bug test caught both planted bugs. | **Not supported by the permitted sources.** None mentions such a test or result. | No evidence in the allowed source set. |
+| A public planted-defect check added two bugs on purpose and the advisory review reported both: directory permissions changed from `0700` to `0755`, and a release function that throws on a second call. | Supported. The pull-request description explicitly says two bugs were planted on purpose. The GitHub Actions advisory comment reports exactly these two findings, and a closing comment confirms that both planted bugs were flagged. | Salaam pull request #120 description and issue comments, including the advisory review at `#issuecomment-6594179216`. |
 
 ## Changes made to the article
 
 1. Changed the opening from “Every pull request” to “Every eligible pull request” so the body does not contradict the documented draft, key, state, filtering, and size conditions.
 2. Recast suite-wide scope as the script's own shared-kit statement and limited direct public evidence to the two repositories actually inspected.
-3. Removed the planted-bug paragraph because its result has no support in the permitted public sources.
-4. Changed `draft: false` to `draft: true` while the required planted-bug claim remains unresolved.
+3. On the earlier verification pass, removed the unsupported planted-bug paragraph and changed `draft: false` to `draft: true`.
+4. After Salaam pull request #120 was added to the permitted source set, checked its public description and advisory comment and confirmed that they support the restored, narrowly worded paragraph. No further article change was required on this pass.
+5. Kept `draft: true` for the publication-approval stage; this is workflow state, not a factual blocker.
 
 ## Constraint check
 
-- The article cites only the five permitted public URLs.
+- The article cites only the six permitted public URLs.
 - It names no private repository, internal agent, host, or team.
 - It makes no cost, adoption, productivity, or generalized accuracy claim.
 - It does not claim that the trust boundary eliminates prompt injection.
 - It does not claim that triage reruns jobs or conclusively diagnoses failures.
 - The title remains intentionally compact, while the opening and limits section make eligibility exceptions explicit.
+
+## Validation
+
+- `npm test`: 41 tests passed, 0 failed.
+- A clean `npm run build` after removing generated `.astro` and `dist` state completed successfully. Astro reported 0 errors and 5 existing hints; Vite also repeated the repository's large-chunk advisory.
+- `git diff --check` passed.
