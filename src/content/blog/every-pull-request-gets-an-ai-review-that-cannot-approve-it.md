@@ -13,6 +13,8 @@ sources:
     url: https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/REVIEW.md
   - claim: The SuperWitness copy implements the same advisory review and failed-CI triage mechanism.
     url: https://github.com/SuperJackfruitLabs/superwitness/blob/cec161e8683a916ae0c44efd537e15a8fc7b35f5/.github/claude/claude-ci.mjs
+  - claim: A public Salaam pull request says two bugs were planted on purpose, and its advisory review reports both.
+    url: https://github.com/SuperJackfruitLabs/salaam/pull/120
   - claim: Anthropic's AI-native SDLC playbook argues for layers of agentic review while keeping people accountable for decisions that require judgement.
     url: https://claude.com/blog/the-ai-native-sdlc-playbook
 ---
@@ -58,6 +60,8 @@ There are honest limits. Draft pull requests are skipped. A missing API key is a
 The same shared script can examine failed job metadata and bounded tails of job logs. It asks Claude to label a failure `likely flaky` or `likely real`, identify the most likely cause and return no more than three summary lines.
 
 The wording matters. This is triage, not diagnosis. The comment is read-only and explicitly says that nothing was rerun. Its job is to help a person decide where to look next, not to quietly retry jobs or declare a root cause.
+
+In a public planted-defect check, the pull request says two bugs were added on purpose, and the advisory comment reports both: a state directory loosened from `0700` to `0755` and a release function that throws when called twice ([Salaam pull request #120](https://github.com/SuperJackfruitLabs/salaam/pull/120)).
 
 ## Review without transferred authority
 
