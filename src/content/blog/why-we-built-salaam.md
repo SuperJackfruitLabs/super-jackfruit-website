@@ -109,4 +109,4 @@ For anyone building an agent CLI, editor integration or unattended workflow, tha
 
 The design test is simple: if closing, reconnecting or changing clients changes the identity of the work, the client still owns too much state.
 
-We built Salaam so the window can disappear without taking the work's identity with it. Version 0.0.7 corrected one place where “coding session” had become shorthand for “local session.” The fix was six characters longer in code. The boundary it restored is the reason the product exists.
+We built Salaam so the window can disappear without taking the work's identity with it. Version 0.0.7 corrected one place where “coding session” had become shorthand for “local session.” The code change replaced one predicate. The boundary it restored is the reason the product exists.
