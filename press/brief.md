@@ -1,125 +1,147 @@
-# Brief: Local is not the same as coding
+# Brief: Why we built Salaam
 
 ## Working title
 
-**The one-word gate that broke image paste in read-only agent sessions**
+**Why we built Salaam: agent work should outlast the terminal**
 
-Alternative: **Local is not the same as coding: fixing attachment parity in Salaam**
+Alternatives:
+
+- **The terminal is a window, not the home for agent work**
+- **Closing the terminal should not end the work**
+
+## Angle
+
+Tell the origin story through the product constraint that has been present since Salaam's first public release: an agent's work must not share the lifetime of the terminal window used to watch it.
+
+The recent shipped hook is [Salaam 0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7), specifically [pull request #114](https://github.com/SuperJackfruitLabs/salaam/pull/114). A plain, read-only local session rejected pasted images and left `@` file mentions as text because the submission route equated “local” with “coding.” Changing `localCoding` to `localWorkspace` fixed the immediate bug. More importantly for this article, it is a small example of the larger reason Salaam exists: the session is the durable object; terminal, SSH and editor clients are ways into it, and coding is only one way to use it.
+
+Do **not** make the predicate bug the main lesson again. Use it as the opening scene and current proof that the original product idea still shapes shipped changes.
 
 ## Thesis
 
-A small bug in Salaam exposes a broadly useful design lesson for agent tools: gate an input capability on the boundary that actually matters, not on a nearby product mode. Pasted images and `@` file mentions are safe and meaningful for any session attached to a local workspace, but the submission path checked whether the session was a *coding* session. That made plain, read-only `salaam` sessions reject pasted images and pass mentions through as text. Pull request [#114](https://github.com/SuperJackfruitLabs/salaam/pull/114) changed the predicate from `localCoding` to `localWorkspace`, added a regression test, and deliberately left board sessions unchanged. The fix shipped in [Salaam 0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7).
+We built Salaam because terminal-native agent work had three lifetime and trust problems that a chat transcript alone could not solve:
 
-The article should use the concrete fix to explain a reusable principle: model capabilities from trust and data-flow boundaries rather than UI labels or permission bundles.
+1. Closing a client should not discard the session or work already admitted.
+2. Reconnecting should resume the same work, not submit the same instruction twice.
+3. A model saying “done” should not be the only evidence that a task or operation succeeded.
 
-## Why this change
-
-- **Recent and shipped:** PR #114 merged on 1 November 2026 and the fix appears in the tagged 0.0.7 release published on 2 November 2026.
-- **Useful outside the company:** developers building agent clients, chat composers, IDE integrations, or multimodal tools routinely decide which session types may resolve local files and accept binary input. The bug shows how a seemingly reasonable mode check can deny a safe capability to the wrong users.
-- **Small enough to explain precisely:** the behavioral change is a one-predicate correction, backed by a focused regression test and release notes.
-- **Not already covered:** the public [blog index](https://superjackfruit.com/blog/) has no article about Salaam attachment handling, PR #114, or release 0.0.7 as of 4 November 2026. Do not turn this into another article about the advisory AI review; that topic is already covered by “Every pull request gets an AI review that cannot approve it.”
+Salaam answers by moving ownership out of the client and into a host-local session service. The service keeps the durable record—accepted instructions, tasks, approvals, results and operation receipts—while terminal, SSH and ACP editor clients attach to it. Version 0.0.7's local-session attachment fix is a useful reminder that this design is about a persistent home for *agent work*, not merely a better coding terminal.
 
 ## Reader
 
-Developers designing persistent agent sessions, terminal or editor chat interfaces, and permission/capability models. Assume they understand local versus remote execution, but not Salaam’s internal session taxonomy.
+Developers building agent CLIs, editor integrations, persistent assistants or unattended workflows. Assume they know terminal agents but have not seen Salaam's service/client split.
 
 ## Reader payoff
 
-By the end, a reader should be able to ask three better questions in their own system:
+The reader should leave with a practical design test: if closing, reconnecting or switching clients changes the identity of the work, then the client still owns too much state. Durable agent systems need a work identity and record independent of any one interface, plus evidence for completion that is stronger than the model's final sentence.
 
-1. What boundary actually determines whether an attachment can be resolved?
-2. Is a mode label such as “coding” accidentally standing in for locality, ownership, or authority?
-3. Does the regression test cover both the newly allowed case and the boundary that must remain denied?
+## Why this is timely and not already covered
+
+- **Recent shipped change:** PR [#114](https://github.com/SuperJackfruitLabs/salaam/pull/114) merged on 1 November 2026 and shipped in [0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) on 2 November 2026.
+- **The change exposes the premise cleanly:** a read-only workspace session was local and persistent even though it was not a coding session. The fix made paste and mention behavior follow workspace locality instead of a coding-mode label.
+- **The origin claim is public and contemporaneous:** the [README at v0.0.1](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.1/README.md) already says “Work should outlast a terminal” and names the same three problems above; the [first release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.1) describes persistent sessions across terminal, SSH and ACP clients.
+- **Novelty check:** the public blog's [“The suite, explained”](https://superjackfruit.com/blog/the-suite-explained) gives Salaam one sentence as the suite's persistent session. It does not explain why the product was built, the failure modes it addresses, or its service/client architecture. The new article should deepen that sentence, not repeat the suite tour.
 
 ## Suggested structure
 
-### 1. The symptom was inconsistent, not random
+### 1. Open on a contradiction in 0.0.6
 
-Open with the user-visible contrast:
+A plain `salaam` session was local, read-only and attached to a workspace. Yet pasting an image produced “Only a local session takes pasted images,” and `@` mentions went through as bare text. Coding sessions already accepted both.
 
-- a plain `salaam` session is a local, read-only workspace session with no commands;
-- it refused a pasted image with “Only a local session takes pasted images”;
-- the same session sent `@` mentions as bare text;
-- coding sessions already accepted both.
+PR [#114](https://github.com/SuperJackfruitLabs/salaam/pull/114) found the mismatch: the route asked whether the session was `localCoding` when it needed to know whether it had a `localWorkspace`. [Version 0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) shipped the correction and kept board sessions unchanged.
 
-The error was especially misleading because the session *was* local. Cite the [PR description](https://github.com/SuperJackfruitLabs/salaam/pull/114) and [0.0.7 release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7).
+Pivot quickly: the interesting distinction is not images. It is that “session,” “client,” “workspace” and “coding mode” are different concepts. Salaam was built around keeping those concepts separate.
 
-### 2. The predicate encoded the wrong concept
+### 2. Name the original problem: work inherited the window's lifetime
 
-Show the minimal diff from the [merge commit](https://github.com/SuperJackfruitLabs/salaam/commit/f23624f3a0338c11b751f195a457fdd829687603):
+Use the wording from the [v0.0.1 README](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.1/README.md):
 
-```ts
-- const local = this.store.localCoding(id);
-+ const local = this.store.localWorkspace(id);
-```
+- closing a client must not discard the agent's session;
+- reconnecting must not resend the same instruction;
+- “done” in a model response must not be the sole success signal.
 
-Explain only what the public diff proves:
+Explain the common failure pattern without claiming undocumented history: when conversation, dispatch and evidence live only in an interactive process, a dropped terminal creates ambiguity. Did the service accept the instruction? Is work still running? Should the client retry? Did the operation happen even though its response was lost?
 
-- the submission route already treated pasted images and mention expansion as a local-only behavior;
-- it used “coding” as the test for “local”;
-- a read-only workspace session is local without being a coding session;
-- the corrected check aligns the behavior with workspace locality.
+Phrase this as the engineering problem documented by Salaam, not as a quote about a private incident or an unrecorded founder anecdote.
 
-Do **not** claim this one line is a complete security mechanism or that `localWorkspace` is a general authorization primitive. The evidence supports a classification fix in this route, not a security audit.
+### 3. Make the terminal a client, not the owner
 
-### 3. Preserve the boundary while widening the valid set
+Use the public [architecture document pinned to 0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md) to explain the split:
 
-The change does not enable attachment resolution everywhere. The code comment, changelog, release notes, and test all say board sessions still receive exactly what was typed. Frame the shape as:
+- terminal, SSH and ACP editor are clients;
+- a host-local service owns session lifecycle, durable dispatch, task state, policy, approvals, receipts and recovery;
+- a pinned Pi worker owns the conversation tree;
+- reconnecting reads committed events from a cursor and returns the saved acceptance for the same request rather than creating a new attempt.
 
-- previously allowed: local coding workspace;
-- newly allowed: local read-only workspace;
-- still not allowed: board/non-workspace session.
+The memorable line for the draft: **the terminal is a window onto the work, not the place the work lives.** Mark it as editorial synthesis, not a maintainer quotation.
 
-This is the useful engineering pattern: widen from a product sub-mode to the true capability boundary without erasing the boundary.
+### 4. Persistence is not automatic retry
 
-### 4. A regression test should prove both payloads
+This distinction is essential to the “why.” According to [the architecture](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md) and [reliability guide](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/reliability.md):
 
-Use the focused test in the [PR file diff](https://github.com/SuperJackfruitLabs/salaam/pull/114/files): it creates a read-only workspace session, submits one pasted PNG plus `@shot.png`, and expects two image attachments. The adjacent board-session test remains. Point out that this checks the two paths users experienced as one feature—paste and mention resolution—rather than testing only the changed boolean.
+- detaching a client leaves admitted work running;
+- a service or worker crash interrupts dispatched work;
+- interrupted or uncertain work is inspected and explicitly continued rather than silently replayed;
+- stable request IDs let a client recover the same accepted submission.
 
-Avoid presenting the author-reported “140 unit files / 3,132 tests” as independently reproduced. It may be included only with attribution to the PR description; the focused regression is more important to the story.
+The goal is not “never lose anything” or “always keep running.” It is to preserve identity and uncertainty honestly so reconnection does not duplicate effects.
 
-### 5. Generalise carefully
+### 5. “Done” needs a durable meaning too
 
-Close with a compact checklist:
+The same architecture separates a model response from task success. A checked task requires fresh acceptance evidence tied to its workspace and execution configuration; an approval applies to the operation reviewed. This is the third reason from the original README, not a secondary feature list.
 
-- Name predicates after the property they prove.
-- Keep locality, mutability, and command authority as separate dimensions.
-- Test the valid sibling mode that exposed the bug.
-- Keep a negative test for the remote or mediated boundary.
-- Make the error message derive from the same concept as the gate.
+Keep this section concrete and short. The article is about why Salaam exists, not a catalogue of every task, policy or sandbox control.
 
-The final point is an inference/recommendation, not a claim that Salaam changed its error architecture.
+### 6. Return to the 0.0.7 fix
+
+Close the loop: the attachment bug happened because one product mode stood in for another property. The fix matters beyond image paste because it keeps a plain local session first-class. Salaam's durable object is the session and its work; coding authority is a separate dimension.
+
+End with a compact design checklist for other agent clients:
+
+1. Give work an identity independent of the UI process.
+2. Persist acceptance before a client can lose the response.
+3. Reconnect by cursor and stable request identity; do not recreate the turn.
+4. Record uncertain effects instead of treating silence as failure or success.
+5. Bind completion to evidence, not only the model's prose.
+6. Keep locality, workspace access and coding authority as separate capabilities.
 
 ## Fact and claim ledger
 
-| Claim | Evidence | Confidence / wording |
+| Claim | Public evidence | Confidence / wording |
 |---|---|---|
-| A plain read-only `salaam` workspace session refused pasted images and left `@` mentions as text. | [PR #114](https://github.com/SuperJackfruitLabs/salaam/pull/114), [release 0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) | High. State as the documented pre-fix behavior. |
-| The implementation changed the route’s test from `localCoding(id)` to `localWorkspace(id)`. | [Merge commit f23624f](https://github.com/SuperJackfruitLabs/salaam/commit/f23624f3a0338c11b751f195a457fdd829687603) | High. Quote the exact two-line diff. |
-| Every local workspace session now accepts pasted images and resolves file mentions; board sessions remain unchanged. | [PR #114 files](https://github.com/SuperJackfruitLabs/salaam/pull/114/files), [tagged release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) | High. Prefer “workspace session” when explaining implementation; the release uses “every local session.” |
-| `@` completion is based on git-visible workspace files; ignored files do not appear, and names with spaces are quoted. | [`docs/tui.md` at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/tui.md) | High, but optional context rather than the main claim. |
-| The regression test covers a pasted PNG and an `@shot.png` mention in one read-only workspace submission. | [PR #114 files](https://github.com/SuperJackfruitLabs/salaam/pull/114/files) | High. Describe the assertion; do not imply a live end-to-end test. |
-| The change shipped in Salaam 0.0.7. | [GitHub release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) | High. |
-| Capability gates should reflect the underlying trust/data-flow boundary rather than a product mode. | Analysis derived from the diff and preserved board boundary. | Medium. Present as the article’s lesson, not as a maintainer quote. |
+| Salaam was publicly framed from its first release as a persistent home for agent work, where work should outlast a terminal. | [README at v0.0.1](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.1/README.md), [release 0.0.1](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.1) | High. This supports “why we built it” as a documented product rationale. Do not add private motives. |
+| The motivating requirements were that closing a client not discard a session, reconnecting not resubmit an instruction, and model prose not be the only proof of success. | [README at v0.0.1](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.1/README.md) | High. Paraphrase or quote briefly. |
+| Terminal, SSH and ACP editor clients connect to the same service-owned durable record. | [Architecture at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md), [release 0.0.1](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.1) | High. |
+| Reconnection uses saved acceptance and committed-event cursors instead of creating another attempt. | [Architecture at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md), [reliability at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/reliability.md) | High. |
+| Detach and crash have different semantics; interrupted work is not silently replayed. | [Architecture at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md), [reliability at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/reliability.md) | High. Avoid “survives every crash.” |
+| A checked task needs fresh evidence; a model's final message does not certify success. | [Architecture at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md), [reliability at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/reliability.md) | High. |
+| A plain local workspace session rejected pasted images and left `@` mentions as text until 0.0.7. | [PR #114](https://github.com/SuperJackfruitLabs/salaam/pull/114), [release 0.0.7](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7) | High. |
+| PR #114 changed the submission check from `localCoding(id)` to `localWorkspace(id)` and added a focused regression test; board sessions remain unchanged. | [PR #114 files](https://github.com/SuperJackfruitLabs/salaam/pull/114/files), [merge commit](https://github.com/SuperJackfruitLabs/salaam/commit/f23624f3a0338c11b751f195a457fdd829687603) | High. |
+| “The terminal is a window onto the work, not the place the work lives.” | Synthesis from the documented architecture. | Medium. Use as the article's framing, not as a quotation or claimed maintainer statement. |
 
 ## Public sources to cite
 
-1. [Merged PR #114 — Take pasted images and @ mentions in every local session](https://github.com/SuperJackfruitLabs/salaam/pull/114)
-2. [PR #114 file diff](https://github.com/SuperJackfruitLabs/salaam/pull/114/files)
-3. [Merge commit f23624f](https://github.com/SuperJackfruitLabs/salaam/commit/f23624f3a0338c11b751f195a457fdd829687603)
-4. [Salaam 0.0.7 release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7)
-5. [`docs/tui.md` pinned to v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/tui.md)
-6. [Public blog index](https://superjackfruit.com/blog/) — novelty check only
+1. [Salaam README at the first release](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.1/README.md)
+2. [Salaam 0.0.1 release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.1)
+3. [Architecture at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/architecture.md)
+4. [Reliability guide at v0.0.7](https://github.com/SuperJackfruitLabs/salaam/blob/v0.0.7/docs/reliability.md)
+5. [Merged PR #114](https://github.com/SuperJackfruitLabs/salaam/pull/114)
+6. [PR #114 file diff](https://github.com/SuperJackfruitLabs/salaam/pull/114/files)
+7. [Salaam 0.0.7 release](https://github.com/SuperJackfruitLabs/salaam/releases/tag/v0.0.7)
+8. [“The suite, explained”](https://superjackfruit.com/blog/the-suite-explained) — novelty and overlap check only
 
 ## Guardrails for the draft
 
-- Do not call a read-only workspace session a sandbox; the cited sources say read-only/no commands, not that it provides a general OS security boundary.
-- Do not say board sessions cannot carry images by any mechanism. The evidence only says this paste/mention submission path leaves board-session input exactly as typed and refuses pasted images.
-- Do not claim the feature was newly invented in 0.0.7. Coding sessions already had it; 0.0.7 fixed parity for plain local workspace sessions.
-- Do not turn the structural work also included in 0.0.7 into a second thesis. It is a separate change in PR #115.
-- Do not rely on the product landing page for version facts; at research time it displayed older version information. Use the tagged release and pinned repository files.
-- Cite only the public URLs above. Do not mention internal systems, repositories, infrastructure, or personnel.
+- Do not invent a private founding anecdote, user complaint, timeline or quote. “Why” must mean the rationale documented in the public README, releases and architecture.
+- Do not say work always survives a service, worker, machine or power failure. Detach is durable; a crash can interrupt work and requires inspection.
+- Do not describe reconnection as automatic replay. The public docs explicitly distinguish reconnecting from retrying uncertain execution.
+- Do not imply a model response is worthless. The narrower claim is that it does not by itself certify an operation or checked task.
+- Do not portray PR #114 as the invention of attachments. Coding sessions already accepted pasted images and mentions; 0.0.7 extended that behavior to plain local workspace sessions.
+- Do not call a plain workspace session a sandbox. The cited source supports read-only/no commands, not a general OS security guarantee.
+- Do not say board sessions cannot carry images by any route. The evidence only says this paste/mention submission path left board input unchanged.
+- Do not turn the article into a full feature inventory or suite overview. Stay with persistence, identity, reconnect semantics and evidence-backed completion.
+- Cite only public URLs. Do not mention internal systems, private repositories or unpublished implementation history.
 
 ## Recommended description
 
-A one-word predicate made a local, read-only agent session behave as if it were remote. Salaam 0.0.7 shows how to gate attachments on the boundary that matters without weakening the one that must remain.
+We built Salaam around a simple constraint: agent work should not disappear with a terminal window. A recent local-session fix shows why the session—not the client or coding mode—has to be the durable object.
