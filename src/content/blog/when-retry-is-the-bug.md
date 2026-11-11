@@ -2,7 +2,7 @@
 title: "When retry is the bug: block work that cannot succeed"
 description: A card was claimed and handed back 230 times because a permanent input defect looked retryable. The fix was not a longer backoff, but a better state.
 date: 2026-11-11
-draft: true
+draft: false
 tags: [agents, engineering, reliability]
 sources:
   - claim: AgentPod PR #858 was merged into main on 11 November 2026 and records one invalid staging card being claimed and handed back 230 times in two hours.
