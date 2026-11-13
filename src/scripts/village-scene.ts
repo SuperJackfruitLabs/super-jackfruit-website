@@ -320,7 +320,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
   // A visitor meets the suite before anything else, one step after another,
   // alternating sides so each house gets its own frontage.
   const startT = 0.012;
-  // keyboard jumps (1–8, H, R): a spot on the road a little before each place, facing it
+  // keyboard jumps (1–9, H, R): a spot on the road a little before each place, facing it
   const jumps = new Map<string, { x: number; z: number; h: number }>();
   const before = (seg: typeof road.main, t: number, metres: number) => {
     const at = Math.max(0, t - metres / seg.length);
@@ -341,9 +341,9 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.src = p.logo;
     })));
     // Main Street holds your work; the products the frame's street footer puts in the Agent Quarter
-    // (SuperDispatch, Salaam, AgentPod, SuperExchange) live on the road that carries straight on at
+    // (SuperDispatch, Salaam, SuperToolkit, AgentPod, SuperExchange) live on the road that carries straight on at
     // the first bend
-    const QUARTER = new Set(['superdispatch', 'salaam', 'agentpod', 'superexchange']);
+    const QUARTER = new Set(['superdispatch', 'salaam', 'supertoolkit', 'agentpod', 'superexchange']);
     const quarter = road.get('straight-on');
     const suiteHouse = (seg: typeof road.main, project: (typeof items)[number], t: number, side: number): void => {
       const c = seg.curve.getPointAt(t);
@@ -413,7 +413,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       info: {
         title: 'Super Jackfruit Labs',
         logo: '/brand/sjl-facet.svg',
-        tagline: 'eight tools for working with agents',
+        tagline: 'nine tools for working with agents',
         lines: [
           'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
           'Further down the road are the experiments that taught us what to build.',
@@ -667,7 +667,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         logo: '/brand/sjl-facet.svg',
         tagline: 'agent-native tools, built in the open',
         lines: [
-          'The first street is the suite: eight tools that carry a task from ask to proof.',
+          'The first street is the suite: nine tools that carry a task from ask to proof.',
           'The other streets hold the experiments that taught us what to build.',
         ],
         links: [
@@ -1020,13 +1020,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.key.toLowerCase() !== 'm') return;
     toggleMute();
   });
-  // desktop shortcuts for getting around: 1–8 the suite in order, H the lab, R the start
+  // desktop shortcuts for getting around: 1–9 the suite in order, H the lab, R the start
   if (!(window.matchMedia?.('(pointer: coarse)').matches ?? false)) {
-    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'superdispatch', 'salaam', 'agentpod', 'superexchange'];
+    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'superdispatch', 'salaam', 'supertoolkit', 'agentpod', 'superexchange'];
     window.addEventListener('keydown', (e) => {
       if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      const to = /^[1-8]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
+      const to = /^[1-9]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
       if (to) teleport(to.x, to.z, to.h);
     });
   }

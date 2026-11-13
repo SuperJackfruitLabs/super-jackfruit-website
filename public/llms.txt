@@ -1,8 +1,8 @@
 # Super Jackfruit Labs
 
-> Super Jackfruit Labs builds eight tools for working with agents, which together carry a task from ask to proof.
+> Super Jackfruit Labs builds nine tools for working with agents, which together carry a task from ask to proof.
 
-Talk, plan, place, do, run, decide, remember, prove: each tool owns one step. Each one has its own website, docs and llms.txt.
+Talk, plan, place, do, connect, run, decide, remember, prove: each tool owns one step. Each one has its own website, docs and llms.txt.
 
 ## Products
 
@@ -12,6 +12,7 @@ Talk, plan, place, do, run, decide, remember, prove: each tool owns one step. Ea
 - [SuperWitness](https://superwitness.dev): Every run, on the record. ([llms.txt](https://superwitness.dev/llms.txt))
 - [SuperDispatch](https://superdispatch.dev): Which agent takes the card, and why. ([llms.txt](https://superdispatch.dev/llms.txt))
 - [Salaam](https://salaam.sh): Agent coding sessions that outlast your terminal. ([llms.txt](https://salaam.sh/llms.txt))
+- [SuperToolkit](https://supertoolkit.dev): The agent never holds the credential.
 - [AgentPod](https://agentpod.dev): The console for the machines your agents live on. ([llms.txt](https://agentpod.dev/llms.txt))
 - [SuperExchange](https://superexchange.dev): The board asks. Answer in chat. ([llms.txt](https://superexchange.dev/llms.txt))
 
@@ -22,6 +23,7 @@ Talk, plan, place, do, run, decide, remember, prove: each tool owns one step. Ea
 - [SuperLibrary docs](https://docs.superlibrary.dev): documentation for SuperLibrary
 - [SuperWitness docs](https://docs.superwitness.dev): documentation for SuperWitness
 - [Salaam docs](https://docs.salaam.sh): documentation for Salaam
+- [SuperToolkit docs](https://docs.supertoolkit.dev): documentation for SuperToolkit
 - [AgentPod docs](https://docs.agentpod.dev): documentation for AgentPod
 - [SuperDispatch README](https://github.com/SuperJackfruitLabs/superdispatch#readme): SuperDispatch has no docs site yet; its README is the documentation
 - [SuperExchange README](https://github.com/SuperJackfruitLabs/superexchange#readme): SuperExchange has no docs site yet; its README is the documentation
@@ -29,7 +31,7 @@ Talk, plan, place, do, run, decide, remember, prove: each tool owns one step. Ea
 ## Links
 
 - [Home](https://superjackfruit.com/)
-- [The village](https://superjackfruit.com/village): drive through the village to meet the eight tools
+- [The village](https://superjackfruit.com/village): drive through the village to meet the nine tools
 - [Lab notes](https://superjackfruit.com/blog)
 - [Source](https://github.com/SuperJackfruitLabs): the Super Jackfruit Labs GitHub organization
 

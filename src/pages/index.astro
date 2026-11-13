@@ -8,7 +8,7 @@ import Site from '../layouts/Site.astro';
 import { suite, CONTACT, accentAttrs } from '../data/suite';
 
 const docs = (p: (typeof suite)[number]) => p.links.find((l) => l.label === 'Docs')!.href;
-const VERBS = ['Talk', 'plan', 'place', 'do', 'run', 'decide', 'remember', 'prove'];
+const VERBS = ['Talk', 'plan', 'place', 'do', 'connect', 'run', 'decide', 'remember', 'prove'];
 const street = suite.map((p) => ({ slug: p.slug, hex: p.hex }));
 
 const jsonLd = {
@@ -54,7 +54,7 @@ const jsonLd = {
     <div class="beats">
       <header class="beat hero" data-beat="0">
         <p class="eyebrow">Super Jackfruit Labs · agent-native tools</p>
-        <h1>Eight tools for working with agents.</h1>
+        <h1>Nine tools for working with agents.</h1>
         <p class="verbs">
           {VERBS.map((v, i) => (
             <span style={`--c:${suite[i].hex};--d:${400 + i * 110}ms`}>{v}{i < VERBS.length - 1 ? ',' : '.'}</span>
