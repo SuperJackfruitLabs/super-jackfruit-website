@@ -10,7 +10,7 @@ const linkLabel = (url: string) => (url.startsWith('/') ? 'page' : new URL(url).
 import '@superjackfruit/vibekit/fonts.css';
 ---
 
-<Layout title="The village — Super Jackfruit Labs" description="Drive through the Super Jackfruit Labs village and meet the six tools for working with agents, from asking for work to proving it was done.">
+<Layout title="The village — Super Jackfruit Labs" description="Drive through the Super Jackfruit Labs village and meet the eight tools for working with agents, from asking for work to proving it was done.">
   <div class="scene">
     <canvas id="village-canvas"></canvas>
     <p class="hint">w / ↑ drive · a d steer · s brake &amp; reverse · shift nitro · m mute · ? keys</p>
@@ -29,7 +29,7 @@ import '@superjackfruit/vibekit/fonts.css';
 
     <!-- the map is a picture of what the menu and the cards already say in words -->
     <div class="minimap" id="minimap" aria-hidden="true" hidden><canvas id="minimap-canvas"></canvas></div>
-    <p class="sr-only">A small map in the corner shows the streets around your car, the six suite houses and the lab's square. The same places are listed under Suite in the menu.</p>
+    <p class="sr-only">A small map in the corner shows the streets around your car, the eight suite houses and the lab's square. The same places are listed under Suite in the menu.</p>
 
     <!-- the map button's panel: the minimap switch, and every place with its links -->
     <div class="env menu places" id="places-panel" role="dialog" aria-modal="true" aria-label="Map and places" hidden>
@@ -151,7 +151,7 @@ import '@superjackfruit/vibekit/fonts.css';
     <div class="welcome" id="welcome" data-open="true" tabindex="-1">
       <div class="welcome__card">
         <h1>Super Jackfruit Labs</h1>
-        <p class="welcome__sub">six tools for working with agents — drive through the suite</p>
+        <p class="welcome__sub">eight tools for working with agents — drive through the suite</p>
         <div
           class="welcome__bar"
           id="welcome-bar"
@@ -191,7 +191,7 @@ import '@superjackfruit/vibekit/fonts.css';
       <dl>
         <dt>W A S D / arrows</dt><dd>drive · steer · brake &amp; reverse</dd>
         <dt>Shift</dt><dd>nitro</dd>
-        <dt>1–6</dt><dd>SuperMessage · SuperPipeline · SuperLibrary · SuperWitness · Salaam · AgentPod</dd>
+        <dt>1–8</dt><dd>SuperMessage · SuperPipeline · SuperLibrary · SuperWitness · SuperDispatch · Salaam · AgentPod · SuperExchange</dd>
         <dt>H / R</dt><dd>the lab · back to the start</dd>
         <dt>↵ / P</dt><dd>open the card's first / second link</dd>
         <dt>Space / I</dt><dd>more about it</dd>
