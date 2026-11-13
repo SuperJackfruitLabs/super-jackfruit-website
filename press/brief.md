@@ -1,140 +1,169 @@
-# Brief: The model does not get to grade its own dispatches
+# Brief: The event is the fast path; the sweep is the guarantee
 
 ## Recommendation
 
-Write the article. Anchor it on learned routing in [SuperDispatch v0.0.1](https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1), the project's first public release, published on 13 November 2026.
+Write the article. Anchor it on [SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2), published on 12 November 2026 and described by its release notes as the first SuperExchange release to go into production. Use the gate projection shipped in that release to explain a reusable reliability pattern: accept events for low latency, reconcile against the authoritative system for completeness, and make both paths converge on the same durable claims.
 
-**Proposed headline:** The model does not get to grade its own dispatches
+**Proposed headline:** The event is the fast path; the sweep is the guarantee
 
-**Alternative:** Before an AI scheduler takes control, make it win in shadow
+**Alternative:** A webhook should wake your projector, not define its truth
 
-**One-sentence angle:** A learned scheduler should not move real work merely because its offline metrics look good: SuperDispatch first records what the model *would* have chosen, scores that counterfactual conservatively, and keeps the deterministic policy in charge until the model has enough data and clears an explicit live-performance gate.
+**One-sentence angle:** SuperExchange posts board gates into Matrix immediately from an event relay, but it does not trust relay delivery to be complete: a periodic sweep finds missed gates and decisions made elsewhere, while durable claims and stable Matrix transaction IDs keep the fast path and repair path from producing duplicate cards or receipts.
 
-**Confidence:** High. The release, tag-pinned documentation, implementation and tests are public and agree on the behaviour.
+**Confidence:** High for the gate path. The release notes, tag-pinned README, implementation and tests agree. Keep the article scoped to gates; the release documents incomplete service-read support for two other sweep types.
 
-## Why this change is worth an article
+## Research decision: both new repositories were checked
 
-Putting a model behind a routing decision is easy. Establishing that it improves the live system is harder because the counterfactual is usually missing: if the existing formula offered work to candidate A, nobody knows whether candidate B—the model's choice—would have accepted it.
+### SuperDispatch
 
-SuperDispatch v0.0.1 makes that uncertainty part of the promotion rule rather than hiding it in a dashboard. In shadow mode, the model records a choice but the deterministic formula still controls the hold. When model and formula disagree, the model receives credit only if its candidate later claims the card anyway; otherwise the result is unknown and counts as a miss. Decisions made by the model itself are excluded from the evidence used to promote it. The result is deliberately a lower bound on model performance.
+[SuperDispatch v0.0.1](https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1) was published on 13 November 2026 as its first release. It contains several viable topics, including tiered holds, fairness across boards, human-only supply suggestions and learned routing behind a shadow-evaluation gate. The previous version of this brief selected the learned-routing angle and supported it well from public code.
 
-The shipped defaults add three more brakes: learned routing is off unless enabled; a model needs at least 500 training rows and 100 informative shadow decisions; and its conservative shadow claim rate must beat the formula's by at least five percentage points. If any check fails—or the model's feature set no longer matches—the formula keeps placing work and the service records why.
+### SuperExchange
 
-That is broadly useful to developers shipping recommendations, queues, assignment systems, fraud rules or any model that may later control a production decision. The reusable lesson is not the particular model. It is to define the evidence needed for authority *before* switching authority on.
+[SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2) was published on 12 November 2026 as the first release to go into production. Its release notes say it carries the product behaviour listed under [v0.0.1](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.1), including relay-driven board-room cards, replies carried back as the person, periodic reconciliation, one receipt per settled item and encrypted board rooms.
+
+### Why SuperExchange wins this slot
+
+The SuperDispatch learned-routing article remains defensible, but SuperExchange supplies the sharper general engineering lesson for this card: event delivery and state reconciliation are complementary, not competing, mechanisms. That lesson applies to webhook consumers, search indexes, notification projectors, chat bridges and read models well beyond this product. It is also clearly separate from the other open article about approvals being bound to the exact version shown.
+
+## Why this shipped change is worth an article
+
+A webhook or event relay makes a projection feel real-time, but it creates two hard questions:
+
+1. What happens when an event never arrives or a consumer stops after recording it but before applying it?
+2. What happens when the authoritative state changes through another interface?
+
+SuperExchange's gate path answers both without asking the event stream to become a database.
+
+The relay is the fast path. A `gate.pending` delivery is recorded and offered for posting into the board's Matrix room. Separately, at boot and on a configurable interval, a sweep asks each enabled board for its currently pending gates. If the board lists a gate the relay never delivered, the sweep records and posts it as if it had arrived. If a delivered gate was claimed but not fully posted, the sweep offers it again.
+
+The sweep also repairs the opposite direction. When a gate previously shown in chat is no longer pending, SuperExchange does not infer a decision from absence. It reads that gate from the board and settles it only if the authoritative response explicitly says `resolved` and includes a decision. A decision made on the web or another client then receives the same room receipt as a decision made in chat.
+
+Both paths converge on durable local state. Before sending a card, the service claims it and records what the card offered. It sends with a transaction ID derived from the card, so retrying the unfinished claim asks Matrix for the same logical event rather than creating a fresh one. The chat-answer path and the reconciliation path also contend for the same receipt claim and use the same receipt transaction IDs. Whichever path settles the gate first prevents the other from posting a second receipt.
+
+That is the reusable pattern: **events reduce latency; reconciliation repairs omissions and out-of-band changes; idempotency makes either path safe to repeat.**
 
 ## Reader and payoff
 
-**Reader:** Developers and operators introducing learned decisions into a system that already has a deterministic policy.
+**Reader:** Developers building webhook consumers, chat integrations, notification services, search projections or other read models over an authoritative API.
 
-**Payoff:** A practical promotion pattern:
+**Payoff:** A concrete projection design:
 
-1. **Keep a baseline in control.** Shadow predictions must not change the decisions they evaluate.
-2. **Record the counterfactual.** Store both the baseline choice and the model's proposed choice with the eventual outcome.
-3. **Treat missing evidence as missing.** Do not convert an unoffered alternative into a synthetic success.
-4. **Prevent self-evaluation.** Outcomes from decisions the model controlled cannot be evidence that the model deserved control.
-5. **Gate authority explicitly.** Require a minimum dataset, a minimum live shadow sample, a margin over baseline and feature compatibility.
-6. **Fail back to the boring path.** A failed gate should leave the known policy in charge and expose the refusal reason.
+1. **Treat the event as a prompt to look, not the only truth.** Apply it quickly, but retain a way to query current authoritative state.
+2. **Reconcile at boot and periodically.** Repair events missed during downtime, delivery exhaustion or partial application.
+3. **Claim before the side effect.** Persist the identity and payload needed to retry before sending externally.
+4. **Reuse the external idempotency key.** A retry should name the same logical send, not merely contain the same body.
+5. **Make fast and repair paths share claims.** Two mechanisms that can finish the same work must converge on one durable winner.
+6. **Do not turn absence into a decision.** Confirm an explicit terminal state before closing a projection.
+7. **State the remaining gap.** A reliability pattern is credible when unsupported surfaces are named rather than generalized away.
 
 ## The shipped change
 
-Primary public change:
+Primary public release:
 
-- [SuperDispatch v0.0.1](https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1), published 13 November 2026. Its release notes ship the labelled dataset, deterministic logistic model, shadow mode and promotion gate together.
+- [SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2), published 12 November 2026. The release notes call it the first production release and say it carries the behaviour listed under v0.0.1.
+- [SuperExchange v0.0.1](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.1), the feature inventory carried into v0.0.2; its own notes explicitly say v0.0.1 was not deployed.
 
-Tag-pinned implementation:
+Tag-pinned implementation at v0.0.2 (`a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c`):
 
-- [Learned-routing documentation at the release commit](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L248-L309)
-- [Dataset labels and training-target rules](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/dataset.ts#L1-L27)
-- [Shadow evaluation and promotion gate](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L1-L19)
-- [Gate refusal paths](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L122-L143)
-- [Runtime fallback to the deterministic formula](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/loop/learned.ts#L129-L150)
+- [README: relay intake, sweep repair and shared receipt claim](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L17-L53)
+- [Gate sweep contract](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L1-L28)
+- [Gate sweep implementation: project missed gates, then verify explicit resolution](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L94-L164)
+- [Card send order: room, encryption guard, membership, durable claim, stable transaction ID](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L1-L16)
+- [Card retry uses the same transaction ID](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L60-L124)
+- [One receipt claim shared by chat answers and reconciliation](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L1-L14)
+- [Receipt settlement and duplicate guard](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L100-L136)
+- [Atomic SQLite claims for answers and receipts](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/store/index.ts#L1156-L1203)
+- [Tests: a decision made elsewhere produces one receipt, and a later sweep does not repeat it](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-sweep.test.ts#L340-L397)
+- [Tests: a repeated chat answer reaches the board once](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-answer.test.ts#L450-L474)
 
-The article should stay on this one engineering change: how learned routing earns authority. Do not turn it into a broad product launch or enumerate every feature in the first release.
+The article should stay on this one engineering change: reliable projection across a fast event path and a repairing state sweep. Do not turn it into a broad SuperExchange launch post.
 
 ## Suggested narrative
 
-### 1. Start with the counterfactual the log cannot prove
+### 1. Open with the webhook that never came
 
-Suppose the current policy chooses candidate A and the model prefers B. A accepts the work. Did the model lose? Maybe. But if B never received the offer, the system has no direct evidence that B would have accepted.
+A board is waiting on a decision, but its event never reaches the chat bridge. No exception in the consumer can repair an event it never saw. Retrying the webhook producer helps only while that producer still remembers the delivery.
 
-Conversely, if B later claims the same work after A's hold lapses, the system has positive evidence for the model's choice. The asymmetry matters.
+The broader problem is architectural: a projection built only from a lossy delivery path has no independent way to know it is incomplete.
 
-### 2. Separate prediction from authority
+### 2. Give events one job: speed
 
-SuperDispatch has three modes:
+SuperExchange takes `gate.pending` from the relay and projects it promptly. That path keeps the room current without polling on every user action.
 
-- `off`: the model is not read;
-- `shadow`: the model's proposed choice and scores are recorded, while the formula still controls the hold;
-- `on`: the model may control the hold, but only after passing the gate.
+But receipt of the event is not treated as proof that the local projection is complete forever. The service keeps a second path to the board's current state.
 
-This is more than a feature flag. Shadow mode creates the evidence needed to evaluate a policy without allowing that policy to alter the sample.
+### 3. Use a sweep for completeness
 
-### 3. Explain the conservative score
+At boot and every configured interval, the sweep asks each enabled board for pending gates. A gate present on the board but absent locally is ingested and posted. A locally known gate whose card did not finish posting is retried.
 
-When model and formula agree, both inherit the observed outcome. When they disagree, only the formula's candidate definitely received the opportunity. The model is credited only when its candidate claims anyway. All other disagreements are unknown and count against the model's lower-bound rate.
+This is anti-entropy: the projection periodically compares itself with the authority and repairs the difference.
 
-The article should be precise here: this does **not** reveal the true counterfactual success rate. It intentionally under-credits the model so uncertainty cannot be mistaken for proof.
+### 4. Reconcile terminal state conservatively
 
-### 4. Show why the model cannot grade itself
+A previously posted gate disappearing from the pending list is not enough to call it resolved. It might be unreadable, malformed or otherwise unavailable. SuperExchange fetches the gate and requires explicit `resolved` state plus a decision before posting a closing receipt.
 
-Once the model starts acting, those acted decisions are excluded from its shadow evidence. Otherwise a policy could alter who receives opportunities, then cite outcomes created by those choices as proof that it should retain control.
+This is an important rule for every reconciler: **absence narrows the question; it does not answer it.**
 
-This is the most reusable idea in the change: promotion evidence must remain independent of the policy being promoted.
+### 5. Make retries name the same effect
 
-### 5. End with the authority gate
+Before an external send, the service stores a claim. A failed send retains that claim, and retry uses the same Matrix transaction ID derived from the card. For the receipt, both the chat-answer path and sweep use one database claim and the same transaction IDs.
 
-At the shipped defaults, the model needs:
+The key is not merely “deduplicate later.” It is to arrange that competing paths and retries refer to the same logical operation from the start.
 
-- at least 500 training rows;
-- at least 100 informative, settled shadow decisions;
-- at least a five-percentage-point lift over the deterministic formula; and
-- the exact feature set the current build expects.
+### 6. End at the boundary, not with a universal claim
 
-If a condition fails, the formula places the card and the log names the first reason: no model, changed features, too few rows, too little shadow evidence or no lift.
+The v0.0.2 README says gate reconciliation works through service-readable routes. It also says the follow-up and waiting-card sweeps cannot yet read their pending lists with the service token, so those surfaces still depend on the relay and direct-answer path for the documented gap.
 
-Close with a general design test: *Can the system explain, using evidence the new policy did not manufacture, why that policy is now allowed to act?*
+Close with the design test: *If the event never arrives—or the state changes somewhere else—what independent mechanism discovers the difference, and what durable key makes the repair safe?*
 
 ## Claim ledger
 
 | Claim | Public evidence | Confidence / wording |
 | --- | --- | --- |
-| SuperDispatch v0.0.1 is the first public release and was published on 13 November 2026. | [Release v0.0.1](https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1) | High. Say “public release”; do not generalize deployment beyond what the release states. |
-| Learned routing ships off by default, with separate `shadow` and `on` modes. | [README at the release commit](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L288-L299) and [runtime router](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/loop/learned.ts#L1-L14) | High. |
-| In shadow mode the formula's choice controls the hold while the model's choice and scores are recorded. | [README](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L288-L299) and [router return paths](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/loop/learned.ts#L129-L150) | High. |
-| When the choices disagree, the model is credited only when its candidate claims anyway; unknown disagreements count as misses, making its reported rate a lower bound. | [Shadow-mode semantics](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L1-L19) and [calculation](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L59-L110) | High. Call it a conservative lower bound, not a causal estimate. |
-| Decisions on which the model acted are excluded from the evidence used by the gate. | [Shadow report and gate](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L17-L19) and [acted-row exclusion](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L71-L79) | High. “Cannot grade itself” is the article's interpretation of this mechanism. |
-| The default promotion gate is 500 training rows, 100 informative shadow decisions and five percentage points of lift. | [Configuration defaults](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/config.ts#L145-L158) and [README](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L294-L299) | High. These are configurable defaults, not universal thresholds. |
-| The gate also refuses a missing model, a changed feature set, too little data, too little shadow evidence or insufficient lift. | [Gate refusal paths](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L122-L143) | High. |
-| The fallback is the deterministic formula, and the service logs why the model did not place. | [Runtime routing](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/loop/learned.ts#L96-L150) | High. Avoid promising availability properties not shown by this code. |
-| Training uses only eligible candidates with a meaningful target; an unchosen candidate that was never offered work is not treated as a negative example. | [Dataset target rules](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/dataset.ts#L10-L27) and [README label table](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L263-L286) | High. |
-| Tests hold the shadow accounting and each threshold boundary. | [Learned-routing tests](https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/test/learned.test.ts#L251-L324) | High. State that the tests cover these cases, not that they prove real-world lift. |
-| No published lab note currently covers learned-routing promotion or SuperDispatch. | [Live blog index](https://www.superjackfruit.com/blog/) | High as checked on 13 November 2026. |
+| SuperExchange v0.0.2 was published on 12 November 2026 and is described as the first release to go into production. | [v0.0.2 release](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2) | High. Say “the release notes describe it as the first production release”; do not infer deployment details beyond the notes. |
+| v0.0.2 carries the product behaviour listed under v0.0.1; v0.0.1 itself was not deployed. | [v0.0.2 release](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2) and [v0.0.1 release](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.1) | High. This is why the article may discuss the gate projector as shipped in v0.0.2. |
+| Relay events provide the immediate path, while a sweep runs at boot and on an interval. | [README](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L17-L42) and [sweep contract](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L1-L25) | High. Call it periodic reconciliation, not consensus. |
+| The gate sweep discovers pending gates missed by the relay and retries known gates not yet posted. | [Gate sweep](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L110-L134) | High. |
+| Absence from the pending list is not treated as a decision; the sweep requires an explicit resolved state and decision. | [Gate sweep](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L136-L164) | High. This is a central reusable lesson. |
+| A card is claimed before sending and retried under the same transaction ID. | [Card posting](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L60-L124) | High. Say “same logical Matrix send” rather than promising transport-wide exactly-once delivery. |
+| The chat-answer path and sweep share one receipt claim and stable receipt transaction IDs. | [Receipt design](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L1-L14), [settlement](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L100-L136), and [store claims](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/store/index.ts#L1156-L1203) | High. The code intentionally chooses at most one receipt claim. |
+| Tests cover a web decision followed by repeated sweeps, a chat answer followed by a sweep, and duplicate chat delivery. | [Sweep tests](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-sweep.test.ts#L340-L433) and [answer tests](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-answer.test.ts#L450-L486) | High. Say the tests pin these traces, not that they prove every distributed failure is solved. |
+| The documented reconciliation coverage is incomplete for delivery follow-ups and waiting cards in v0.0.2. | [README](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L107-L116) | High. Scope the main claim to gates. |
+| No published lab note currently covers SuperExchange or relay-plus-sweep projection. | [Live blog index](https://www.superjackfruit.com/blog/) | High as checked on 13 November 2026. |
 
 ## Boundaries and caveats
 
-- Do not say the model has demonstrated real-world superiority. The release ships the evaluation and promotion mechanism; the public sources do not show a particular model clearing it.
-- Do not call the shadow comparison a randomized experiment or causal estimate. The code explicitly treats the model's result as a lower bound because only the formula's choice was offered the work.
-- The five-point margin and sample sizes are configurable defaults in this system, not recommended universal values.
-- The trained target is whether a candidate claims the card, not whether the eventual work succeeds. The source explicitly leaves later run success to a different record.
-- Offline holdout metrics are available, but they do not grant authority. The live shadow gate does.
-- Avoid internal process, infrastructure and unpublished operating data. The public release, documentation, implementation and tests are sufficient.
+- Do **not** claim generic exactly-once delivery. The implementation uses durable claims and stable Matrix transaction IDs to make its own retries and competing paths converge. That is narrower and more defensible.
+- A receipt is claimed before it is sent. If that send fails, the gate remains resolved and the code logs the missing receipt rather than risking a duplicate later. Describe this as an at-most-one receipt claim with idempotent sends, not guaranteed eventual acknowledgement under every failure.
+- Keep the article's reliability claim scoped to gates. The README explicitly documents missing service-read access for the follow-up and waiting-card sweeps in this release.
+- Do not imply that polling replaces the relay. The design uses the relay for latency and the sweep for repair.
+- Do not say that disappearance from a list means completion. The implementation deliberately performs a second read and requires explicit resolved state.
+- Do not broaden this into an approval-security article. Exact subject/variant binding belongs to the other open article.
+- Avoid operational details not needed for the public design lesson. The public release, tag-pinned code and tests are sufficient.
 
 ## Originality and collision check
 
-The [live blog index](https://www.superjackfruit.com/blog/) was read before selecting the topic. Its nine published notes cover the lab, the suite, SuperPipeline, AgentPod, SuperWitness, a CLI self-update failure, AI pull-request review, Salaam session durability and retry-state design. None covers SuperDispatch, shadow routing, conservative counterfactual scoring or promotion gates for learned policies.
+The [live blog index](https://www.superjackfruit.com/blog/) was read before selecting the topic. Its eight published notes cover the lab, the suite, SuperPipeline, AgentPod, SuperWitness, a CLI self-update failure, AI pull-request review and Salaam session durability. None covers SuperExchange, event-relay repair, anti-entropy sweeps or idempotent Matrix projection.
 
-The other open scheduled article on this board is about variant-bound human approvals—an approval must identify the exact version shown. This brief instead covers model promotion for routing decisions, so the angles do not collide.
+The other open scheduled article is about variant-bound human approvals: an approval must identify the exact version shown. This brief instead covers projection reliability when events are missed or authoritative state changes elsewhere. Do not drift into subject digests, preview completeness or approval expiry.
 
 ## Source list for the eventual post
 
 Use only public URLs:
 
-1. https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1
-2. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/README.md#L248-L309
-3. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/dataset.ts#L1-L27
-4. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/learned.ts#L1-L11
-5. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L1-L19
-6. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/placement/shadow.ts#L59-L143
-7. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/src/loop/learned.ts#L96-L150
-8. https://github.com/SuperJackfruitLabs/superdispatch/blob/d8a29516f5ef0af156e5319b225cf3779b6bdf21/apps/dispatch/test/learned.test.ts#L251-L324
-9. https://www.superjackfruit.com/blog/
+1. https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2
+2. https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.1
+3. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L17-L53
+4. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L107-L116
+5. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L1-L28
+6. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L94-L164
+7. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L1-L16
+8. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L60-L124
+9. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L1-L14
+10. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L100-L136
+11. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/store/index.ts#L1156-L1203
+12. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-sweep.test.ts#L340-L433
+13. https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/test/gate-answer.test.ts#L450-L486
+14. https://github.com/SuperJackfruitLabs/superdispatch/releases/tag/v0.0.1
+15. https://www.superjackfruit.com/blog/
