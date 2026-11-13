@@ -28,6 +28,10 @@ Talk, plan, place, do, connect, run, decide, remember, prove: each tool owns one
 - [SuperDispatch docs](https://docs.superdispatch.dev): documentation for SuperDispatch
 - [SuperExchange docs](https://docs.superexchange.dev): documentation for SuperExchange
 
+## Contracts
+
+- [Treaty](https://treaty.superjackfruit.com): the contracts between the tools: the events and their envelope, the relay, the board-room Matrix cards and the identity corpus ([llms.txt](https://treaty.superjackfruit.com/llms.txt))
+
 ## Links
 
 - [Home](https://superjackfruit.com/)
