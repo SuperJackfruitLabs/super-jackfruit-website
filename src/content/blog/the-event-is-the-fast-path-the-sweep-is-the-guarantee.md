@@ -1,10 +1,12 @@
 ---
 title: "The event is the fast path; the sweep is the guarantee"
-description: "SuperExchange combines relay events with periodic reconciliation so missed deliveries and decisions made elsewhere still converge on one durable Matrix projection."
+description: "SuperPipeline owns gate state; SuperExchange combines relay events with reconciliation so its Matrix projection can recover from missed deliveries and decisions made elsewhere."
 date: 2026-11-13
 draft: true
 tags: [engineering, reliability, integrations]
 sources:
+  - claim: SuperPipeline owns work state and models approval gates as human decisions that cards wait on.
+    url: https://github.com/SuperJackfruitLabs/superpipeline/blob/0c7f11fc19c4c54447639c0e43a849d00de00541/README.md#L5-L24
   - claim: SuperExchange v0.0.2 was published on 12 November 2026 as its first production release and carries the product behaviour introduced in the undeployed v0.0.1 release.
     url: https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2
   - claim: SuperExchange uses relay events for immediate projection and runs gate reconciliation at boot and on a configured interval.
@@ -25,9 +27,17 @@ A board is waiting for a decision. The event announcing that gate never reaches 
 
 That is the uncomfortable limit of a projection built only from events: it can process every delivery perfectly and still be wrong.
 
-[SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2), which its release notes describe as the first production release, takes a different approach to projecting board gates into Matrix. Relay events provide the fast path. A periodic sweep checks the board's current state and repairs what the event path missed. Durable claims and stable transaction IDs make those two paths converge instead of competing.
+[SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2), which its release notes describe as the first production release, takes a different approach to projecting [SuperPipeline](https://github.com/SuperJackfruitLabs/superpipeline/blob/0c7f11fc19c4c54447639c0e43a849d00de00541/README.md#L5-L24) board gates into Matrix. SuperPipeline owns the work state and the human approval gate; SuperExchange is the optional communication server that shows that gate in a room and carries the person's answer back. Relay events provide the fast path. A periodic sweep checks SuperPipeline's current state and repairs what the event path missed. Durable claims and stable transaction IDs make those two paths converge instead of competing.
 
 The pattern is useful beyond chat bridges. It applies to webhook consumers, search indexes, notification services and any read model that must feel immediate without pretending an event stream is the authority.
+
+## Keep the board authoritative
+
+The product boundary matters to the reliability argument. SuperPipeline coordinates cards, runs and approval gates; its public description says plainly that it owns work state. SuperExchange does not become a second board when it puts one of those gates in Matrix. Its own release documentation describes it as a bridge: it receives a `gate.pending` event, renders the gate, and sends an answer back to SuperPipeline as the person who made it.
+
+That makes the Matrix room a projection and interaction surface, not the source of truth. A gate can be resolved on the SuperPipeline web app, through `supi`, or through another authorized path. SuperExchange still has to make the room catch up. Its gate sweep therefore reads SuperPipeline's pending-gate list and individual gate state through service routes, then posts the same closing receipt it would have posted for an answer made in chat.
+
+This separation gives each system one authority. SuperPipeline decides whether the gate is pending or resolved. SuperExchange decides what it has durably projected into Matrix. Reconciliation compares those two records instead of trying to make event delivery itself authoritative.
 
 ## Give the event one job: speed
 

@@ -6,11 +6,14 @@
 
 The headline uses “guarantee” for the existence of an independent reconciliation route, not as a timing, availability, or exactly-once guarantee. The article now says that explicitly.
 
+The article also now states the product boundary that the prior draft left implicit: SuperPipeline owns board and gate state; SuperExchange is the optional Matrix projection and answer path. This directly resolves the review finding that the draft discussed only SuperExchange and not SuperPipeline.
+
 ## Public record checked
 
 - [SuperExchange v0.0.2](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.2): GitHub records it as published on 12 November 2026. Its notes call it the first release to go into production and say it carries everything listed under v0.0.1.
 - [SuperExchange v0.0.1](https://github.com/SuperJackfruitLabs/superexchange/releases/tag/v0.0.1): its notes say it was never deployed and describe the relay-driven cards, periodic gate sweep, one receipt, encrypted rooms, and the 60-second default sweep setting carried by v0.0.2.
 - Tag `v0.0.2` resolves to immutable commit [`a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c`](https://github.com/SuperJackfruitLabs/superexchange/commit/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c).
+- [SuperPipeline v0.0.31](https://github.com/SuperJackfruitLabs/superpipeline/releases/tag/v0.0.31) resolves to immutable commit [`0c7f11fc19c4c54447639c0e43a849d00de00541`](https://github.com/SuperJackfruitLabs/superpipeline/commit/0c7f11fc19c4c54447639c0e43a849d00de00541). Its [tag-pinned README](https://github.com/SuperJackfruitLabs/superpipeline/blob/0c7f11fc19c4c54447639c0e43a849d00de00541/README.md#L5-L24) identifies SuperPipeline as the owner of work state and describes its human approval gates.
 - The [tag-pinned README](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L17-L53) documents relay intake, a sweep at boot and on the configured interval, projection of relay omissions, explicit terminal-state reads, and the shared answer/sweep receipt claim.
 - The [gate sweep implementation](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L94-L164) iterates enabled boards, records pending gates absent locally, retries known unposted gates, and settles an absent gate only after an individual read returns `resolved` with a non-null decision.
 - The [gate posting implementation](https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-card.ts#L369-L475) takes the local gate claim before sending and uses transaction IDs derived from the gate ID and message part. An unfinished claim is retried under those same IDs.
@@ -25,12 +28,15 @@ The headline uses “guarantee” for the existence of an independent reconcilia
 2. **Corrected transaction-ID wording.** The draft said the transaction ID was derived from “the card.” The code derives separate IDs from the gate ID and the part (`prose` or `card`). The text now states that exact behavior and uses the plural where two sends are involved.
 3. **Removed a timing overclaim.** “The sweep bounds how long an omission can remain hidden” was too strong because a board can be unreadable and failed passes back off. The article now says the sweep provides recurring discovery opportunities, subject to readable boards and successful sweeps.
 4. **Qualified the headline's guarantee.** The closing sentence now defines the guarantee as an independent repair route and expressly excludes a promise that every sweep or receipt send succeeds.
+5. **Made the SuperPipeline boundary explicit.** In response to review feedback, the description, introduction and a new “Keep the board authoritative” section now explain that SuperPipeline owns gate state while SuperExchange projects that state into Matrix, carries answers back, and reconciles against SuperPipeline's service reads. The new claim is pinned to the public SuperPipeline v0.0.31 commit rather than to a moving branch.
 
 ## Claim-by-claim findings
 
 | Article claim | Finding |
 | --- | --- |
 | v0.0.2 is the first production release. | Supported verbatim by the v0.0.2 release notes. |
+| SuperPipeline owns work state and its approval gates are human decisions that cards wait on. | Supported by the SuperPipeline v0.0.31 tag-pinned README and concepts documentation. |
+| SuperExchange is a Matrix projection and answer path over SuperPipeline rather than a second authority for gate state. | Supported by the SuperPipeline ownership statement and the SuperExchange v0.0.2 README's relay, answer and service-read contracts. |
 | Relay `gate.pending` deliveries are the immediate path. | Supported by the README and release notes. |
 | The sweep runs at boot and on a configured interval over enabled boards. | Supported by the README, `gate-sweep.ts`, and startup wiring. |
 | The sweep ingests gates missed by the relay and retries known unfinished posts. | Supported by `gate-sweep.ts` lines 110–127. |
