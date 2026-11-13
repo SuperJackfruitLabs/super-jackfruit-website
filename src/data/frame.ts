@@ -16,6 +16,7 @@ export const frame = {
   links: [
     { label: 'Lab notes', href: '/blog' },
     { label: 'Archive', href: '/archive' },
+    { label: 'Contracts', href: 'https://treaty.superjackfruit.com' },
     { label: 'RSS', href: '/rss.xml' },
   ],
 };
