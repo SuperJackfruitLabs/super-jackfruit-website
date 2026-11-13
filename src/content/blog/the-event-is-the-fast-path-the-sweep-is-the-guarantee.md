@@ -11,8 +11,8 @@ sources:
     url: https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/README.md#L17-L53
   - claim: The gate sweep discovers pending gates missed by the relay, retries unfinished card posts and requires explicit resolved state before posting a receipt.
     url: https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-sweep.ts#L94-L164
-  - claim: Card posting records a durable claim before sending and reuses a Matrix transaction ID derived from the card when retrying.
-    url: https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/card-post.ts#L60-L124
+  - claim: Gate posting records a durable claim before sending and reuses Matrix transaction IDs derived from the gate when retrying.
+    url: https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-card.ts#L369-L475
   - claim: Chat answers and reconciliation share a receipt claim and stable Matrix transaction IDs so competing paths converge on one receipt operation.
     url: https://github.com/SuperJackfruitLabs/superexchange/blob/a81467cfe8f1abcd9aa6f868edd70dbc04aaca7c/apps/exchange/src/board-chat/gate-receipt.ts#L1-L14
   - claim: Tests cover a decision made outside chat followed by repeated sweeps without a repeated receipt.
@@ -51,7 +51,7 @@ This is reconciliation rather than replay. The sweep does not need to reconstruc
 
 That distinction changes the recovery model. A relay outage can delay a card, but it does not make the omission undiscoverable. A process restart becomes an opportunity to repair unfinished projection work. The system can regain a current view without requiring the event producer to retain every delivery forever.
 
-Events and polling are often presented as alternatives. Here they solve different problems. The event path minimizes staleness. The sweep bounds how long an omission can remain hidden.
+Events and polling are often presented as alternatives. Here they solve different problems. The event path minimizes staleness. The sweep creates recurring opportunities to discover an omission, subject to the board being readable and the sweep succeeding.
 
 ## Absence narrows the question; it does not answer it
 
@@ -71,7 +71,7 @@ A fast path and a repair path create a race. The relay can be posting a card jus
 
 SuperExchange makes the paths converge on shared durable claims.
 
-Before sending a gate card, the service claims it locally and records what the card offered. The Matrix send uses a transaction ID derived from that card. If the process has to retry the unfinished claim, it uses the same transaction ID again—naming the same logical Matrix send rather than creating a fresh one with an identical body.
+Before sending a gate card, the service claims it locally and records what the card offered. Each Matrix send uses a transaction ID derived from the gate and the part being sent. If the process has to retry the unfinished claim, it uses the same transaction IDs again—naming the same logical Matrix sends rather than creating fresh ones with identical bodies.
 
 Receipts follow the same principle. The chat-answer path and the reconciliation path contend for one receipt claim and use stable receipt transaction IDs. Whichever path settles the gate first prevents the other from independently claiming a second receipt. Tests pin the out-of-band case: a decision made outside chat produces a receipt, and later sweeps do not repeat it.
 
@@ -95,4 +95,4 @@ The design test is simple:
 
 > If the event never arrives—or the state changes somewhere else—what independent mechanism discovers the difference, and what durable key makes the repair safe?
 
-For SuperExchange gates, the event wakes the projection quickly. The sweep checks what is true. Shared claims make both routes finish the same work. The event is the fast path; the sweep is the guarantee.
+For SuperExchange gates, the event wakes the projection quickly. The sweep checks what is true. Shared claims make both routes finish the same work. The event is the fast path; the sweep is the guarantee that there is an independent repair route—not a promise that every sweep or receipt send succeeds.
