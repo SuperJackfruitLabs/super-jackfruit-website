@@ -41,6 +41,12 @@ const links = (slug: string, site: string, docs: string) => [
   { label: 'Docs', href: docs },
   { label: 'Source', href: `${GH}/${slug}` },
 ];
+/** A product with no docs site yet: its README is the documentation, and the Docs link says so. */
+const readme = (slug: string, site: string) => [
+  { label: 'Website', href: site },
+  { label: 'Docs', href: `${GH}/${slug}#readme` },
+  { label: 'Source', href: `${GH}/${slug}` },
+];
 
 export const suite: Product[] = [
   {
@@ -88,6 +94,27 @@ export const suite: Product[] = [
     links: links('superpipeline', 'https://superpipeline.dev', 'https://docs.superpipeline.dev'),
   },
   {
+    slug: 'superdispatch',
+    name: 'SuperDispatch',
+    step: 'It finds its agent',
+    blurb: 'which agent takes the card, and why',
+    headline: 'Which agent takes the card, and why.',
+    summary: 'SuperDispatch is the scheduler between SuperPipeline and AgentPod. When a card is ready, it places it on an agent by capability, load and history, and records every decision with its reasons. An agent outside it keeps working by pull.',
+    features: [
+      'Filters every agent by capability, grants, policy, health and load, then scores the rest',
+      'Every decision is recorded with each candidate considered and the reason for each',
+      'Early: proven on staging; nothing requires it, and agents keep pulling work without it',
+    ],
+    status: 'In development',
+    checked: '2026-11-13',
+    hex: '#00afab',
+    fg: '#06201f',
+    ink: '#007a77',
+    site: 'https://superdispatch.dev',
+    cta: { label: 'Install', href: `${GH}/superdispatch#run-it` },
+    links: readme('superdispatch', 'https://superdispatch.dev'),
+  },
+  {
     slug: 'salaam',
     name: 'Salaam',
     step: 'An agent does it',
@@ -130,6 +157,28 @@ export const suite: Product[] = [
     site: 'https://agentpod.dev',
     cta: { label: 'Sign in', href: 'https://console.agentpod.dev' },
     links: links('agentpod', 'https://agentpod.dev', 'https://docs.agentpod.dev'),
+  },
+  {
+    slug: 'superexchange',
+    name: 'SuperExchange',
+    step: 'You decide in chat',
+    blurb: 'board decisions, answered in chat',
+    headline: 'The board asks. Answer in chat.',
+    summary: 'SuperExchange is a Matrix application service. It carries SuperPipeline’s gates, questions and waiting cards into the board’s encrypted room, and when a person answers there, the board acts on it as that person.',
+    features: [
+      'Gates, questions, follow-ups and waiting cards posted once in the board’s encrypted Matrix room',
+      'An answer acts on the board as the person who gave it, with one receipt; an agent cannot answer',
+      'Early: in production, but no production board has moved to it yet',
+    ],
+    status: 'Released',
+    version: 'v0.0.2',
+    checked: '2026-11-13',
+    hex: '#00a0d7',
+    fg: '#06201f',
+    ink: '#007aa2',
+    site: 'https://superexchange.dev',
+    cta: { label: 'Install', href: `${GH}/superexchange#run-it` },
+    links: readme('superexchange', 'https://superexchange.dev'),
   },
   {
     slug: 'superlibrary',
