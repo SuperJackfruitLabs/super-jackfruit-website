@@ -316,11 +316,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     }
   }
 
-  // ---------- the suite: the first six houses down the main road, in flow order ----------
+  // ---------- the suite: its houses down the main road and the Agent Quarter, in flow order ----------
   // A visitor meets the suite before anything else, one step after another,
   // alternating sides so each house gets its own frontage.
   const startT = 0.012;
-  // keyboard jumps (1–6, H, R): a spot on the road a little before each place, facing it
+  // keyboard jumps (1–8, H, R): a spot on the road a little before each place, facing it
   const jumps = new Map<string, { x: number; z: number; h: number }>();
   const before = (seg: typeof road.main, t: number, metres: number) => {
     const at = Math.max(0, t - metres / seg.length);
@@ -340,9 +340,10 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       img.onerror = () => resolve(); // a missing logo falls back to the step number
       img.src = p.logo;
     })));
-    // Main Street holds your work; the agents' two (AgentPod, Salaam) live on the Agent Quarter,
-    // the road that carries straight on at the first bend, as in the frame's street footer
-    const QUARTER = new Set(['agentpod', 'salaam']);
+    // Main Street holds your work; the products the frame's street footer puts in the Agent Quarter
+    // (SuperDispatch, Salaam, AgentPod, SuperExchange) live on the road that carries straight on at
+    // the first bend
+    const QUARTER = new Set(['superdispatch', 'salaam', 'agentpod', 'superexchange']);
     const quarter = road.get('straight-on');
     const suiteHouse = (seg: typeof road.main, project: (typeof items)[number], t: number, side: number): void => {
       const c = seg.curve.getPointAt(t);
@@ -379,8 +380,11 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     // the Agent Quarter's houses stand on its outer side, clear of the loop's inside
     const outer = quarter.perp(0.5).x < 0 ? 1 : -1;
     // alternate sides, like Main Street, so one sign doesn't hide the next
-    items.filter((p) => QUARTER.has(p.slug)).forEach((project, i) =>
-      suiteHouse(quarter, project, 0.3 + i * 0.4, i % 2 === 0 ? outer : -outer));
+    // spread evenly along it, centred; two houses keep their old spots (0.3 and 0.7)
+    const onQuarter = items.filter((p) => QUARTER.has(p.slug));
+    const gap = Math.min(0.4, 0.6 / Math.max(1, onQuarter.length - 1));
+    onQuarter.forEach((project, i) =>
+      suiteHouse(quarter, project, 0.5 - (gap * (onQuarter.length - 1)) / 2 + i * gap, i % 2 === 0 ? outer : -outer));
 
     // the crossroads: an arch over the way into the Agent Quarter, as at the square, so it
     // names the street without standing in front of the signs beyond it
@@ -409,7 +413,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
       info: {
         title: 'Super Jackfruit Labs',
         logo: '/brand/sjl-facet.svg',
-        tagline: 'six tools for working with agents',
+        tagline: 'eight tools for working with agents',
         lines: [
           'Drive on: Main Street holds your work — you talk, the work is planned, it remembers, you see proof. At the first bend the Agent Quarter carries straight on: where agents work (Salaam) and the machines they live on (AgentPod).',
           'Further down the road are the experiments that taught us what to build.',
@@ -663,7 +667,7 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
         logo: '/brand/sjl-facet.svg',
         tagline: 'agent-native tools, built in the open',
         lines: [
-          'The first street is the suite: six tools that carry a task from ask to proof.',
+          'The first street is the suite: eight tools that carry a task from ask to proof.',
           'The other streets hold the experiments that taught us what to build.',
         ],
         links: [
@@ -1016,13 +1020,13 @@ export async function initVillageScene(canvas: HTMLCanvasElement): Promise<boole
     if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.key.toLowerCase() !== 'm') return;
     toggleMute();
   });
-  // desktop shortcuts for getting around: 1–6 the suite in order, H the lab, R the start
+  // desktop shortcuts for getting around: 1–8 the suite in order, H the lab, R the start
   if (!(window.matchMedia?.('(pointer: coarse)').matches ?? false)) {
-    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'salaam', 'agentpod'];
+    const ORDER = ['supermessage', 'superpipeline', 'superlibrary', 'superwitness', 'superdispatch', 'salaam', 'agentpod', 'superexchange'];
     window.addEventListener('keydown', (e) => {
       if (villageControlsBlocked() || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      const to = /^[1-6]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
+      const to = /^[1-8]$/.test(k) ? jumps.get(ORDER[+k - 1]) : k === 'h' ? jumps.get('hq') : k === 'r' ? startJump : undefined;
       if (to) teleport(to.x, to.z, to.h);
     });
   }

@@ -254,7 +254,9 @@ export async function createStreet(canvas: HTMLCanvasElement, products: StreetPr
 
   // one house per product along the north side, in the order a task travels, so the camera
   // can track down the street in one direction instead of crossing it
-  const houses = products.map((p, i) => ({ ...p, x: -30 + i * 12, z: -10 }));
+  // spread over the 76-unit road whatever the count: 12 apart for six, closer for more
+  const gapX = Math.min(12, 70 / Math.max(1, products.length - 1));
+  const houses = products.map((p, i) => ({ ...p, x: -((products.length - 1) * gapX) / 2 + i * gapX, z: -10 }));
   const signMats: THREE.MeshStandardMaterial[] = [];
   const glows: THREE.PointLight[] = [];
   const bulbs: THREE.MeshStandardMaterial[] = [];
