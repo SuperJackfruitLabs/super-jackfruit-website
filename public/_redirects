@@ -11,5 +11,9 @@
 /products/superlibrary https://superlibrary.dev/ 301
 /products/superwitness/* https://superwitness.dev/ 301
 /products/superwitness https://superwitness.dev/ 301
+/products/superdispatch/* https://superdispatch.dev/ 301
+/products/superdispatch https://superdispatch.dev/ 301
+/products/superexchange/* https://superexchange.dev/ 301
+/products/superexchange https://superexchange.dev/ 301
 /products/* / 301
 /products / 301

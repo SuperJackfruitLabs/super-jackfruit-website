@@ -7,7 +7,7 @@
 // where it stopped, so a burst of retirements spreads over several frames and
 // one awkward actor can't hog a frame.
 //
-// A teleport (the 1–6/H/R keys) is the one time the budget is lifted: the old
+// A teleport (the 1–8/H/R keys) is the one time the budget is lifted: the old
 // neighbourhood is gone, so everyone is placed around the new spot at once.
 
 /** what the pool needs to know about any actor */

@@ -32,7 +32,7 @@ export interface District {
 }
 
 export const districts: District[] = [
-  { id: 'agent-works', name: 'The Suite', blurb: 'six tools, one task from ask to proof', accent: '#d98a1f' },
+  { id: 'agent-works', name: 'The Suite', blurb: 'eight tools, one task from ask to proof', accent: '#d98a1f' },
   { id: 'mcp-alley', name: 'MCP Alley', blurb: 'wiring AI into everything', accent: '#f2a707' },
   { id: 'odd-shop', name: 'The Odd Shop', blurb: 'no refunds on curiosity', accent: '#a12cf9' },
 ];
