@@ -41,12 +41,6 @@ const links = (slug: string, site: string, docs: string) => [
   { label: 'Docs', href: docs },
   { label: 'Source', href: `${GH}/${slug}` },
 ];
-/** A product with no docs site yet: its README is the documentation, and the Docs link says so. */
-const readme = (slug: string, site: string) => [
-  { label: 'Website', href: site },
-  { label: 'Docs', href: `${GH}/${slug}#readme` },
-  { label: 'Source', href: `${GH}/${slug}` },
-];
 
 export const suite: Product[] = [
   {
@@ -112,7 +106,7 @@ export const suite: Product[] = [
     ink: '#007a77',
     site: 'https://superdispatch.dev',
     cta: { label: 'Install', href: `${GH}/superdispatch#run-it` },
-    links: readme('superdispatch', 'https://superdispatch.dev'),
+    links: links('superdispatch', 'https://superdispatch.dev', 'https://docs.superdispatch.dev'),
   },
   {
     slug: 'salaam',
@@ -200,7 +194,7 @@ export const suite: Product[] = [
     ink: '#007aa2',
     site: 'https://superexchange.dev',
     cta: { label: 'Install', href: `${GH}/superexchange#run-it` },
-    links: readme('superexchange', 'https://superexchange.dev'),
+    links: links('superexchange', 'https://superexchange.dev', 'https://docs.superexchange.dev'),
   },
   {
     slug: 'superlibrary',

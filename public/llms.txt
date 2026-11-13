@@ -25,8 +25,8 @@ Talk, plan, place, do, connect, run, decide, remember, prove: each tool owns one
 - [Salaam docs](https://docs.salaam.sh): documentation for Salaam
 - [SuperToolkit docs](https://docs.supertoolkit.dev): documentation for SuperToolkit
 - [AgentPod docs](https://docs.agentpod.dev): documentation for AgentPod
-- [SuperDispatch README](https://github.com/SuperJackfruitLabs/superdispatch#readme): SuperDispatch has no docs site yet; its README is the documentation
-- [SuperExchange README](https://github.com/SuperJackfruitLabs/superexchange#readme): SuperExchange has no docs site yet; its README is the documentation
+- [SuperDispatch docs](https://docs.superdispatch.dev): documentation for SuperDispatch
+- [SuperExchange docs](https://docs.superexchange.dev): documentation for SuperExchange
 
 ## Links
 
