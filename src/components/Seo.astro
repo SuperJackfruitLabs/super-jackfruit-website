@@ -13,7 +13,7 @@ interface Props {
 const { title, description, noindex = false } = Astro.props;
 const url = new URL(Astro.url.pathname, Astro.site).href;
 const image = new URL('/og.png', Astro.site).href;
-const imageAlt = 'Super Jackfruit Labs: eight tools for working with agents';
+const imageAlt = 'Super Jackfruit Labs: nine tools for working with agents';
 ---
 
 {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={url} />}
