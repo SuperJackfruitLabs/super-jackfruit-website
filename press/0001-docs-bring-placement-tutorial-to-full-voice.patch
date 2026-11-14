@@ -1,0 +1,155 @@
+From 537d72cfa54813c2c3b2b9a7249475e503e00bb5 Mon Sep 17 00:00:00 2001
+From: Analyst Echo <analyst-echo@id.agentpod.dev>
+Date: Sat, 14 Nov 2026 12:50:01 +0530
+Subject: [PATCH] docs: bring placement tutorial to full voice
+
+---
+ .../content/docs/start/first-placement.mdx    | 60 +++++++++++--------
+ 1 file changed, 35 insertions(+), 25 deletions(-)
+
+diff --git a/docs-site/src/content/docs/start/first-placement.mdx b/docs-site/src/content/docs/start/first-placement.mdx
+index 226f74b..b50efe3 100644
+--- a/docs-site/src/content/docs/start/first-placement.mdx
++++ b/docs-site/src/content/docs/start/first-placement.mdx
+@@ -8,8 +8,8 @@ import Tip from '@superjackfruit/docs-theme/components/Tip.astro';
+ import HeadsUp from '@superjackfruit/docs-theme/components/HeadsUp.astro';
+ import JackAside from '@superjackfruit/docs-theme/components/JackAside.astro';
+ 
+-Let's place one real card and then prove why it went to that agent. We will check the service, opt
+-in a board, make a card ready, and follow the decision through its outcome.
++Let's place one real card together and then prove why it went to that agent. We'll check the
++service, opt in your board, make a card ready, and follow the decision all the way to its outcome.
+ 
+ For this tutorial, SuperDispatch gets a seat in the broadcast booth: it names the pick and explains
+ the call, but it never claims the card. The chosen agent does that through SuperPipeline.
+@@ -38,7 +38,8 @@ SuperPipeline board ID, including its `brd_` prefix.
+ 
+ ## 1. Check SuperDispatch
+ 
+-Ask the health endpoint whether the service is listening:
++We start with the smallest useful question: is SuperDispatch awake? Ask the health endpoint. (A
++whole tutorial built on a sleeping service would be admirably optimistic.)
+ 
+ ```sh
+ curl http://127.0.0.1:8796/healthz
+@@ -54,12 +55,14 @@ If the request cannot connect, check the service log. A missing or malformed set
+ startup; the error names the setting but never its value. Follow [Running it](/run/running-it/) to
+ correct the setting and start the service before continuing.
+ 
+-**Payoff:** the response confirms that SuperDispatch is running on its default port and ready for
+-the operator requests that follow.
++There it is: SuperDispatch is running on its default port, and you and I have a live operator API
++to work with.
+ 
+ ## 2. Opt the board in
+ 
+-A fresh SuperDispatch watches no boards, including in production. Opt in this board explicitly:
++A fresh SuperDispatch watches exactly zero boards, production included. That's on purpose: a
++scheduler that starts scheduling the moment you switch it on is a surprise, and nobody wants
++surprises in production. So we opt in deliberately:
+ 
+ ```sh
+ curl -X PUT -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8796/v1/boards/$BOARD"
+@@ -78,32 +81,35 @@ The request has no body. The response has this shape:
+ }
+ ```
+ 
+-SuperDispatch now includes the board in every sweep and checks it immediately. It also sets the
+-board's placement window in SuperPipeline—10 seconds by default. During that window, a newly ready
+-card is held back from pull so SuperDispatch can place it first.
++Hear that? Neither did we. SuperDispatch now includes the board in every sweep and checks it
++immediately. It also sets the board's placement window in SuperPipeline—10 seconds by default.
++During that window, a newly ready card is held back from pull so SuperDispatch can place it first.
+ 
+ If the response is `401`, verify `$TOKEN`. If it says the board ID is invalid, set `$BOARD` to the
+ full ID shown by SuperPipeline and repeat the request.
+ 
+-**Payoff:** the board is enabled, its first check has started, and its placement window is active.
++Your board is now opted in: its first check has started, and every newly ready card gets that
++10-second placement window before pull can take it.
+ 
+ ## 3. Make a card ready
+ 
+-In SuperPipeline, create a card or choose an existing one. Move it into the capability-owned stage
+-served by the two rostered agents. The card is ready while it is waiting in that stage, unclaimed,
+-and not otherwise held.
++Now we give the scheduler something worth scheduling. In SuperPipeline, create a card or choose an
++existing one, then move it into the capability-owned stage served by the two rostered agents. The
++card is ready while it is waiting in that stage, unclaimed, and not otherwise held. No ribbon
++cutting is required; changing the stage is enough.
+ 
+ With the relay, the `card.ready` delivery starts placement immediately. Without it, wait for the
+ next sweep, which runs every 30 seconds by default. If no decision appears after that interval,
+ confirm that the board is enabled, the card is still waiting in the stage, and at least two enabled
+ roster agents can service the stage's capability.
+ 
+-**Payoff:** the ready card is now an input to placement, so SuperDispatch can filter the candidates,
+-rank the eligible ones, and request a hold for its choice.
++You have put a real card on the starting line. SuperDispatch can now filter the candidates, rank
++the eligible ones, and request a hold for its choice.
+ 
+ ## 4. Read why that agent was chosen
+ 
+-Let's ask the broadcast booth for the replay. Read the board's latest decisions, newest first:
++We have a pick; now let's ask the broadcast booth for the replay. Read the board's latest
++decisions, newest first:
+ 
+ ```sh
+ curl -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8796/v1/decisions?board=$BOARD&limit=20"
+@@ -127,18 +133,21 @@ stage asks for a capability the agent does not have. [Candidates and filters](/p
+ lists every reason code.
+ 
+ For each agent that passed every filter, inspect `score`. The highest `total` wins; `terms` records
+-the values that established the order.
++the values that established the order. The decision record keeps receipts, which is considerably
++more useful than a confident shrug.
+ 
+ If there is no row for the card, use the checks in step 3. If the decision's `reason` is
+ `one-candidate`, add a second eligible agent to the board's roster or leave the card to normal
+ pull; SuperDispatch does not choose when there is only one candidate.
+ 
+-**Payoff:** you can identify the chosen agent and trace the choice through recorded filter results
+-and score terms instead of inferring it from the eventual claim.
++You can now name the chosen agent and show your work: every filter result and score term is in the
++record, so nobody has to reconstruct the choice from the eventual claim.
+ 
+ ## 5. Follow the outcome
+ 
+-On a later pass, SuperDispatch settles what happened to the decision. Run the same query again:
++Choosing is only half the story, so we come back on a later pass to see what actually happened.
++Yes, we're refreshing a query for the ending; even schedulers get a tiny cliffhanger. Run the same
++query again:
+ 
+ ```sh
+ curl -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8796/v1/decisions?board=$BOARD&limit=20"
+@@ -165,12 +174,13 @@ open to any matching agent. Each hold attempt has its own decision; see
+   continue to claim by pull.
+ </HeadsUp>
+ 
+-**Payoff:** the decision now tells you whether the chosen agent claimed, another agent claimed, the
+-hold expired, the card moved, or the reservation was refused.
++You can now see how the placement ended: the chosen agent claimed, another agent claimed, the hold
++expired, the card moved, or the reservation was refused.
+ 
+ ## 6. Opt out when you are finished
+ 
+-To stop placing cards on this board, disable it:
++We made a placement, explained it, and followed the result. Now we'll put the lab back the way we
++found it—future you has enough mysteries already. To stop placing cards on this board, disable it:
+ 
+ ```sh
+ curl -X DELETE -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8796/v1/boards/$BOARD"
+@@ -179,8 +189,8 @@ curl -X DELETE -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8796/v1/board
+ The board record and its decisions remain readable. Existing holds lapse on their own, and the
+ board's placement window returns to zero. A later `PUT` enables the same board again.
+ 
+-**Payoff:** SuperDispatch no longer places new cards on the board, while the decision history stays
+-available for inspection.
++The board is quiet again: SuperDispatch will not place new cards there, and your decision history
++is still available whenever you need it.
+ 
+ The broadcast is over: you have the placement, the reason, and the outcome. The agent did the
+ claiming; SuperDispatch can take off the headset.
+-- 
+2.43.0
+
