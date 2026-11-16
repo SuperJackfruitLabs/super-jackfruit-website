@@ -6,7 +6,7 @@ Write the article. Treat the shipped work as one cross-repository thread, not as
 
 The thread answers one developer-facing question: **when a workflow asks a person to approve work, what exact evidence is the decision attached to?** The answer now converges across completion checks, artifact identity, version-pinned links, the web gate and the room message: the artifacts linked by the run under review, at the versions that run handed off. If the run linked none, the reviewing surfaces say so instead of silently presenting stale evidence or an empty-looking gate.
 
-**Confidence:** high. The six merged public pull requests, commit-pinned code and regression tests, and the Treaty v0.0.14 release all agree on the behavior. The release boundary is also clear: the Treaty pieces are in a numbered release; the AgentPod and SuperPipeline pieces are merged to their default branches but are not in numbered releases.
+**Confidence:** high. Seven merged public changes, commit-pinned code and regression tests, and the Treaty v0.0.14 release all agree on the behavior. The release boundary is also clear: the Treaty pieces are in a numbered release; the AgentPod, SuperPipeline and SuperExchange pieces are merged to their default branches but are not in numbered releases.
 
 ## Recommended headline
 
@@ -20,7 +20,7 @@ Alternatives:
 
 ## One-sentence thesis
 
-An approval gate is trustworthy only when it identifies both **which run produced the evidence** and **which version of that evidence the reviewer opened**; six recent changes carry that invariant from artifact linking through API completion, the web gate and the room message.
+An approval gate is trustworthy only when it identifies both **which run produced the evidence** and **which version of that evidence the reviewer opened**; seven recent changes carry that invariant from artifact linking through API completion, the web gate and the room message.
 
 ## Why an outside developer should care
 
@@ -56,9 +56,9 @@ This establishes **what the artifact is** across revisions.
 
 ### 2. Make completion depend on evidence from this run
 
-[SuperPipeline PR #106](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/106) records the producing run on a run-linked reference and evaluates a stage's reference requirement against references from the completing run, while still allowing a person-added reference as an explicit intervention. An artifact left on the card by an earlier run no longer makes revised work look complete.
+[The SuperPipeline current-run reference change](https://github.com/SuperJackfruitLabs/superpipeline/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98) records the producing run on a run-linked reference and evaluates a stage's reference requirement against references from the completing run, while still allowing a person-added reference as an explicit intervention. An artifact left on the card by an earlier run no longer makes revised work look complete.
 
-The API also derives attribution from the authenticated call path: the run-reference function supplies `addedBy: 'agent'` and the current `runId`; those values are not accepted from the request body. Cite the [commit-pinned attribution code](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/references.ts#L41-L45) and the [current-run completion query](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/run-verbs.ts#L280-L292).
+The API also derives attribution from the authenticated call path: the run-reference function supplies `addedBy: 'agent'` and the current `runId`; those values are not accepted from the request body. Cite the [commit-pinned attribution code](https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/references.ts#L41-L45) and the [current-run completion query](https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/run-verbs.ts#L280-L292).
 
 This establishes **which attempt produced the evidence** and prevents caller-supplied provenance from rewriting that answer.
 
@@ -77,21 +77,25 @@ This establishes **which revision the handoff means**.
 
 ### 4. Put the run's exact evidence on the web gate
 
-[SuperPipeline PR #111](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/111) adds the opening run's references to gate payloads and renders them in every web gate and Operate layout. It selects references by the gate's run, upgrades a known SuperLibrary item-plus-version to `/a/<item>/v/<n>`, displays the version, and says **“This run linked no artifact”** when the list is empty.
+[The SuperPipeline gate-reference change](https://github.com/SuperJackfruitLabs/superpipeline/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f) adds the opening run's references to gate payloads and renders them in every web gate and Operate layout. It selects references by the gate's run, upgrades a known SuperLibrary item-plus-version to `/a/<item>/v/<n>`, displays the version, and says **“This run linked no artifact”** when the list is empty.
 
-Use the [commit-pinned run-scoped gate query](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687) and [web renderer](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63).
+Use the [commit-pinned run-scoped gate query](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687) and [web renderer](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63).
 
 This makes the web decision surface answer plainly: **these are the artifacts from the run you are judging, at these versions**.
 
 ### 5. Carry the same subject into the room message, safely
 
-[Treaty PR #41](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/41) extends the gate delivery contract and prose builder so a board-room gate message lists each run-linked artifact as `- [title](url)`, falling back to the URL for a missing title. An empty list says **“This run linked no artifact.”** Deliveries without the new field remain backward-compatible.
+[The Treaty gate-prose change](https://github.com/SuperJackfruitLabs/treaty/commit/49bb2c2a736d72d46d4e2664228e4a2b8e5a98b8) extends the gate delivery contract and prose builder so a board-room gate message lists each run-linked artifact as `- [title](url)`, falling back to the URL for a missing title. An empty list says **“This run linked no artifact.”** Deliveries without the new field remain backward-compatible.
 
-[Treaty PR #42](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/42) hardens that feature before release. The tests found that malformed `references` could throw and that crafted Markdown could add a link. The fix treats a non-list as absent, skips unusable entries, permits only HTTP(S) URLs, percent-encodes Markdown-significant URL characters and escapes titles. This matters because the evidence shown to a reviewer must not become a second injection surface.
+[The Treaty hardening change](https://github.com/SuperJackfruitLabs/treaty/commit/420230d3307d48f10e96be71267b22acd533b86c) hardens that feature before release. The tests found that malformed `references` could throw and that crafted Markdown could add a link. The fix treats a non-list as absent, skips unusable entries, permits only HTTP(S) URLs, percent-encodes Markdown-significant URL characters and escapes titles. This matters because the evidence shown to a reviewer must not become a second injection surface.
 
 Both changes shipped in [Treaty v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14).
 
-This gives the chat decision surface the same answer as the API and web gate, without trusting reference text as formatting instructions.
+### 6. Ship that contract through the room-message consumer
+
+[The SuperExchange consumer update](https://github.com/SuperJackfruitLabs/superexchange/commit/fb328cf0bcc0284a3e449e6b3e23c9f458cbbce1) moves the application to `treaty-matrix-events` 0.0.14. Its changelog states that board-room gate messages now list the opening run's linked artifacts, preserve pinned SuperLibrary version links, and explicitly say when no artifact was linked.
+
+This closes the consumer side of the thread: the safe gate prose is not only published in the Treaty library; it is merged into the application that sends the room message.
 
 ## Suggested article structure
 
@@ -106,7 +110,7 @@ Introduce the two dimensions:
 1. **Run provenance:** did this attempt produce or explicitly receive this reference?
 2. **Version identity:** which exact revision did the attempt hand off?
 
-Use PR #106 for the first coordinate and PR #895 for the second. Neither alone is sufficient.
+Use the SuperPipeline current-run reference change for the first coordinate and AgentPod PR #895 for the second. Neither alone is sufficient.
 
 ### 3. Follow the evidence to every decision surface
 
@@ -116,7 +120,7 @@ Trace the same subject through:
 - the web gate;
 - the room message.
 
-Use PR #111 and Treaty PRs #41–#42. Emphasize the explicit empty state. “No artifact” is review information, not a cosmetic placeholder.
+Use the SuperPipeline gate-reference change, the two Treaty commits and the SuperExchange consumer update. Emphasize the explicit empty state. “No artifact” is review information, not a cosmetic placeholder.
 
 ### 4. Explain why attribution and prose are part of the interface
 
@@ -142,13 +146,14 @@ Practical review questions:
 
 ## Release status
 
-- **SuperPipeline #106:** merged to `main` on 15 November 2026; recorded under `Unreleased`, not in a numbered SuperPipeline release.
+- **SuperPipeline current-run reference change:** merged to `main` on 15 November 2026; recorded under `Unreleased`, not in a numbered SuperPipeline release.
 - **AgentPod #889:** merged to `main` on 15 November 2026; not in a numbered AgentPod release.
 - **AgentPod #895:** merged to `main` on 16 November 2026; its changelog entry is under `Unreleased`, not in a numbered AgentPod release.
-- **SuperPipeline #111:** merged to `main` on 16 November 2026; recorded under `Unreleased`, not in a numbered SuperPipeline release.
-- **Treaty #41 and #42:** merged to `main` on 16 November 2026 and included in the numbered [Treaty v0.0.14 release](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14), published the same day.
+- **SuperPipeline gate-reference change:** merged to `main` on 16 November 2026; recorded under `Unreleased`, not in a numbered SuperPipeline release.
+- **Treaty gate-prose and hardening changes:** merged to `main` on 16 November 2026 and included in the numbered [Treaty v0.0.14 release](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14), published the same day.
+- **SuperExchange consumer update:** merged to `main` on 16 November 2026; recorded under `Unreleased`, not in a numbered SuperExchange release.
 
-Use **“merged”** for the AgentPod and SuperPipeline pieces. Do not describe the entire cross-product thread as released just because the Treaty contract package has a numbered release.
+Use **“merged”** for the AgentPod, SuperPipeline and SuperExchange pieces. Do not describe the entire cross-product thread as released just because the Treaty contract package has a numbered release.
 
 ## Claims ledger
 
@@ -156,13 +161,14 @@ Use **“merged”** for the AgentPod and SuperPipeline pieces. Do not describe 
 |---|---|---|
 | A renamed revision previously selected a new source identity; #889 gives a titled card artifact the stable source path `artifacts/<card>/<encoded title>`. | [PR #889](https://github.com/SuperJackfruitLabs/agentpod/pull/889), [implementation](https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.ts#L338-L356) | High. Say “stable logical source path,” not content-addressed identity. |
 | The #889 regression links renamed files with the same title and requires the second link to return the first item at version 2. | [Regression test](https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.test.ts#L108-L175) | High. This is the real tested failure; do not replace it with an invented incident. |
-| Completion accepts current-run references, plus a person-added reference as an explicit intervention, rather than stale references from earlier runs. | [SuperPipeline PR #106](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/106), [completion query](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/run-verbs.ts#L280-L292) | High. Do not simplify this to “only agents' current-run references”; person-added references remain valid. |
-| Run-reference attribution is derived by the authenticated run path rather than accepted from request input. | [Attribution code](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/references.ts#L41-L45) | High. |
+| Completion accepts current-run references, plus a person-added reference as an explicit intervention, rather than stale references from earlier runs. | [Merge commit](https://github.com/SuperJackfruitLabs/superpipeline/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98), [completion query](https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/run-verbs.ts#L280-L292) | High. Do not simplify this to “only agents' current-run references”; person-added references remain valid. |
+| Run-reference attribution is derived by the authenticated run path rather than accepted from request input. | [Attribution code](https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/references.ts#L41-L45) | High. |
 | `agentpod_link_artifact` returns both a floating item URL and a version-pinned `versionUrl`, and directs callers to attach the latter. | [AgentPod PR #895](https://github.com/SuperJackfruitLabs/agentpod/pull/895), [implementation](https://github.com/SuperJackfruitLabs/agentpod/blob/a10ffca497bdda0e3de891c7d195510a009ad8c5/apps/hub/src/mcp/tools.ts#L194-L204), [test](https://github.com/SuperJackfruitLabs/agentpod/blob/a10ffca497bdda0e3de891c7d195510a009ad8c5/apps/hub/tests/unit/exact-artifact-gate.test.ts#L45-L79) | High. Call it version-pinned, not immutable or content-addressed. |
-| Web gates show the opening run's references, pin known SuperLibrary versions and display an explicit empty state. | [SuperPipeline PR #111](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/111), [gate query](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687), [renderer](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/src/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63) | High. “Known” matters: the renderer can pin an item URL when version metadata exists. |
-| Room-message gate prose lists the run's artifacts or says none were linked. | [Treaty PR #41](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/41) | High. Backward compatibility is preserved when the field is absent. |
-| Malformed or hostile reference data is ignored or safely rendered instead of throwing or injecting another Markdown link. | [Treaty PR #42](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/42) | High. Describe the concrete validation and escaping, not a general claim that all message content is safe. |
-| The two Treaty changes are in a numbered release. | [Treaty v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14) | High. This release status does not extend to the AgentPod or SuperPipeline changes. |
+| Web gates show the opening run's references, pin known SuperLibrary versions and display an explicit empty state. | [Merge commit](https://github.com/SuperJackfruitLabs/superpipeline/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f), [gate query](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687), [renderer](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63) | High. “Known” matters: the renderer can pin an item URL when version metadata exists. |
+| Room-message gate prose lists the run's artifacts or says none were linked. | [Treaty gate-prose commit](https://github.com/SuperJackfruitLabs/treaty/commit/49bb2c2a736d72d46d4e2664228e4a2b8e5a98b8) | High. Backward compatibility is preserved when the field is absent. |
+| Malformed or hostile reference data is ignored or safely rendered instead of throwing or injecting another Markdown link. | [Treaty hardening commit](https://github.com/SuperJackfruitLabs/treaty/commit/420230d3307d48f10e96be71267b22acd533b86c) | High. Describe the concrete validation and escaping, not a general claim that all message content is safe. |
+| The two Treaty changes are in a numbered release. | [Treaty v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14) | High. This release status does not extend to the AgentPod, SuperPipeline or SuperExchange changes. |
+| The room-message consumer now uses `treaty-matrix-events` 0.0.14, carrying the artifact-list and explicit-empty-state prose into SuperExchange. | [SuperExchange merge commit](https://github.com/SuperJackfruitLabs/superexchange/commit/fb328cf0bcc0284a3e449e6b3e23c9f458cbbce1) | High. Merged to `main`, but not in a numbered SuperExchange release. |
 
 ## Guardrails
 
@@ -170,17 +176,17 @@ Use **“merged”** for the AgentPod and SuperPipeline pieces. Do not describe 
 - Do not imply the floating item URL is defective. It is correct for “show me the latest”; it is wrong only when a decision is supposed to bind to one revision.
 - Do not claim one PR delivered the whole invariant. The point of the article is that identity, provenance, pinning and presentation were separate failure boundaries.
 - Do not claim a real approval was wrongly granted. The real failure was a renamed revision becoming a separate item; the approval consequences are why the regression mattered.
-- Do not say every piece is in a numbered release. Only Treaty #41 and #42 are in v0.0.14.
+- Do not say every piece is in a numbered release. Only the two Treaty changes are in v0.0.14.
 - Do not say the stable source path uses the file's path. It deliberately uses `artifacts/<card>/<encoded title>` when a card and title are present.
 - Do not omit the explicit “This run linked no artifact” state. Absence is part of the approval subject.
 - Do not name people, internal roles, private systems or work-tracking identifiers from PR descriptions. Tell the story from the public behavior, code and tests.
-- Do not cite or describe unmerged downstream work. The article is about what had shipped by the research cutoff.
+- Do not describe the SuperExchange consumer as released. It is merged to the default branch and recorded under `Unreleased`.
 
 ## Related work included or left out
 
-All merged pieces in this approval-evidence thread are included: SuperPipeline #106 and #111, AgentPod #889 and #895, and Treaty #41 and #42. No merged companion in the thread was intentionally omitted.
+All merged pieces in this approval-evidence thread are included: the two SuperPipeline changes, AgentPod #889 and #895, the two Treaty changes, and the SuperExchange consumer update. No merged companion in the thread was intentionally omitted.
 
-A downstream consumer update was still open at the research cutoff, so it is not part of the article and should not be named as shipped. Unrelated changes from the seven-day scan—documentation voice rollouts, release plumbing and other product fixes—serve different purposes and would blur the causal story.
+The downstream SuperExchange consumer update merged after the earlier research cutoff and is now included. Unrelated changes from the seven-day scan—documentation voice rollouts, release plumbing and other product fixes—serve different purposes and would blur the causal story.
 
 ## Blog-overlap and open-card check
 
@@ -196,21 +202,20 @@ Go directly to the failure and invariant; do not repeat those product introducti
 
 ## Public source list
 
-1. [SuperPipeline PR #106 — require current-run stage references](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/106)
-2. [SuperPipeline #106 merge commit](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98)
-3. [AgentPod PR #889 — a revised card artifact becomes the next version](https://github.com/SuperJackfruitLabs/agentpod/pull/889)
-4. [AgentPod #889 merge commit](https://github.com/SuperJackfruitLabs/agentpod/commit/426caf22658556d8ec47ac7673874966e4c9f5f0)
-5. [AgentPod #889 regression test](https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.test.ts#L108-L175)
-6. [AgentPod PR #895 — return a version-pinned artifact link](https://github.com/SuperJackfruitLabs/agentpod/pull/895)
-7. [AgentPod #895 merge commit](https://github.com/SuperJackfruitLabs/agentpod/commit/a10ffca497bdda0e3de891c7d195510a009ad8c5)
-8. [SuperPipeline PR #111 — gates show the run's pinned artifacts](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/pulls/111)
-9. [SuperPipeline #111 merge commit](https://forge.superjackfruit.com/SuperJackfruitLabs/superpipeline/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f)
-10. [Treaty PR #41 — gate prose lists the run's artifacts](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/41)
-11. [Treaty PR #42 — harden gate references](https://forge.superjackfruit.com/SuperJackfruitLabs/treaty/pulls/42)
-12. [Treaty v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14)
+1. [SuperPipeline merge commit — require current-run stage references](https://github.com/SuperJackfruitLabs/superpipeline/commit/9a4b9989a7a18bfd6614168fb8ea660a630e7a98)
+2. [AgentPod PR #889 — a revised card artifact becomes the next version](https://github.com/SuperJackfruitLabs/agentpod/pull/889)
+3. [AgentPod #889 merge commit](https://github.com/SuperJackfruitLabs/agentpod/commit/426caf22658556d8ec47ac7673874966e4c9f5f0)
+4. [AgentPod #889 regression test](https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.test.ts#L108-L175)
+5. [AgentPod PR #895 — return a version-pinned artifact link](https://github.com/SuperJackfruitLabs/agentpod/pull/895)
+6. [AgentPod #895 merge commit](https://github.com/SuperJackfruitLabs/agentpod/commit/a10ffca497bdda0e3de891c7d195510a009ad8c5)
+7. [SuperPipeline merge commit — gates show the run's pinned artifacts](https://github.com/SuperJackfruitLabs/superpipeline/commit/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f)
+8. [Treaty commit — gate prose lists the run's artifacts](https://github.com/SuperJackfruitLabs/treaty/commit/49bb2c2a736d72d46d4e2664228e4a2b8e5a98b8)
+9. [Treaty commit — harden gate references](https://github.com/SuperJackfruitLabs/treaty/commit/420230d3307d48f10e96be71267b22acd533b86c)
+10. [Treaty v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14)
+11. [SuperExchange merge commit — consume Treaty 0.0.14 gate prose](https://github.com/SuperJackfruitLabs/superexchange/commit/fb328cf0bcc0284a3e449e6b3e23c9f458cbbce1)
 
 ## Research cutoff and gaps
 
 Research cutoff: 16 November 2026.
 
-No source gap blocks drafting. The only important deployment boundary is the mixed release status: every listed PR is merged to its repository's default branch, but only the Treaty pair is confirmed in a numbered release. Keep that distinction visible in the article.
+No source gap blocks drafting. The only important deployment boundary is the mixed release status: every listed change is merged to its repository's default branch, but only the Treaty pair is confirmed in a numbered release. Keep that distinction visible in the article.
