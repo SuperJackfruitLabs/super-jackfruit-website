@@ -5,20 +5,24 @@ date: 2026-11-16
 draft: false
 tags: [agents, engineering, human-in-the-loop]
 sources:
-  - claim: AgentPod gives a titled artifact on a card a stable logical source path, so linking a renamed revision under the same title creates the next version of the same item.
-    url: https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.ts#L338-L356
+  - claim: On the same station, AgentPod gives a titled artifact on a card a stable logical source path, so linking a renamed revision under the same title creates the next version of the same item.
+    url: https://github.com/SuperJackfruitLabs/agentpod/pull/889
   - claim: AgentPod's regression test links two differently named files under one title and requires the second link to return the original item at version 2.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.test.ts#L108-L175
-  - claim: SuperPipeline attributes an agent-added reference to the authenticated run and checks a stage's reference requirement against that run's references while allowing explicit person-added references.
+  - claim: SuperPipeline checks a stage's reference requirement against the completing run's references while allowing explicit person-added references.
     url: https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/run-verbs.ts#L280-L292
+  - claim: SuperPipeline attributes an agent-added reference to the authenticated run rather than accepting attribution from the request body.
+    url: https://github.com/SuperJackfruitLabs/superpipeline/blob/9a4b9989a7a18bfd6614168fb8ea660a630e7a98/apps/api/src/board/references.ts#L41-L45
   - claim: AgentPod's artifact-linking tool returns both a floating item URL and the version-pinned URL created by that link operation.
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/a10ffca497bdda0e3de891c7d195510a009ad8c5/apps/hub/src/mcp/tools.ts#L194-L204
-  - claim: SuperPipeline web gates select references from the opening run, pin known SuperLibrary versions and render an explicit empty state.
+  - claim: SuperPipeline gate payloads select references from the opening run.
+    url: https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687
+  - claim: SuperPipeline web gates pin known SuperLibrary versions and render an explicit empty state.
     url: https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63
   - claim: Treaty gate prose lists the opening run's linked artifacts or states that the run linked no artifact.
-    url: https://github.com/SuperJackfruitLabs/treaty/commit/49bb2c2a736d72d46d4e2664228e4a2b8e5a98b8
+    url: https://github.com/SuperJackfruitLabs/treaty/commit/855d57d05c66f54d3e3fcb9e1702f6b1abf1260c
   - claim: Treaty validates and escapes gate references before rendering them into Markdown room messages.
-    url: https://github.com/SuperJackfruitLabs/treaty/commit/420230d3307d48f10e96be71267b22acd533b86c
+    url: https://github.com/SuperJackfruitLabs/treaty/commit/d832f606f83b5d6963aa7e56009b4e5cb6dc244a
   - claim: The Treaty gate-prose and hardening changes shipped in Treaty v0.0.14.
     url: https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14
   - claim: SuperExchange now consumes treaty-matrix-events 0.0.14, carrying the new gate prose into its room-message path.
@@ -39,7 +43,7 @@ The AgentPod regression test uses two files: `docs-voice-pass-spec.md` and `docs
 
 Previously, the workspace filename contributed the upload's source identity. Renaming the file therefore made the revision look like a new object. The fix gives a titled artifact on a card a stable source path based on the card and encoded title: `artifacts/<card>/<encoded title>` ([implementation](https://github.com/SuperJackfruitLabs/agentpod/blob/426caf22658556d8ec47ac7673874966e4c9f5f0/apps/hub/src/services/superlibrary/link.ts#L338-L356)).
 
-That is a logical identity, not a content hash. Change the title and you name a different item. Keep the card and title, and a renamed working file can remain the next revision of the same deliverable.
+That is a logical identity, not a content hash. Change the title and you name a different item. On the same station, keep the card and title, and a renamed working file can remain the next revision of the same deliverable. A different station still starts a new item because the station remains part of SuperLibrary's matching key ([documented limit](https://github.com/SuperJackfruitLabs/agentpod/pull/889)).
 
 The distinction matters anywhere files pass through temporary workspaces. A pathname describes where a worker happened to write something. It does not necessarily describe what the artifact means to the workflow. If reviewers approve logical deliverables, the storage identity needs to preserve that meaning before version numbers can do useful work.
 
@@ -68,13 +72,13 @@ Together, run provenance and version identity define the approval subject: **the
 
 A trustworthy subject cannot exist only in an API response. People make decisions in interfaces, and every interface can accidentally widen or erase the binding.
 
-SuperPipeline's web gates now load the references associated with the run that opened the gate. For a known SuperLibrary item with version metadata, the renderer constructs the version-specific route and displays the version alongside the artifact. If the run linked nothing, the gate says: **“This run linked no artifact.”** ([source](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63)).
+SuperPipeline's web gates now load the references associated with the run that opened the gate ([API query](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/api/src/board/gates.ts#L681-L687)). For a known SuperLibrary item with version metadata, the renderer constructs the version-specific route and displays the version alongside the artifact. If the run linked nothing, the gate says: **“This run linked no artifact.”** ([renderer](https://github.com/SuperJackfruitLabs/superpipeline/blob/c1f76fe689d182faa8938be0fd9f818a2ff1bf5f/apps/web/src/lib/components/card/gate/GateReferences.svelte#L19-L63)).
 
 That empty state is part of the evidence model. Silence is ambiguous: perhaps there is no artifact, perhaps the interface failed to load it, or perhaps the workflow never expected one. An explicit statement tells the reviewer what the system knows. “No artifact” may be a reason to reject the work, request a missing deliverable or decide that this gate does not need one. In every case, absence is review information rather than unused space.
 
-The room message needs the same subject. A Treaty change extends the gate-delivery contract so the prose can list each run-linked artifact as a Markdown link, with the URL as a fallback when no title is available. An empty list produces the same explicit sentence: “This run linked no artifact.” Older deliveries without the new field remain compatible ([change](https://github.com/SuperJackfruitLabs/treaty/commit/49bb2c2a736d72d46d4e2664228e4a2b8e5a98b8)).
+The room message needs the same subject. A Treaty change extends the gate-delivery contract so the prose can list each run-linked artifact as a Markdown link, with the URL as a fallback when no title is available. An empty list produces the same explicit sentence: “This run linked no artifact.” Older deliveries without the new field remain compatible ([change](https://github.com/SuperJackfruitLabs/treaty/commit/855d57d05c66f54d3e3fcb9e1702f6b1abf1260c)).
 
-Rendering references into chat also creates an input boundary. A follow-up Treaty change handles a malformed non-list as absent, skips unusable entries, accepts only HTTP or HTTPS URLs, percent-encodes Markdown-significant URL characters and escapes titles ([change](https://github.com/SuperJackfruitLabs/treaty/commit/420230d3307d48f10e96be71267b22acd533b86c)). The goal is narrow but important: evidence displayed for a decision should not become a route for adding a deceptive second Markdown link or crashing the message builder.
+Rendering references into chat also creates an input boundary. A follow-up Treaty change handles a malformed non-list as absent, skips unusable entries, accepts only HTTP or HTTPS URLs, percent-encodes URL characters that Markdown would interpret and escapes titles ([change](https://github.com/SuperJackfruitLabs/treaty/commit/d832f606f83b5d6963aa7e56009b4e5cb6dc244a)). The goal is narrow but important: evidence displayed for a decision should not become a route for adding a deceptive second Markdown link or crashing the message builder.
 
 Those Treaty changes shipped in [v0.0.14](https://github.com/SuperJackfruitLabs/treaty/releases/tag/v0.0.14). [SuperExchange has moved its consumer to `treaty-matrix-events` 0.0.14](https://github.com/SuperJackfruitLabs/superexchange/commit/fb328cf0bcc0284a3e449e6b3e23c9f458cbbce1), carrying the artifact list and explicit empty state into the application that sends the room message.
 
