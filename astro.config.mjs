@@ -13,5 +13,5 @@ export default defineConfig({
   redirects: { "/suite": "/", "/next": "/" },
   // The village imports the frame's client by name to mount Captain Jack. Pre-bundled, its
   // `?url` import of the rig breaks in dev; served as source it works, as it does for the frame.
-  vite: { optimizeDeps: { exclude: ["@superjackfruit/frontdoor"] } },
+  vite: { optimizeDeps: { exclude: ["@superjackfruitlabs/vibekit-frame"] } },
 });
