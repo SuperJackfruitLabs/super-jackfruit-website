@@ -29,9 +29,9 @@ export interface Product {
   ink: string;
   /** the product's own website; it is where every "go to" link leads */
   site: string;
-  /** the one thing to do next, as the product's own site offers it: Sign in, Download or Install */
-  cta: { label: 'Sign in' | 'Download' | 'Install'; href: string };
-  /** Website, Docs and Source, in that order */
+  /** the one thing to do next, as the product's own site offers it: Sign in, Download, Install, or Follow before a first release */
+  cta: { label: 'Sign in' | 'Download' | 'Install' | 'Follow'; href: string };
+  /** Website, Docs and Source, in that order; Docs is left out until the product has a docs site */
   links: { label: string; href: string }[];
 }
 
@@ -151,6 +151,30 @@ export const suite: Product[] = [
     site: 'https://supertoolkit.dev',
     cta: { label: 'Install', href: 'https://docs.supertoolkit.dev/install/' },
     links: links('supertoolkit', 'https://supertoolkit.dev', 'https://docs.supertoolkit.dev'),
+  },
+  {
+    slug: 'superbench',
+    name: 'SuperBench',
+    step: 'It gets a checkout',
+    blurb: 'one task\u2019s checkout, kept warm and checkpointed',
+    headline: 'One task, one bench.',
+    summary: 'SuperBench is in development. A bench is one task\u2019s git worktree, kept warm and checkpointed between agents\u2019 turns; it is meant to lease each one to a single holder and check the work is on the remote before the next one picks it up. It is an experimental prototype for one machine and trusted repositories.',
+    features: [
+      'One git worktree per task, leased to one holder at a time; leases are cooperative, so they do not stop direct edits',
+      'A checkpoint pushes the existing HEAD, never with force, and confirms the remote has exactly that commit',
+      'Not released yet: no install, and nothing in it isolates untrusted code',
+    ],
+    status: 'In development',
+    checked: '2026-11-17',
+    hex: '#038068',
+    fg: '#ffffff',
+    ink: '#038068',
+    site: 'https://superbench.dev',
+    cta: { label: 'Follow', href: 'https://superbench.dev' },
+    links: [
+      { label: 'Website', href: 'https://superbench.dev' },
+      { label: 'Source', href: `${GH}/superbench` },
+    ],
   },
   {
     slug: 'agentpod',
