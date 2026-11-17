@@ -17,5 +17,7 @@
 /products/superexchange https://superexchange.dev/ 301
 /products/supertoolkit/* https://supertoolkit.dev/ 301
 /products/supertoolkit https://supertoolkit.dev/ 301
+/products/superbench/* https://superbench.dev/ 301
+/products/superbench https://superbench.dev/ 301
 /products/* / 301
 /products / 301
