@@ -7,7 +7,7 @@ import '@fontsource-variable/inconsolata';
 // the places the menu lists: the suite in flow order, then the lab and its guide
 const SUITE_PLACES = byDistrict('agent-works');
 const linkLabel = (url: string) => (url.startsWith('/') ? 'page' : new URL(url).host);
-import '@superjackfruit/vibekit/fonts.css';
+import '@superjackfruitlabs/vibekit-ui/fonts.css';
 ---
 
 <Layout title="The village — Super Jackfruit Labs" description="Drive through the Super Jackfruit Labs village and meet the ten tools for working with agents, from asking for work to proving it was done.">
@@ -1033,7 +1033,7 @@ import '@superjackfruit/vibekit/fonts.css';
   };
   // The village has no frame around it, so it mounts the frame's Captain Jack sheet itself;
   // the sheet answers sjl-ask, as it does on every other page of the site.
-  import('@superjackfruit/frontdoor/client').then(({ mountJack }) => mountJack({ product: 'lab' })).catch((e) => console.warn('[village] Captain Jack', e));
+  import('@superjackfruitlabs/vibekit-frame/client').then(({ mountJack }) => mountJack({ product: 'lab' })).catch((e) => console.warn('[village] Captain Jack', e));
   // a card link to #captain-jack opens the frame's Captain Jack sheet instead of navigating
   for (const el of [githubEl, demoEl]) {
     el.addEventListener('click', (e) => {
