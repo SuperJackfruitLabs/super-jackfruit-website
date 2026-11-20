@@ -27,7 +27,7 @@ That failure, recorded in [AgentPod PR #881](https://github.com/SuperJackfruitLa
 
 It had not. The call had only accepted the job.
 
-The repair took three pull requests and two releases because each real canary exposed a different boundary: first an open tool call, then detached work behind an already completed call, then a production payload formatted differently from the test fixture. Together they point to a general rule for agent runtimes, job launchers and workflow engines: **transport completion, turn completion and work completion are different events.**
+The repair took three pull requests and two releases because each real canary exposed a different boundary: first an open tool call, then detached work behind an already completed call, then a runtime payload formatted differently from the test fixture. Together they point to a general rule for agent runtimes, job launchers and workflow engines: **transport completion, turn completion and work completion are different events.**
 
 ## Three clocks, one false ending
 
@@ -95,7 +95,7 @@ That yields a useful ordering:
 
 “Sleep longer” solves none of the first three.
 
-## JSON in the test, Markdown in production
+## JSON in the test, Markdown from the runtime
 
 The next canary showed why the producer’s actual wire representation belongs in the test.
 
