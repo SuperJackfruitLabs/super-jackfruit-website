@@ -2,7 +2,7 @@
 title: The tool call finished. The work had not.
 description: A launcher can return successfully while the work it started is still running. Reliable agent systems need separate states for RPC, turn and semantic completion.
 date: 2026-11-20
-draft: true
+draft: false
 tags: [agents, engineering, reliability]
 sources:
   - claim: AgentPod PR #877 kept runs open for pending or in-progress ACP tool calls, woke the same session after the final call settled and bounded the wait with the turn limit.
