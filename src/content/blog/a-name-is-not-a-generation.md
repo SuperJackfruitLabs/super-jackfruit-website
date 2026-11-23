@@ -21,6 +21,10 @@ sources:
     url: https://github.com/SuperJackfruitLabs/agentpod/blob/a583d63fd5c523ea34f5b99a42331a264432add4/apps/node-agent/internal/benchlaunch/stuck_test.go
   - claim: AgentPod v0.1.131 includes the commits from PRs #907, #908 and #909.
     url: https://github.com/SuperJackfruitLabs/agentpod/releases/tag/v0.1.131
+  - claim: AgentPod's registered-launch design is proposed and off by default.
+    url: https://github.com/SuperJackfruitLabs/agentpod/blob/a583d63fd5c523ea34f5b99a42331a264432add4/docs/BENCH_REGISTERED_LAUNCH.md
+  - claim: Kubernetes permits a deleted object's name to be reused while assigning every created object a distinct UID.
+    url: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
 ---
 
 A workspace is reclaimed. Later, a workspace with the same key appears. A fresh status read says the key is active again.
@@ -71,7 +75,7 @@ A lookup by `card-42` tells a controller where to ask. It does not tell the cont
 
 That creates two symmetrical hazards. Old state about A can be mistaken for authority over B. New state about B can be mistaken for proof that an unresolved operation on A has settled. In either case, the status response is current. The correlation is wrong.
 
-This pattern is common outside workspaces. A Kubernetes object can be deleted and recreated under the same namespace and name but receive a different UID. A cloud instance label can outlive an instance. A queue consumer name can be reused by another process. A database job can be restarted under the same human-readable identifier. Stable names are valuable for discovery; they are unsafe as the sole identity of an incarnation.
+This pattern is common outside workspaces. [A Kubernetes object can be deleted and recreated under the same namespace and name while each created object has a distinct UID](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids). A cloud instance label can outlive an instance. A queue consumer name can be reused by another process. A database job can be restarted under the same human-readable identifier. Stable names are valuable for discovery; they are unsafe as the sole identity of an incarnation.
 
 ## Bind the journal before sending
 
@@ -154,7 +158,7 @@ For systems that recover external side effects, that suggests six rules:
 
 ## A generation is part of the evidence
 
-The reclaim lifecycle shipped in [SuperBench v0.0.1](https://github.com/SuperJackfruitLabs/superbench/releases/tag/v0.0.1), which describes itself as an experimental single-host prototype. The AgentPod changes from PRs #907, #908 and #909 are listed in [AgentPod v0.1.131](https://github.com/SuperJackfruitLabs/agentpod/releases/tag/v0.1.131). AgentPod's registered-launch design remains proposed and off by default.
+The reclaim lifecycle shipped in [SuperBench v0.0.1](https://github.com/SuperJackfruitLabs/superbench/releases/tag/v0.0.1), which describes itself as an experimental single-host prototype. The AgentPod changes from PRs #907, #908 and #909 are listed in [AgentPod v0.1.131](https://github.com/SuperJackfruitLabs/agentpod/releases/tag/v0.1.131). [AgentPod's registered-launch design remains proposed and off by default](https://github.com/SuperJackfruitLabs/agentpod/blob/a583d63fd5c523ea34f5b99a42331a264432add4/docs/BENCH_REGISTERED_LAUNCH.md).
 
 Those limits matter. This is not a claim that the integration is production-proven. It is a compact account of a failure mode that applies anywhere resources can be deleted and recreated behind durable names.
 
