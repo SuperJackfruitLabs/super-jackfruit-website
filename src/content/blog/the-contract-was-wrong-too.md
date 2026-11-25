@@ -83,7 +83,7 @@ So far, the story appears straightforward: publish a contract, execute its cases
 
 ## Strict validation found an error in the specification
 
-Treaty v0.0.20 required every SuperPipeline stage to include `order`. SuperDispatch pinned the contract and strictly validated board data before using it for placement.
+Treaty v0.0.20's board-read contract required every returned SuperPipeline stage to include `order`. SuperDispatch pinned the contract and strictly validated board data before using it for placement.
 
 A real board arrived without the field. Validation stopped at `#/stages/0`, recorded `contract_refused` and produced no placement.
 
